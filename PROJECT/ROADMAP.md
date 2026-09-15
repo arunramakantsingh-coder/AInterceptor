@@ -1,6 +1,6 @@
 # ROADMAP.md
 
-Current: Phase 0 COMPLETE — moving to Phase 1 (Governance Dashboard)
+Current: Phase 1 — Governance Dashboard (1.1 PASS, 1.2 in progress)
 
 | Phase | Name | Status |
 |---|---|---|
@@ -9,8 +9,9 @@ Current: Phase 0 COMPLETE — moving to Phase 1 (Governance Dashboard)
 | 2 | Single Provider PoC | PENDING |
 | 3 | Session Harvesting + Direct HTTP | PENDING |
 | 4 | Multi-Provider Adapters | PENDING |
-| 5 | Routing Engine | PENDING |
-| 6 | OpenAI-Compatible API | PENDING |
+| 5 | Orchestrator Engine (capability routing + merge) | PENDING |
+| 6 | Gateway API (OpenAI-compat, key auth) | PENDING |
+| 7 | Dashboard panels (orchestrator + gateway) | PENDING |
 
 ## Phase 0 Gate
 | Gate | Status |

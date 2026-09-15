@@ -17,3 +17,8 @@ Read order: this file -> PROJECT_GOVERNANCE_STANDARD_v1.1.md -> BLUEPRINT.md
 Python (FastAPI + Playwright) backend. Next.js dashboard (Phase 6).
 
 9. **Script Delivery Rule (Section 19)** — every instruction that changes the repo is ONE pasteable script that BOTH writes the file(s) AND runs any commands. No "now run this" follow-ups.
+
+## Two Subsystems (Section 20)
+- **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
+- **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
+Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.

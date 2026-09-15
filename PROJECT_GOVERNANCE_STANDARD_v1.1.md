@@ -88,3 +88,32 @@ This rule supersedes any interpretation of Section 18 that allowed
 The developer must never translate instructions into code. The agent
 produces a single artifact the developer pastes and executes.
 <!-- /SECTION:19_SCRIPT_DELIVERY -->
+
+<!-- SECTION:20_SUBSYSTEMS -->
+## 20. Subsystem Architecture
+
+AInterceptor has TWO core subsystems. All features map to one of them.
+
+### 20.1 Interceptor
+Web-layer interception per provider. Owns sessions, adapters, SSE/WS
+extraction. Location: `backend/app/interception/`, `backend/app/providers/`.
+Never exposes public API. Never holds routing logic.
+
+### 20.2 Orchestrator
+The intelligence layer. Routes requests, selects models by capability,
+merges multi-AI replies, enforces fallback + rate limits. Owns the public
+Gateway API (OpenRouter-style). Location: `backend/app/orchestrator/`,
+`backend/app/gateway/`.
+
+### 20.3 Gateway
+The Orchestrator's public face. External apps authenticate with a
+generated key and call `POST /v1/chat/completions`. The Gateway:
+- Validates API keys
+- Delegates to Orchestrator
+- Returns OpenAI-format responses (streaming and non-streaming)
+
+### 20.4 Rule
+A change is not accepted unless it declares which subsystem it targets
+and does not violate subsystem boundaries. Cross-subsystem imports go
+through defined interfaces only.
+<!-- /SECTION:20_SUBSYSTEMS -->
