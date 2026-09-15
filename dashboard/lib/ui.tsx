@@ -10,6 +10,10 @@ export const S = {
   red: { color: "#f85149" } as const,
   green: { color: "#3fb950" } as const,
   yellow: { color: "#d29922" } as const,
+  table: { borderCollapse: "collapse" as const, width: "100%", marginTop: "0.5rem" },
+  th: { textAlign: "left" as const, borderBottom: "1px solid #30363d",
+        padding: "0.4rem 0.6rem", background: "#161b22" },
+  td: { borderBottom: "1px solid #21262d", padding: "0.4rem 0.6rem" },
 };
 
 export function Nav() {
@@ -18,6 +22,22 @@ export function Nav() {
       <a href="/" style={S.link}>Commits</a>
       <a href="/versions" style={S.link}>Versions</a>
       <a href="/compare" style={S.link}>Compare</a>
+      <a href="/roadmap" style={S.link}>Roadmap</a>
+      <a href="/bugs" style={S.link}>Bugs</a>
+      <a href="/rollback" style={S.link}>Rollback</a>
     </nav>
+  );
+}
+
+export function MdTable({ t }: { t: { headers: string[]; rows: string[][] } }) {
+  return (
+    <table style={S.table}>
+      <thead><tr>{t.headers.map((h, i) => <th key={i} style={S.th}>{h}</th>)}</tr></thead>
+      <tbody>
+        {t.rows.map((r, i) => (
+          <tr key={i}>{r.map((c, j) => <td key={j} style={S.td}>{c}</td>)}</tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
