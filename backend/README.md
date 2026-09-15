@@ -1,3 +1,6 @@
 # backend/
-Phase 0 — not implemented. Phase 1 adds requirements.txt and Claude adapter.
-Do NOT run pip install -r requirements.txt before Phase 1.
+Phase 2 — Interceptor + Orchestrator.
+
+## Run
+
+Endpoints: GET /health, GET /providers, POST /v1/intercept/chat (SSE).
