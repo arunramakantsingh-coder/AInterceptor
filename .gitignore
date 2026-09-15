@@ -14,5 +14,6 @@ cookies.json
 credentials.json
 .bak/
 .evidence/*.log
+.evidence/*.json
 .vscode/settings.json
 .DS_Store
