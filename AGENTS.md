@@ -15,3 +15,5 @@ Read order: this file -> PROJECT_GOVERNANCE_STANDARD_v1.1.md -> BLUEPRINT.md
 
 ## Stack
 Python (FastAPI + Playwright) backend. Next.js dashboard (Phase 6).
+
+9. **Script Delivery Rule (Section 19)** — every instruction that changes the repo is ONE pasteable script that BOTH writes the file(s) AND runs any commands. No "now run this" follow-ups.

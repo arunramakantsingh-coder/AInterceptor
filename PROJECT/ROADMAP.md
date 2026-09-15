@@ -1,16 +1,16 @@
 # ROADMAP.md
 
-Current: Phase 0 — Framework bootstrap (IN PROGRESS)
+Current: Phase 0 COMPLETE — moving to Phase 1 (Governance Dashboard)
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Framework bootstrap | IN PROGRESS |
-| 1 | Single Provider PoC | PENDING |
-| 2 | Session Harvesting + Direct HTTP | PENDING |
-| 3 | Multi-Provider Adapters | PENDING |
-| 4 | Routing Engine | PENDING |
-| 5 | OpenAI-Compatible API | PENDING |
-| 6 | Governance Dashboard | PENDING |
+| 0 | Framework bootstrap | COMPLETE |
+| 1 | Governance Dashboard | PENDING |
+| 2 | Single Provider PoC | PENDING |
+| 3 | Session Harvesting + Direct HTTP | PENDING |
+| 4 | Multi-Provider Adapters | PENDING |
+| 5 | Routing Engine | PENDING |
+| 6 | OpenAI-Compatible API | PENDING |
 
 ## Phase 0 Gate
 | Gate | Status |

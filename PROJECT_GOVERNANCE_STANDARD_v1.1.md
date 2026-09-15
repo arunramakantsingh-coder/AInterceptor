@@ -57,3 +57,34 @@ with commit SHA or BLOCKED with exact reason.
 Manual milestone git ops. Force-push. Committing without validation.
 Secrets in any file/log/message.
 <!-- /SECTION:18_PASTEABLE_SCRIPTS -->
+
+<!-- SECTION:19_SCRIPT_DELIVERY -->
+## 19. Script Delivery Rule (Hardened)
+
+**Every instruction that changes the repository MUST be delivered as one
+self-contained script that BOTH creates/modifies the file(s) AND runs any
+resulting commands (validation, tests, git operations).**
+
+This rule supersedes any interpretation of Section 18 that allowed
+"create this file" and "now run this command" to be separate steps.
+
+### 19.1 Non-negotiable
+- One paste. One execution. No follow-up "now run this".
+- The script writes the file(s) AND invokes them.
+- Applies to: creating files, editing sections, running tests, git
+  commits, pushes, remote verification, and rollbacks.
+- Applies to every AI agent (Claude, DeepSeek, GPT, Gemini, Copilot,
+  Cursor, Codex, and any future agent).
+
+### 19.2 Required script shape
+
+### 19.3 Prohibited
+- Delivering a file's content alone without the command to run it.
+- Delivering a command alone without the file it needs.
+- Multi-turn "next run this" for a single logical change.
+- Relying on the human to assemble the pieces.
+
+### 19.4 Rationale
+The developer must never translate instructions into code. The agent
+produces a single artifact the developer pastes and executes.
+<!-- /SECTION:19_SCRIPT_DELIVERY -->
