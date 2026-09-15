@@ -1,11 +1,11 @@
 # ROADMAP.md
 
-Current: Phase 1 — Governance Dashboard (1.1 PASS, 1.2 in progress)
+Current: Phase 1 COMPLETE at v0.1.0 — moving to Phase 2 (Interceptor Claude PoC)
 
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Framework bootstrap | COMPLETE |
-| 1 | Governance Dashboard | PENDING |
+| 1 | Governance Dashboard | COMPLETE (v0.1.0) |
 | 2 | Single Provider PoC | PENDING |
 | 3 | Session Harvesting + Direct HTTP | PENDING |
 | 4 | Multi-Provider Adapters | PENDING |
@@ -16,12 +16,12 @@ Current: Phase 1 — Governance Dashboard (1.1 PASS, 1.2 in progress)
 ## Phase 0 Gate
 | Gate | Status |
 |---|---|
-| Implementation | PENDING |
-| Local Validation | PENDING |
-| Security/integrity | PENDING |
-| Git diff review | PENDING |
-| Commit | PENDING |
-| Push | PENDING |
-| Remote verification | PENDING |
-| Documentation/ROADMAP | PENDING |
-| Milestone | IN PROGRESS |
+| Implementation | PASS |
+| Local Validation | PASS |
+| Security/integrity review | PASS |
+| Git diff review | PASS |
+| Commit | c9d7852 + M1.5 |
+| Push | PASS |
+| Remote verification | PASS |
+| Documentation/ROADMAP | UPDATED |
+| Milestone | COMPLETE |

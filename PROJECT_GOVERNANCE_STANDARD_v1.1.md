@@ -117,3 +117,29 @@ A change is not accepted unless it declares which subsystem it targets
 and does not violate subsystem boundaries. Cross-subsystem imports go
 through defined interfaces only.
 <!-- /SECTION:20_SUBSYSTEMS -->
+
+<!-- SECTION:21_UI_FIRST -->
+## 21. UI-First Development Rule
+
+Every phase ships its UI surface in the same commit as its backend.
+
+### 21.1 Rules
+- A backend phase is not accepted without a visible page/panel in the
+  governance dashboard by end of phase.
+- Frontend is developed in parallel with backend, never after.
+- New backend capability => new or updated dashboard page in the same
+  milestone commit (or the immediately following UI commit under the
+  same milestone).
+- The dashboard is the developer's window into the running system.
+
+### 21.2 Required UI touchpoints per phase
+- Phase with a new provider => Providers page row updated.
+- Phase with a new route => Status page reflects current task.
+- Phase with new logs => Intercept Log page (Phase 2+).
+- Phase with new config => Config page (Phase 3+).
+- Phase with new gateway endpoints => Gateway page (Phase 6+).
+
+### 21.3 Rationale
+Blind backend development hides regressions. Visible UI forces real
+verification and gives stakeholders ongoing visibility.
+<!-- /SECTION:21_UI_FIRST -->

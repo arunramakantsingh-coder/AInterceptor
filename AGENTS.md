@@ -27,3 +27,6 @@ Every change declares its subsystem. No cross-subsystem imports except via defin
 - **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
 - **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
 Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.
+
+## UI-First (Section 21)
+Every phase ships its dashboard page in the same milestone. No backend-only phases.
