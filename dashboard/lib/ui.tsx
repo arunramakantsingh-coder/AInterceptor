@@ -1,7 +1,7 @@
 export const S = {
   page: { maxWidth: 1000, margin: "0 auto", padding: "2rem" } as const,
   header: { borderBottom: "1px solid #30363d", paddingBottom: "1rem", marginBottom: "1.5rem" } as const,
-  nav: { display: "flex", gap: "1rem", marginTop: "0.5rem" } as const,
+  nav: { display: "flex", gap: "1rem", marginTop: "0.5rem", flexWrap: "wrap" as const } as const,
   link: { color: "#58a6ff", textDecoration: "none" } as const,
   card: { padding: "0.75rem", border: "1px solid #30363d", borderRadius: 6,
           marginBottom: "0.5rem", background: "#161b22" } as const,
@@ -24,6 +24,8 @@ export function Nav() {
       <a href="/compare" style={S.link}>Compare</a>
       <a href="/roadmap" style={S.link}>Roadmap</a>
       <a href="/bugs" style={S.link}>Bugs</a>
+      <a href="/providers" style={S.link}>Providers</a>
+      <a href="/status" style={S.link}>Status</a>
       <a href="/rollback" style={S.link}>Rollback</a>
     </nav>
   );
