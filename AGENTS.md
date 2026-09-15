@@ -22,3 +22,8 @@ Python (FastAPI + Playwright) backend. Next.js dashboard (Phase 6).
 - **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
 - **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
 Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.
+
+## Two Subsystems (Section 20)
+- **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
+- **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
+Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.
