@@ -1,4 +1,8 @@
-"""Interactive hierarchical shell for AInterceptor."""
+"""Cisco-style AIRouter NOS interactive shell.
+
+The shell is a control-plane UI. It never owns provider transport/session
+mechanics; those remain in the Interceptor subsystem.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -9,233 +13,322 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 
-from . import __version__
 from .chat import chat
-from .registry import PROVIDER_ORDER, load_providers
+from .nos import Mode, NOSState, PROVIDERS, provider_definition
 from .renderer import (
     banner,
-    global_help,
-    provider_help,
-    provider_status,
+    boot_console,
+    bootstrap,
+    counters_view,
+    credits_view,
+    help_view,
+    models_view,
+    provider_status_view,
     providers_status,
+    routes_view,
+    sessions_view,
     system_status,
+    system_view,
+    version_view,
 )
 
 
-class AInterceptorCompleter(Completer):
-    GLOBAL = (
-        "help", "providers", "status", "use", "sessions", "diagnostics",
-        "version", "clear", "exit", "quit", "1", "2", "3", "4",
-    )
-    PROVIDER = (
-        "help", "status", "session", "chat", "diagnostics", "doctor", "back", "exit",
-    )
+class AIRouterCompleter(Completer):
+    COMMANDS = {
+        Mode.USER_EXEC: (
+            "enable", "show", "chat", "airouter", "logout", "exit", "?",
+        ),
+        Mode.PRIVILEGED_EXEC: (
+            "show", "chat", "configure", "clear", "disable", "exit", "logout", "?",
+        ),
+        Mode.CONFIG: ("ai", "exit", "end", "?"),
+        Mode.CONFIG_AI: (
+            "provider", "model", "route", "prompt", "session", "api", "exit", "end", "?",
+        ),
+        Mode.CONFIG_AI_PROVIDER: (
+            "enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?",
+        ),
+    }
 
-    def __init__(self, provider: str | None = None) -> None:
-        self.provider = provider
+    def __init__(self, state: NOSState) -> None:
+        self.state = state
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor.lower()
-        if text.startswith("use "):
-            prefix = text[4:].split()[-1] if text[4:].strip() else ""
-            for name in PROVIDER_ORDER:
-                if name.startswith(prefix):
-                    yield Completion(name, start_position=-len(prefix))
+        word = document.get_word_before_cursor().lower()
+        commands = self.COMMANDS.get(self.state.mode, ())
+
+        if text.startswith("show "):
+            topics = ("version", "system", "ai", "providers", "models", "routes", "sessions", "counters", "credits", "health")
+            prefix = text[5:].split()[-1] if text[5:].strip() else ""
+            for item in topics:
+                if item.startswith(prefix):
+                    yield Completion(item, start_position=-len(prefix))
             return
 
-        word = document.get_word_before_cursor().lower()
-        commands = self.PROVIDER if self.provider else self.GLOBAL
+        if text.startswith("chat "):
+            prefix = text[5:].split()[-1] if text[5:].strip() else ""
+            for item in (p.name for p in PROVIDERS):
+                if item.startswith(prefix):
+                    yield Completion(item, start_position=-len(prefix))
+            return
+
+        if text.startswith("provider ") and self.state.mode == Mode.CONFIG_AI:
+            prefix = text[9:].split()[-1] if text[9:].strip() else ""
+            for item in (p.name for p in PROVIDERS):
+                if item.startswith(prefix):
+                    yield Completion(item, start_position=-len(prefix))
+            return
+
         for command in commands:
             if command.startswith(word):
                 yield Completion(command, start_position=-len(word))
 
 
-class CLIState:
+class AIRouterShell:
     def __init__(self) -> None:
-        self.provider: str | None = None
-        self.chat_mode = False
-        self.running = True
+        self.state = NOSState()
+        history_dir = Path(".ainterceptor")
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history = FileHistory(str(history_dir / "cli_history"))
+        self.session = PromptSession(
+            history=history,
+            completer=AIRouterCompleter(self.state),
+            complete_while_typing=False,
+        )
+        self.chat_session = PromptSession(history=history, completer=None)
 
     @property
     def prompt(self) -> str:
-        if self.chat_mode and self.provider:
-            return f"AInterceptor [{self.provider}] (chat)> "
-        return f"AInterceptor [{self.provider}]> " if self.provider else "AInterceptor> "
+        if self.state.mode == Mode.BOOT:
+            return "AInterceptor-BOOT> "
+        if self.state.mode == Mode.USER_EXEC:
+            return "AIRouter> "
+        if self.state.mode == Mode.PRIVILEGED_EXEC:
+            return "AIRouter# "
+        if self.state.mode == Mode.CONFIG:
+            return "AIRouter(config)# "
+        if self.state.mode == Mode.CONFIG_AI:
+            return "AIRouter(config-ai)# "
+        if self.state.mode == Mode.CONFIG_AI_PROVIDER:
+            name = self.state.provider or "provider"
+            return f"AIRouter(config-ai-provider-{name})# "
+        return "AIRouter(chat)> "
 
+    def _set_mode(self, mode: Mode) -> None:
+        self.state.mode = mode
+        self.session.completer = AIRouterCompleter(self.state)
 
-class CommandDispatcher:
-    GLOBAL_ALIASES = {
-        "h": "help", "p": "providers", "st": "status", "u": "use",
-        "sess": "sessions", "diag": "diagnostics", "ver": "version",
-        "cl": "clear", "q": "quit", "x": "exit",
-    }
-    PROVIDER_ALIASES = {
-        "h": "help", "st": "status", "se": "session", "c": "chat",
-        "d": "diagnostics", "do": "doctor", "b": "back", "q": "exit",
-    }
-
-    def __init__(self, state: CLIState) -> None:
-        self.state = state
-
-    def dispatch(self, raw: str) -> str | None:
-        command = raw.strip()
-        if not command:
-            return None
-        parts = command.split()
-        name = parts[0].lower()
-        args = parts[1:]
-        aliases = self.PROVIDER_ALIASES if self.state.provider else self.GLOBAL_ALIASES
-        name = aliases.get(name, name)
-
-        if self.state.provider:
-            return self._provider_command(name, args)
-        return self._global_command(name, args)
-
-    def _global_command(self, name: str, args: list[str]) -> str | None:
-        if name in {"exit", "quit"}:
-            self.state.running = False
-            return "Bye."
-        if name in {"help", "?"}:
-            return global_help()
-        if name == "providers":
-            return providers_status()
-        if name == "status":
+    def _show(self, args: list[str]) -> str:
+        if not args:
             return system_status()
-        if name == "use":
-            if not args:
-                return "Usage: use <provider>"
-            requested = args[0].lower()
-            if requested.isdigit() and 1 <= int(requested) <= len(PROVIDER_ORDER):
-                requested = PROVIDER_ORDER[int(requested) - 1]
-            if requested not in load_providers():
-                return f"Unknown provider: {requested}"
-            self.state.provider = requested
-            self.state.chat_mode = False
-            return f"Context changed to {requested}"
-        if name.isdigit() and 1 <= int(name) <= len(PROVIDER_ORDER):
-            self.state.provider = PROVIDER_ORDER[int(name) - 1]
-            self.state.chat_mode = False
-            return f"Context changed to {self.state.provider}"
-        if name == "sessions":
-            return "Sessions: provider session inventory is runtime-owned."
-        if name == "diagnostics":
-            return "Diagnostics: Gateway READY | Orchestrator READY | Interceptor READY"
-        if name == "version":
-            return __version__
-        if name == "clear":
-            os.system("cls" if os.name == "nt" else "clear")
-            return None
-        return f"Unknown command: {name}. Type help or ?."
+        topic = args[0].lower()
+        if topic == "version":
+            return version_view()
+        if topic == "system":
+            return system_view()
+        if topic in {"ai", "health"}:
+            return system_status()
+        if topic in {"providers", "provider"}:
+            return providers_status()
+        if topic == "models":
+            return models_view()
+        if topic == "routes":
+            return routes_view()
+        if topic == "sessions":
+            return sessions_view()
+        if topic == "counters":
+            return counters_view(self.state.counters)
+        if topic == "credits":
+            return credits_view()
+        return f"% Unknown show topic: {topic}. Type show ?."
 
-    def _provider_command(self, name: str, args: list[str]) -> str | None:
-        provider = self.state.provider
-        assert provider is not None
-        if name == "back":
-            self.state.chat_mode = False
-            self.state.provider = None
-            return "Returned to global context."
-        if name in {"exit", "quit"}:
-            self.state.running = False
-            return "Bye."
-        if name in {"help", "?"}:
-            return provider_help()
-        if name == "status":
-            return provider_status(provider)
-        if name == "session":
-            return f"{provider}: session management is runtime-owned."
-        if name == "diagnostics":
-            return f"{provider}: diagnostics are runtime-owned."
-        if name == "doctor":
-            return f"{provider}: provider context reachable; runtime health probe available through diagnostics."
-        if name == "chat":
-            self.state.chat_mode = True
-            if args:
-                self._run_chat(provider, " ".join(args))
-            return "Entered chat mode. Type /exit or press Ctrl+C to return." if not args else None
-        return f"Unknown provider command: {name}. Type help or ?."
+    def _chat(self, provider: str, initial_prompt: str | None = None) -> None:
+        definition = provider_definition(provider)
+        if definition is None:
+            print(f"% Unknown provider: {provider}")
+            return
+        if provider != "claude":
+            print(f"% {definition.display_name}: runtime is not implemented yet.")
+            print("  Provider-specific runtime will be added behind the common Interceptor contract.")
+            return
 
-    @staticmethod
-    def _run_chat(provider: str, prompt: str) -> None:
+        self.state.chat_provider = provider
+        self._set_mode(Mode.CHAT)
+        print(f"\nConnected to {definition.display_name} chat context.")
+        print("Type /exit, /back, or press Ctrl+C to return to AIRouter.\n")
+
+        if initial_prompt:
+            self._run_chat(provider, initial_prompt)
+
+        while self.state.running and self.state.mode == Mode.CHAT:
+            try:
+                prompt = self.chat_session.prompt("AIRouter(chat)> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                self._set_mode(Mode.PRIVILEGED_EXEC)
+                break
+            if not prompt:
+                continue
+            if prompt.lower() in {"/exit", "/quit", "/back"}:
+                self._set_mode(Mode.PRIVILEGED_EXEC)
+                print("Returning to AIRouter#")
+                break
+            self._run_chat(provider, prompt)
+
+    def _run_chat(self, provider: str, prompt: str) -> None:
         try:
-            print()
-            print(f"{provider.title()}:")
+            self.state.counters["requests"] += 1
+            print(f"\n{provider.title()}:")
             print("  ", end="", flush=True)
 
             def render_delta(delta: str) -> None:
                 print(delta, end="", flush=True)
 
             asyncio.run(chat(provider, prompt, on_delta=render_delta))
+            self.state.counters["success"] += 1
             print("\n")
         except Exception as exc:
+            self.state.counters["failed"] += 1
             print(f"\n% {exc}\n")
 
-
-class InteractiveShell:
-    def __init__(self) -> None:
-        self.state = CLIState()
-        self.dispatcher = CommandDispatcher(self.state)
-        history_dir = Path(".ainterceptor")
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history = FileHistory(str(history_dir / "cli_history"))
-        self.session = PromptSession(
-            history=history,
-            completer=AInterceptorCompleter(),
-            # Cisco-style behavior: completion is explicit (Tab), not on every keystroke.
-            complete_while_typing=False,
-        )
-        self.chat_session = PromptSession(history=history, completer=None)
-
-    def _refresh_completer(self) -> None:
-        self.session.completer = AInterceptorCompleter(self.state.provider)
-
-    def _run_chat_mode(self) -> None:
-        provider = self.state.provider
-        if not provider:
-            self.state.chat_mode = False
+    def _dispatch_boot(self, name: str, args: list[str]) -> None:
+        if name == "airouter":
+            print("\n" + banner())
+            print()
+            print(bootstrap())
+            print(providers_status())
+            print()
+            print("AIRouter NOS initialized. Type ? for commands.\n")
+            self._set_mode(Mode.USER_EXEC)
             return
+        if name in {"exit", "quit", "logout"}:
+            self.state.running = False
+            return
+        if name in {"?", "help"}:
+            print("Type 'airouter' to initialize the AIRouter NOS.")
+            return
+        print(f"% Unknown boot command: {name}. Type airouter or ?.")
 
-        print(f"Entering {provider.title()} chat mode. Type /exit or press Ctrl+C to return.")
-        while self.state.running and self.state.chat_mode:
-            try:
-                prompt = self.chat_session.prompt(self.state.prompt).strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                self.state.chat_mode = False
-                break
+    def _dispatch_exec(self, name: str, args: list[str]) -> None:
+        mode = self.state.mode
+        if name in {"?", "help"}:
+            print(help_view(mode.value))
+            return
+        if name == "show":
+            if args and args[0] == "?":
+                print("show version | system | ai | providers | models | routes | sessions | counters | credits | health")
+            else:
+                print(self._show(args))
+            return
+        if name == "airouter":
+            print("\n" + banner())
+            return
+        if name == "enable" and mode == Mode.USER_EXEC:
+            self._set_mode(Mode.PRIVILEGED_EXEC)
+            return
+        if name == "disable" and mode == Mode.PRIVILEGED_EXEC:
+            self._set_mode(Mode.USER_EXEC)
+            return
+        if name in {"exit", "logout", "quit"}:
+            if mode == Mode.USER_EXEC:
+                self.state.running = False
+            elif mode == Mode.PRIVILEGED_EXEC:
+                self._set_mode(Mode.USER_EXEC)
+            return
+        if name == "configure" and args and args[0] in {"terminal", "t"} and mode == Mode.PRIVILEGED_EXEC:
+            print("Enter configuration commands, one per line. End with 'end'.")
+            self._set_mode(Mode.CONFIG)
+            return
+        if name == "clear" and args and args[0] == "counters" and mode == Mode.PRIVILEGED_EXEC:
+            for key in self.state.counters:
+                self.state.counters[key] = 0
+            print("Counters cleared.")
+            return
+        if name == "chat":
+            if not args:
+                print("Usage: chat <provider> [initial prompt]")
+                return
+            provider = args[0].lower()
+            initial = " ".join(args[1:]) or None
+            self._chat(provider, initial)
+            return
+        print(f"% Unknown command: {name}. Type ?. ")
 
-            if not prompt:
-                continue
-            if prompt.lower() in {"/exit", "/quit", "/back"}:
-                self.state.chat_mode = False
-                print("Leaving chat mode.")
-                break
+    def _dispatch_config(self, name: str, args: list[str]) -> None:
+        if name in {"?", "help"}:
+            print(help_view(self.state.mode.value))
+            return
+        if name in {"exit"}:
+            if self.state.mode == Mode.CONFIG:
+                self._set_mode(Mode.PRIVILEGED_EXEC)
+            elif self.state.mode == Mode.CONFIG_AI:
+                self._set_mode(Mode.CONFIG)
+            elif self.state.mode == Mode.CONFIG_AI_PROVIDER:
+                self._set_mode(Mode.CONFIG_AI)
+            return
+        if name == "end":
+            self._set_mode(Mode.PRIVILEGED_EXEC)
+            return
+        if self.state.mode == Mode.CONFIG and name == "ai":
+            self._set_mode(Mode.CONFIG_AI)
+            return
+        if self.state.mode == Mode.CONFIG_AI and name == "provider":
+            if not args or provider_definition(args[0]) is None:
+                print("Usage: provider <chatgpt|claude|gemini|deepseek>")
+                return
+            self.state.provider = args[0].lower()
+            self._set_mode(Mode.CONFIG_AI_PROVIDER)
+            return
+        if self.state.mode == Mode.CONFIG_AI:
+            if name in {"model", "route", "prompt", "session", "api"}:
+                print(f"% {name} configuration submode is reserved for the next orchestration milestone.")
+                return
+        if self.state.mode == Mode.CONFIG_AI_PROVIDER:
+            provider = self.state.provider or "provider"
+            if name in {"enable", "disable"}:
+                self.state.config.setdefault("providers", {})[provider] = name == "enable"
+                print(f"{provider}: routing policy {'enabled' if name == 'enable' else 'disabled'}.")
+                return
+            if name == "session":
+                print(provider_status_view(provider))
+                return
+            if name == "health":
+                print(provider_status_view(provider))
+                return
+            if name == "model":
+                print("Model selection will use the shared model registry; no models discovered yet.")
+                return
+            if name in {"login", "logout"}:
+                print(f"{provider}: authentication/session workflow remains owned by the Interceptor runtime.")
+                return
+        print(f"% Unknown command: {name}. Type ?. ")
 
-            self.dispatcher._run_chat(provider, prompt)
+    def dispatch(self, raw: str) -> None:
+        command = raw.strip()
+        if not command:
+            return
+        parts = command.split()
+        name = parts[0].lower()
+        args = parts[1:]
+        if self.state.mode == Mode.BOOT:
+            self._dispatch_boot(name, args)
+        elif self.state.mode in {Mode.USER_EXEC, Mode.PRIVILEGED_EXEC}:
+            self._dispatch_exec(name, args)
+        elif self.state.mode in {Mode.CONFIG, Mode.CONFIG_AI, Mode.CONFIG_AI_PROVIDER}:
+            self._dispatch_config(name, args)
 
     def run(self) -> None:
-        print(banner())
+        print(boot_console())
         print()
-        print(providers_status())
-        print()
-        print(system_status())
-        print()
-        print("Type 'help' or '?' for commands. Use number 1-4 or 'use <provider>' to navigate.")
-        print()
-
         while self.state.running:
-            if self.state.chat_mode:
-                self._run_chat_mode()
-                continue
-
-            self._refresh_completer()
             try:
-                raw = self.session.prompt(self.state.prompt)
+                raw = self.session.prompt(self.prompt)
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
+            self.dispatch(raw)
 
-            result = self.dispatcher.dispatch(raw)
-            if result:
-                print(result)
-            if self.state.chat_mode:
-                self._run_chat_mode()
+
+def main() -> None:
+    AIRouterShell().run()
