@@ -49,11 +49,35 @@ def test_show_command_accepts_abbreviation():
     shell.dispatch("show v")
 
 
+def test_show_run_renders_running_configuration():
+    shell = AIRouterShell()
+    shell.state = NOSState(mode=Mode.PRIVILEGED_EXEC)
+    shell._set_mode(Mode.PRIVILEGED_EXEC)
+    shell.state.selected_model = "claude-opus-4-8"
+    shell.state.config["providers"] = {"claude": True, "chatgpt": False}
+    output = shell._show(["run"])
+    assert "model claude-opus-4-8" in output
+    assert "provider claude" in output
+    assert "enable" in output
+    assert "provider chatgpt" in output
+    assert "disable" in output
+
+
 def test_model_catalog_is_available_to_context_help():
     assert model_definitions()
     assert "claude-opus-4-8" in model_help("claude")
     assert "gemini-3.6-flash" in model_help("gemini")
     assert "deepseek-flash" in model_help("deepseek")
+
+
+def test_provider_runtime_modules_import():
+    from app.interception.chatgpt import ChatGPTRuntime
+    from app.interception.deepseek import DeepSeekRuntime
+    from app.interception.gemini import GeminiRuntime
+
+    assert ChatGPTRuntime().provider == "chatgpt"
+    assert GeminiRuntime().provider == "gemini"
+    assert DeepSeekRuntime().provider == "deepseek"
 
 
 def test_help_is_mode_specific():
