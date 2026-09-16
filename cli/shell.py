@@ -6,7 +6,6 @@ mechanics; those remain in the Interceptor subsystem.
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
@@ -35,19 +34,11 @@ from .renderer import (
 
 class AIRouterCompleter(Completer):
     COMMANDS = {
-        Mode.USER_EXEC: (
-            "enable", "show", "chat", "airouter", "logout", "exit", "?",
-        ),
-        Mode.PRIVILEGED_EXEC: (
-            "show", "chat", "configure", "clear", "disable", "exit", "logout", "?",
-        ),
+        Mode.USER_EXEC: ("enable", "show", "chat", "airouter", "logout", "exit", "?"),
+        Mode.PRIVILEGED_EXEC: ("show", "chat", "configure", "clear", "disable", "exit", "logout", "?"),
         Mode.CONFIG: ("ai", "exit", "end", "?"),
-        Mode.CONFIG_AI: (
-            "provider", "model", "route", "prompt", "session", "api", "exit", "end", "?",
-        ),
-        Mode.CONFIG_AI_PROVIDER: (
-            "enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?",
-        ),
+        Mode.CONFIG_AI: ("provider", "model", "route", "prompt", "session", "api", "exit", "end", "?"),
+        Mode.CONFIG_AI_PROVIDER: ("enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?"),
     }
 
     def __init__(self, state: NOSState) -> None:
@@ -61,6 +52,9 @@ class AIRouterCompleter(Completer):
         if text.startswith("show "):
             topics = ("version", "system", "ai", "providers", "models", "routes", "sessions", "counters", "credits", "health")
             prefix = text[5:].split()[-1] if text[5:].strip() else ""
+            if text.startswith("show ai "):
+                topics = ("providers", "models", "routes", "sessions", "usage", "credits", "prompts", "health")
+                prefix = text[8:].split()[-1] if text[8:].strip() else ""
             for item in topics:
                 if item.startswith(prefix):
                     yield Completion(item, start_position=-len(prefix))
@@ -127,7 +121,22 @@ class AIRouterShell:
             return version_view()
         if topic == "system":
             return system_view()
-        if topic in {"ai", "health"}:
+        if topic == "ai":
+            subtopic = args[1].lower() if len(args) > 1 else None
+            if subtopic in {"providers", "provider"}:
+                return providers_status()
+            if subtopic == "models":
+                return models_view()
+            if subtopic == "routes":
+                return routes_view()
+            if subtopic == "sessions":
+                return sessions_view()
+            if subtopic in {"usage", "counters"}:
+                return counters_view(self.state.counters)
+            if subtopic == "credits":
+                return credits_view()
+            return system_status()
+        if topic == "health":
             return system_status()
         if topic in {"providers", "provider"}:
             return providers_status()
@@ -143,7 +152,7 @@ class AIRouterShell:
             return credits_view()
         return f"% Unknown show topic: {topic}. Type show ?."
 
-    def _chat(self, provider: str, initial_prompt: str | None = None) -> None:
+    def _chat(self, provider: str, initial_prompt: str | None = None, return_mode: Mode = Mode.PRIVILEGED_EXEC) -> None:
         definition = provider_definition(provider)
         if definition is None:
             print(f"% Unknown provider: {provider}")
@@ -166,13 +175,13 @@ class AIRouterShell:
                 prompt = self.chat_session.prompt("AIRouter(chat)> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print()
-                self._set_mode(Mode.PRIVILEGED_EXEC)
+                self._set_mode(return_mode)
                 break
             if not prompt:
                 continue
             if prompt.lower() in {"/exit", "/quit", "/back"}:
-                self._set_mode(Mode.PRIVILEGED_EXEC)
-                print("Returning to AIRouter#")
+                self._set_mode(return_mode)
+                print("Returning to AIRouter.")
                 break
             self._run_chat(provider, prompt)
 
@@ -217,7 +226,7 @@ class AIRouterShell:
             return
         if name == "show":
             if args and args[0] == "?":
-                print("show version | system | ai | providers | models | routes | sessions | counters | credits | health")
+                print("show version | system | ai [providers|models|routes|sessions|usage|credits] | providers | models | routes | sessions | counters | credits | health")
             else:
                 print(self._show(args))
             return
@@ -251,7 +260,7 @@ class AIRouterShell:
                 return
             provider = args[0].lower()
             initial = " ".join(args[1:]) or None
-            self._chat(provider, initial)
+            self._chat(provider, initial, return_mode=mode)
             return
         print(f"% Unknown command: {name}. Type ?. ")
 
@@ -259,7 +268,7 @@ class AIRouterShell:
         if name in {"?", "help"}:
             print(help_view(self.state.mode.value))
             return
-        if name in {"exit"}:
+        if name == "exit":
             if self.state.mode == Mode.CONFIG:
                 self._set_mode(Mode.PRIVILEGED_EXEC)
             elif self.state.mode == Mode.CONFIG_AI:
@@ -280,20 +289,16 @@ class AIRouterShell:
             self.state.provider = args[0].lower()
             self._set_mode(Mode.CONFIG_AI_PROVIDER)
             return
-        if self.state.mode == Mode.CONFIG_AI:
-            if name in {"model", "route", "prompt", "session", "api"}:
-                print(f"% {name} configuration submode is reserved for the next orchestration milestone.")
-                return
+        if self.state.mode == Mode.CONFIG_AI and name in {"model", "route", "prompt", "session", "api"}:
+            print(f"% {name} configuration submode is reserved for the next orchestration milestone.")
+            return
         if self.state.mode == Mode.CONFIG_AI_PROVIDER:
             provider = self.state.provider or "provider"
             if name in {"enable", "disable"}:
                 self.state.config.setdefault("providers", {})[provider] = name == "enable"
                 print(f"{provider}: routing policy {'enabled' if name == 'enable' else 'disabled'}.")
                 return
-            if name == "session":
-                print(provider_status_view(provider))
-                return
-            if name == "health":
+            if name in {"session", "health"}:
                 print(provider_status_view(provider))
                 return
             if name == "model":
