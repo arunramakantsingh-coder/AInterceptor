@@ -1,73 +1,69 @@
 # .ai/CURRENT_TASK.md
 
 ## Current Milestone
-**M2.0 — AIRouter NOS Control-Plane Foundation**
+**M2.1 — Provider Lifecycle / Web Runtime Expansion**
 
 ## Status
-M1 provider-runtime boundary work remains the foundation. M2.0 establishes the Cisco-like AIRouter command/mode architecture without moving provider transport or session ownership into the CLI.
+M2.0 established the AIRouter NOS control-plane foundation. M2.1 now extends the existing Interceptor boundary to ChatGPT Web, Gemini Web and DeepSeek Web while keeping provider transport/session mechanics outside the CLI.
 
-## M2.0 Implemented
-- AIRouter NOS startup banner, version, hardware/runtime information and self-tests.
-- User EXEC, privileged EXEC, global configuration, AI configuration and provider configuration modes.
-- Cisco-style explicit Tab completion with `complete_while_typing=False`.
-- Cisco-style unique command abbreviations and context-sensitive `?` help:
-  - `conf t` / `con t` resolves to `configure terminal`.
-  - `sh v` resolves to `show version`.
-  - `en` resolves to `enable`.
-  - `show v?` lists matching show commands.
-  - `configure ?` lists `terminal`.
-  - `model ?` lists model candidates.
-  - ambiguous prefixes are rejected instead of guessed.
-- Added `bootai` console entry point so the installed CLI can be launched directly.
-- Added a runtime-neutral model catalog for ChatGPT, Claude, Gemini and DeepSeek. Catalog entries are not claims of web-session access; actual provider web availability is discovered by provider runtimes.
-- Added model selection state through the AI configuration CLI.
-- Added provider configuration commands for enable/disable/login/logout/session/model/health, with runtime ownership preserved.
-- Added show surfaces for providers, models, routes, sessions, usage/counters and credits.
+## M2.1 Implemented
+- Added a shared `BrowserWebRuntime` boundary for browser-backed providers.
+- Browser automation is limited to provider session establishment, authentication recovery and prompt submission.
+- Provider response extraction remains transport-level network interception; rendered provider DOM is not used as the response source.
+- Added `ChatGPTRuntime` with ChatGPT Web transport matching and SSE/backend response normalization.
+- Added `GeminiRuntime` with Gemini Web `StreamGenerate` transport matching and tolerant framed-response normalization.
+- Added `DeepSeekRuntime` with DeepSeek Web completion transport matching and SSE normalization.
+- Added interactive `login` workflow for the three new provider runtimes using isolated local browser profiles and persisted Playwright storage state.
+- Wired CLI `chat <provider>` through the shared runtime registry instead of hard-coding Claude.
+- Added `show run` / `show running-config` rendering of the current AIRouter control-plane configuration.
+- Added regression tests for `show run` and provider runtime imports.
+- Added `.ainterceptor/` to `.gitignore` because it contains local CLI history and provider browser/session state.
 
-## Provider / Model Catalog Boundary
-Provider model metadata is deliberately separated from web-session availability. A catalog entry may be known from the provider's current public model documentation while a particular account/session may not expose that model. Runtime discovery must be authoritative for actual web use.
+## Important Runtime Boundary
+The provider runtimes are deliberately thin and provider-specific. The Orchestrator must not depend on URL formats, SSE schemas, browser selectors, cookies, tokens, or provider-specific session details. Those belong below the Interceptor runtime boundary.
 
-## Architecture Boundary
-```text
-AIRouter CLI / Client
-        |
-        v
-Gateway
-        |
-        v
-Orchestrator
-        |
-        v
-Interceptor
-        |
-        v
-Provider Web Runtime
-```
+The new web runtimes use transport observations rather than DOM answer extraction. Their network contracts are private web-interface contracts and may drift; live account validation is therefore required before marking a provider `READY`.
 
-The CLI must not implement provider transport, browser scraping, provider-specific session mechanics, or provider inference APIs as the primary integration path.
+## Cisco-style Running Configuration
+`show run` is a first-class operational command. It must eventually represent the complete effective AIRouter configuration, including:
+- provider enable/disable policy;
+- selected model policy;
+- routing/service-group policy;
+- prompt profiles;
+- session policy;
+- API clients;
+- security policy;
+- future MOTD/banner configuration.
 
-## Next Milestone
-**M2.1 — Provider lifecycle and shared orchestration contracts**
+Secrets, cookies, browser storage and private credentials must never be rendered into `show run`.
 
-Implement provider/service lifecycle, model registry contracts, health state, session state, request accounting, and routing decision interfaces. Claude remains the reference runtime. Do not duplicate those mechanics in the CLI.
+## Next Work
+1. Live-validate ChatGPT, Gemini and DeepSeek login/session recovery on the user's machine.
+2. Fix provider-specific transport drift discovered by those tests rather than weakening the transport boundary.
+3. Implement shared provider lifecycle/health/session/accounting contracts in the Orchestrator.
+4. Connect runtime-discovered model availability to the model registry; catalog metadata must never be treated as account access.
+5. Add provider counters, usage/credit semantics and route decisions.
+6. Expand `show run` into a complete IOS-style effective configuration renderer.
 
 ## Validation
 1. Pull `feature/m1-provider-runtime-boundary-20260916`.
-2. Install editable once for the direct command:
+2. Install editable once:
    `python -m pip install -e .`
-3. Launch with:
+3. Launch:
    `bootai`
-4. Verify:
+4. Verify NOS commands:
    - `airouter`
-   - `enable` / `en`
-   - `configure terminal` / `conf t` / `con t`
-   - `show version` / `show v`
+   - `en`
+   - `conf t`
+   - `show run`
    - `show v?`
    - `ai`
-   - `provider claude`
    - `model ?`
-   - `show models`
-   - `chat claude`
-5. Do not merge to `main`.
-6. Do not rebuild/reset/destroy database or migrations.
-7. Do not force-push or rewrite history.
+5. For each provider:
+   - `provider chatgpt` / `provider gemini` / `provider deepseek`
+   - `login`
+   - `session`
+   - `chat <provider>`
+6. Do not merge to `main`.
+7. Do not rebuild/reset/destroy database or migrations.
+8. Do not force-push or rewrite history.
