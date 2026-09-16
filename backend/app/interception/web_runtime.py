@@ -11,9 +11,9 @@ import json
 import os
 import pathlib
 import re
-import uuid
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable
+from urllib.parse import urlparse
 
 from app.interception.contracts import EventType, ProviderExecutionRequest, StreamEvent
 from app.interception.runtime import ProviderRuntime
@@ -107,8 +107,6 @@ def _best_text(value: Any) -> str:
     candidates = [item for item in candidates if len(item.strip()) > 0]
     if not candidates:
         return ""
-    # Prefer the longest plausible natural-language field while avoiding
-    # giant serialized request/config blobs.
     plausible = [item for item in candidates if len(item) < 200_000]
     return max(plausible or candidates, key=len).strip()
 
@@ -236,7 +234,8 @@ class BrowserWebRuntime(ProviderRuntime):
             self._context = contexts[0]
             self._owns_browser = False
             self._owns_context = False
-            pages = [p for p in self._context.pages if self.spec.home_url.split("/")[2] in (p.url or "")]
+            host = urlparse(self.spec.home_url).netloc
+            pages = [p for p in self._context.pages if host == urlparse(p.url or "").netloc]
             self._page = pages[-1] if pages else await self._context.new_page()
         elif self.session_path and pathlib.Path(self.session_path).exists():
             self._browser = await self._pw.chromium.launch(headless=self.headless)
@@ -255,7 +254,9 @@ class BrowserWebRuntime(ProviderRuntime):
             pages = list(self._context.pages)
             self._page = pages[-1] if pages else await self._context.new_page()
 
-        if self._page.url != self.spec.home_url:
+        current_host = urlparse(self._page.url or "").netloc
+        home_host = urlparse(self.spec.home_url).netloc
+        if current_host != home_host:
             await self._page.goto(self.spec.home_url, wait_until="domcontentloaded", timeout=30_000)
 
     def _is_login_page(self) -> bool:
@@ -291,6 +292,25 @@ class BrowserWebRuntime(ProviderRuntime):
         self._started = True
         print(f"{self.provider}: authenticated session saved to {path}.")
 
+    async def _prompt_textbox(self) -> Any:
+        """Return the visible, editable provider composer rather than an incidental textbox."""
+        selectors = (
+            "textarea",
+            '[contenteditable="true"]',
+            '[role="textbox"]',
+        )
+        for selector in selectors:
+            locator = self._page.locator(selector)
+            count = await locator.count()
+            for index in range(count - 1, -1, -1):
+                candidate = locator.nth(index)
+                try:
+                    if await candidate.is_visible() and await candidate.is_editable():
+                        return candidate
+                except Exception:
+                    continue
+        raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
+
     async def execute(self, request: ProviderExecutionRequest) -> AsyncIterator[StreamEvent]:
         if request.provider != self.provider:
             raise ValueError(f"runtime provider mismatch: {request.provider}")
@@ -304,9 +324,20 @@ class BrowserWebRuntime(ProviderRuntime):
             async with WebNetworkCapture(self._page, self.spec) as capture:
                 yield StreamEvent(self.provider, request.request_id, EventType.REQUEST_INTERCEPTED, sequence, metadata={"transport": "playwright-network"})
                 sequence += 1
-                textbox = self._page.get_by_role("textbox").last
-                await textbox.fill(prompt)
-                await textbox.press("Enter")
+                try:
+                    await self._page.bring_to_front()
+                    textbox = await self._prompt_textbox()
+                    await textbox.fill(prompt)
+                    await textbox.press("Enter")
+                except Exception as exc:
+                    yield StreamEvent(
+                        self.provider,
+                        request.request_id,
+                        EventType.STREAM_FAILED,
+                        sequence,
+                        metadata={"reason": f"prompt_submission_failed: {exc}"},
+                    )
+                    return
                 try:
                     status, content_type, body = await capture.wait()
                 except Exception as exc:
