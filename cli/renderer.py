@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from . import __version__
-from .nos import PROVIDERS, provider_status, self_tests, system_info
+from .nos import MODEL_CATALOG, PROVIDERS, model_definitions, provider_status, self_tests, system_info
 
 WIDTH = 68
 RULE = "─" * WIDTH
@@ -15,7 +15,7 @@ def boot_console() -> str:
         "║                    AI Router Control Console                      ║",
         "╚════════════════════════════════════════════════════════════════════╝",
         "",
-        "Type 'airouter' to initialize the AIRouter NOS.",
+        "Type 'bootai' to enter AInterceptor-BOOT mode.",
     ))
 
 
@@ -108,8 +108,26 @@ def system_view() -> str:
     return "\n".join(f"{key:<12}: {value}" for key, value in info.items())
 
 
-def models_view() -> str:
-    return "Model Registry\n" + RULE + "\n  No provider models have been discovered yet."
+def models_view(provider: str | None = None) -> str:
+    models = model_definitions(provider)
+    title = "Model Registry" if provider is None else f"Model Registry — {provider}"
+    lines = [title, RULE]
+    if not models:
+        return "\n".join(lines + ["  No catalog entries found."])
+    lines.append("  ID                              Provider       Status")
+    for item in models:
+        lines.append(f"  {item.model_id:<31} {item.provider:<14} CATALOG")
+    lines.append("")
+    lines.append("  CATALOG = known provider model metadata; WEB availability is session-discovered.")
+    return "\n".join(lines)
+
+
+def model_help(provider: str | None = None) -> str:
+    models = model_definitions(provider)
+    lines = ["Available model candidates:"]
+    for item in models:
+        lines.append(f"  {item.model_id:<31} {item.display_name}")
+    return "\n".join(lines)
 
 
 def sessions_view() -> str:
@@ -148,9 +166,7 @@ def help_view(mode: str) -> str:
             "User EXEC commands:",
             "  enable                 Enter privileged EXEC mode",
             "  show ?                 Show available show commands",
-            "  show version           Show software version",
-            "  show system            Show system information",
-            "  show ai                Show AI subsystem status",
+            "  chat <provider>        Enter persistent provider chat",
             "  airouter               Re-display NOS banner",
             "  logout                 Exit the console",
             "  ?                      Show this help",
@@ -177,11 +193,11 @@ def help_view(mode: str) -> str:
         return "\n".join((
             "AI subsystem configuration commands:",
             "  provider <name>         Configure a provider",
-            "  model <name>            Configure model policy (registry-backed later)",
-            "  route <name>            Configure routing policy (later milestone)",
-            "  prompt <name>           Configure prompt profile (later milestone)",
-            "  session                 Configure session policy (later milestone)",
-            "  api                     Configure application API clients (later milestone)",
+            "  model <name>            Select a model from the catalog",
+            "  route <name>            Configure routing policy",
+            "  prompt <name>           Configure prompt profile",
+            "  session                 Configure session policy",
+            "  api                     Configure application API clients",
             "  exit                    Return to global configuration",
         ))
     if mode == "config-ai-provider":
@@ -191,8 +207,8 @@ def help_view(mode: str) -> str:
             "  disable                 Disable provider in routing policy",
             "  login                   Enter provider authentication workflow",
             "  logout                  End provider session",
-            "  session                 Show session state",
-            "  model                   Show provider model policy",
+            "  session                 Show provider session",
+            "  model                   Show provider models",
             "  health                  Show provider health",
             "  exit                    Return to AI configuration",
         ))
