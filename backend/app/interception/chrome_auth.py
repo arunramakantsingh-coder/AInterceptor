@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import platform
 import shutil
+import socket
 import subprocess
 import time
 import urllib.error
@@ -36,6 +37,10 @@ def _profile_dir() -> Path:
         os.getenv("AINTERCEPTOR_CHROME_USER_DATA_DIR")
         or str(Path(".ainterceptor") / "chrome-profile")
     ).expanduser()
+
+
+def _endpoint_file() -> Path:
+    return _profile_dir() / "cdp_endpoint.txt"
 
 
 def _chrome_executable() -> str:
@@ -69,7 +74,15 @@ def _chrome_executable() -> str:
 
 
 def chrome_cdp_url() -> str:
-    return os.getenv("AINTERCEPTOR_CHROME_CDP_URL") or f"http://127.0.0.1:{_port()}"
+    configured = os.getenv("AINTERCEPTOR_CHROME_CDP_URL")
+    if configured:
+        return configured
+    endpoint_file = _endpoint_file()
+    try:
+        saved = endpoint_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        saved = ""
+    return saved or f"http://127.0.0.1:{_port()}"
 
 
 def _cdp_ready(url: str) -> bool:
@@ -80,20 +93,24 @@ def _cdp_ready(url: str) -> bool:
         return False
 
 
-def ensure_chrome_cdp() -> str:
-    """Return a localhost CDP endpoint, starting isolated system Chrome if needed."""
-    url = chrome_cdp_url()
-    if _cdp_ready(url):
-        return url
+def _free_port(start: int) -> int:
+    for port in range(start, min(start + 50, 65536)):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError(f"No free localhost CDP port found starting at {start}")
 
-    profile = _profile_dir()
-    profile.mkdir(parents=True, exist_ok=True)
-    executable = _chrome_executable()
-    port = _port()
+
+def _launch(executable: str, profile: Path, port: int) -> None:
     args = [
         executable,
         f"--remote-debugging-port={port}",
         "--remote-debugging-address=127.0.0.1",
+        "--remote-allow-origins=*",
         f"--user-data-dir={profile}",
         "--no-first-run",
         "--no-default-browser-check",
@@ -106,14 +123,47 @@ def ensure_chrome_cdp() -> str:
         start_new_session=True,
     )
 
-    deadline = time.monotonic() + 15.0
-    while time.monotonic() < deadline:
-        if _cdp_ready(url):
-            return url
-        time.sleep(0.25)
+
+def ensure_chrome_cdp() -> str:
+    """Return a localhost CDP endpoint, starting isolated system Chrome if needed."""
+    url = chrome_cdp_url()
+    if _cdp_ready(url):
+        return url
+
+    profile = _profile_dir()
+    profile.mkdir(parents=True, exist_ok=True)
+    executable = _chrome_executable()
+    requested_port = _port()
+
+    # A previous Chrome can leave the default port unavailable, or a Chrome
+    # process can already own the profile without exposing CDP. Prefer the
+    # configured port, then recover with a fresh localhost port and isolated
+    # profile rather than reporting a generic startup failure.
+    profiles = [profile]
+    if (profile / "SingletonLock").exists():
+        profiles.append(profile.parent / f"chrome-profile-{int(time.time())}")
+
+    last_url = url
+    for launch_profile in profiles:
+        port = requested_port if launch_profile == profile else _free_port(requested_port)
+        if not _cdp_ready(f"http://127.0.0.1:{port}"):
+            _launch(executable, launch_profile, port)
+        candidate = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            if _cdp_ready(candidate):
+                try:
+                    _endpoint_file().parent.mkdir(parents=True, exist_ok=True)
+                    _endpoint_file().write_text(candidate, encoding="utf-8")
+                except OSError:
+                    pass
+                return candidate
+            time.sleep(0.25)
+        last_url = candidate
+
     raise RuntimeError(
-        f"Chrome started but CDP endpoint did not become ready: {url}. "
-        "Check whether Chrome or an enterprise policy blocks remote debugging."
+        f"Chrome started but CDP endpoint did not become ready: {last_url}. "
+        "Check whether Chrome is already using the AInterceptor profile or an enterprise policy blocks remote debugging."
     )
 
 
