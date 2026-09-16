@@ -9,6 +9,7 @@
 | 0005 | Python over PowerShell for bootstrap scripts | Accepted | 2026-09-15 |
 | 0006 | Transport/event interception is the authoritative provider extraction boundary | Accepted | 2026-09-16 |
 | 0007 | Provider runtime boundary is separate from the legacy adapter facade | Accepted | 2026-09-16 |
+| 0008 | Claude streaming uses Chromium CDP Network streamResourceContent | Accepted | 2026-09-16 |
 
 ## ADR-0006 — Transport/event interception is the authoritative provider extraction boundary
 
@@ -61,3 +62,47 @@ count.
 - No provider inference API integration.
 - No DOM-based response extraction.
 - No routing/fallback logic.
+
+## ADR-0008 — Claude streaming uses Chromium CDP Network streamResourceContent
+
+### Context
+Playwright's high-level `Response.body()`/`text()` APIs expose a completed
+response body and therefore do not provide the incremental response contract
+required by M1. Claude's completion transport is currently observed as an SSE
+response.
+
+Chromium's DevTools Protocol provides `Network.streamResourceContent`, which
+enables streaming for a request and causes subsequent `Network.dataReceived`
+events to contain received response data. The command also returns any data
+buffered before streaming was enabled. The capability is experimental in the
+current CDP documentation and is therefore subject to live Chromium validation.
+
+### Decision
+The Claude runtime will use a Chromium CDP session attached to the provider
+page. It will:
+
+1. enable the Network domain;
+2. bypass service workers for deterministic transport visibility;
+3. identify Claude completion requests from Network request/response events;
+4. enable `Network.streamResourceContent` for the completion response;
+5. feed buffered and subsequent network bytes into an incremental provider-local
+   SSE parser;
+6. normalize parsed provider events into the shared AInterceptor event contract.
+
+Playwright remains responsible for browser/session lifecycle and prompt
+submission. It does not extract the provider response from the DOM.
+
+### Consequences
+- Claude response parsing is incremental and transport-based.
+- Provider browser/CDP objects remain inside the Claude runtime.
+- The page's rendered response is not the source of truth for AInterceptor.
+- M1.3 can be validated synthetically without invoking Claude.
+- Live validation must verify that the installed Chromium build supports the
+  experimental CDP command and that the actual Claude web transport matches
+  the current completion/SSE assumptions.
+
+### Non-goals
+- No provider inference API.
+- No DOM response scraping.
+- No live provider request during M1.3 implementation validation.
+- No routing or fallback logic.

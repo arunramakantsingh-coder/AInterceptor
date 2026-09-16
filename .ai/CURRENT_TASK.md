@@ -4,8 +4,7 @@
 **M1 — Single Provider Interception PoC**
 
 ## Status
-M1.2 Provider Runtime Boundary is defined. No provider implementation is
-being declared transport-compliant yet.
+M1.3 Claude transport interceptor implementation is staged. Synthetic tests are added but have not yet been executed in a local environment.
 
 ## Goal
 Validate one provider end-to-end through the AInterceptor web-layer
@@ -26,11 +25,21 @@ interception boundary:
   the earlier contract commit was not an ancestor of current `main`.
 - Recorded ADR-0007 for the runtime/legacy-adapter boundary.
 
+## M1.3 Implementation Staged
+- Replaced Claude's page-side response `fetch()` and full-response buffering.
+- Added a provider-local Chromium CDP Network transport observer.
+- Added incremental SSE parsing for split UTF-8/network frames.
+- Kept Playwright limited to session lifecycle and prompt submission.
+- Added explicit session-expiry/recovery and stream-failure events.
+- Preserved `ClaudeInterceptor` as a compatibility facade for the legacy adapter.
+- Added synthetic parser tests; no live Claude request is part of this change.
+- Recorded ADR-0008 for the CDP streaming mechanism.
+
 ## Important Constraint
-The existing Claude PoC uses page-side `fetch()` and buffers the complete
-response before parsing. Treat it as transitional PoC code. Do not extend
-that pattern as the final architecture. M1.3 must replace it with a real
-transport/event interception implementation.
+`Network.streamResourceContent` is an experimental Chromium DevTools Protocol
+capability. M1.3 therefore establishes the implementation boundary but does
+not claim live transport compliance until the installed Chromium runtime and
+actual Claude web transport are validated.
 
 ## Acceptance
 - M1 architecture boundary is demonstrably respected.
@@ -43,7 +52,6 @@ transport/event interception implementation.
 - Milestone completion follows the repository's milestone commit/checkpoint procedure.
 
 ## Next Procedure
-M1.3 — refactor the Claude provider runtime so browser/runtime objects remain
-provider-local and provider communication is intercepted incrementally at the
-transport/event layer. Do not perform live provider validation until synthetic
-contract coverage exists.
+M1.4 — execute synthetic contract tests, fix any failures, then prepare the
+local pull checkpoint. Do not perform live provider validation until M1.4 is
+PASS.
