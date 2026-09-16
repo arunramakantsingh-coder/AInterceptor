@@ -40,7 +40,7 @@ class WebProviderSpec:
 
 
 class WebNetworkCapture:
-    """Capture one provider response at the Chromium transport boundary."""
+    """Legacy Playwright response capture used only when CDP is unavailable."""
 
     def __init__(self, page: Any, spec: WebProviderSpec) -> None:
         self.page = page
@@ -71,10 +71,7 @@ class WebNetworkCapture:
             raise TimeoutError(f"{self.spec.provider} transport response timed out") from exc
         if self._response is None:
             raise RuntimeError("provider response not captured")
-        status = self._response.status
-        content_type = self._response.headers.get("content-type", "")
-        body = await self._response.text()
-        return status, content_type, body
+        return self._response.status, self._response.headers.get("content-type", ""), await self._response.text()
 
     async def __aexit__(self, *args: Any) -> None:
         try:
@@ -85,6 +82,7 @@ class WebNetworkCapture:
 
 def _best_text(value: Any) -> str:
     candidates: list[str] = []
+
     def visit(node: Any) -> None:
         if isinstance(node, dict):
             for k, v in node.items():
@@ -95,6 +93,7 @@ def _best_text(value: Any) -> str:
         elif isinstance(node, list):
             for item in node:
                 visit(item)
+
     visit(value)
     candidates = [item.strip() for item in candidates if item.strip()]
     plausible = [item for item in candidates if len(item) < 200_000]
@@ -151,6 +150,18 @@ def parse_deepseek(body: str) -> str:
                     nested = value.get("content") or value.get("text")
                     if isinstance(nested, str):
                         parts.append(nested)
+            # DeepSeek has also used nested choices/message structures.
+            choices = obj.get("choices")
+            if isinstance(choices, list):
+                for choice in choices:
+                    if isinstance(choice, dict):
+                        delta = choice.get("delta") or choice.get("message") or choice.get("content")
+                        if isinstance(delta, str):
+                            parts.append(delta)
+                        elif isinstance(delta, dict):
+                            value = delta.get("content") or delta.get("text")
+                            if isinstance(value, str):
+                                parts.append(value)
     if parts:
         return "".join(parts).strip()
     return _best_text(_safe_json(body))
@@ -185,7 +196,10 @@ def _gemini_json_candidates(text: str) -> list[Any]:
 def parse_gemini(body: str) -> str:
     candidates: list[str] = []
     for obj in _gemini_json_candidates(body):
-        candidates.append(_best_text(obj))
+        text = _best_text(obj)
+        if text:
+            candidates.append(text)
+
         def walk(node: Any) -> None:
             if isinstance(node, list):
                 for item in node:
@@ -196,9 +210,9 @@ def parse_gemini(body: str) -> str:
             elif isinstance(node, dict):
                 for value in node.values():
                     walk(value)
+
         walk(obj)
-    candidates = [x for x in candidates if x]
-    return max(candidates, key=len, default="")
+    return max((x for x in candidates if x), key=len, default="")
 
 
 def _safe_json(value: str) -> Any:
@@ -264,7 +278,7 @@ class BrowserWebRuntime(ProviderRuntime):
             await self._page.goto(self.spec.home_url, wait_until="domcontentloaded", timeout=30_000)
         if self.cdp_url and self._cdp is None:
             self._cdp = await self._context.new_cdp_session(self._page)
-            await self._cdp.send("Network.enable")
+            await self._cdp.send("Network.enable", {"maxTotalBufferSize": 20 * 1024 * 1024, "maxResourceBufferSize": 10 * 1024 * 1024})
             try:
                 await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
             except Exception:
@@ -314,58 +328,80 @@ class BrowserWebRuntime(ProviderRuntime):
                     continue
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
+    def _is_provider_request(self, url: str, method: str = "POST") -> bool:
+        return method.upper() == "POST" and any(marker.lower() in url.lower() for marker in self.spec.response_markers)
+
     async def _execute_cdp(self, request: ProviderExecutionRequest) -> AsyncIterator[StreamEvent]:
+        """Provider transport modeled on the working Claude CDP boundary."""
         sequence = 0
-        request_id: str | None = None
-        body_parts: list[str] = []
+        active_request: str | None = None
         response_status: int | None = None
         response_type = ""
         response_url = ""
+        chunks: list[bytes] = []
         finished = asyncio.Event()
-        failed: str | None = None
+        failure: str | None = None
+        request_seen = asyncio.Event()
 
         def on_request(params: dict[str, Any]) -> None:
-            nonlocal request_id
+            nonlocal active_request
             req = params.get("request") or {}
             url = str(req.get("url") or "")
-            method = str(req.get("method") or "GET").upper()
-            if request_id is None and method == "POST" and any(marker.lower() in url.lower() for marker in self.spec.response_markers):
-                request_id = params.get("requestId")
+            if active_request is None and self._is_provider_request(url, str(req.get("method") or "GET")):
+                active_request = str(params.get("requestId") or "")
+                request_seen.set()
 
         def on_response(params: dict[str, Any]) -> None:
             nonlocal response_status, response_type, response_url
-            if request_id is None or params.get("requestId") != request_id:
+            rid = str(params.get("requestId") or "")
+            if not active_request or rid != active_request:
                 return
             response = params.get("response") or {}
-            response_status = int(response.get("status") or 0)
-            response_type = str(response.get("mimeType") or response.get("headers", {}).get("content-type", ""))
             response_url = str(response.get("url") or "")
+            response_status = int(response.get("status") or 0)
+            headers = {str(k).lower(): str(v) for k, v in (response.get("headers") or {}).items()}
+            response_type = headers.get("content-type", "") or str(response.get("mimeType") or "")
+            asyncio.create_task(enable_stream(rid))
 
-        async def collect_body() -> None:
-            nonlocal failed
+        async def enable_stream(rid: str) -> None:
+            nonlocal failure
             try:
-                result = await self._cdp.send("Network.getResponseBody", {"requestId": request_id})
-                body = result.get("body", "")
-                if result.get("base64Encoded"):
-                    body = base64.b64decode(body).decode("utf-8", errors="replace")
-                body_parts.append(body)
+                result = await self._cdp.send("Network.streamResourceContent", {"requestId": rid})
+                buffered = result.get("bufferedData") or ""
+                if buffered:
+                    try:
+                        chunks.append(base64.b64decode(buffered))
+                    except Exception as exc:
+                        failure = f"invalid buffered network data: {exc}"
+                        finished.set()
             except Exception as exc:
-                failed = str(exc)
-            finally:
+                failure = f"stream-enable-failed: {exc}"
                 finished.set()
 
         def on_data(params: dict[str, Any]) -> None:
-            if request_id is None or params.get("requestId") != request_id:
+            rid = str(params.get("requestId") or "")
+            if not active_request or rid != active_request:
                 return
+            encoded = params.get("data")
+            if not encoded:
+                return
+            try:
+                chunks.append(base64.b64decode(encoded))
+            except Exception as exc:
+                nonlocal_failure[0] = f"invalid network data: {exc}"
+
+        nonlocal_failure = [None]
 
         def on_finished(params: dict[str, Any]) -> None:
-            if request_id is not None and params.get("requestId") == request_id:
-                asyncio.create_task(collect_body())
+            rid = str(params.get("requestId") or "")
+            if active_request and rid == active_request:
+                finished.set()
 
         def on_failed(params: dict[str, Any]) -> None:
-            nonlocal failed
-            if request_id is not None and params.get("requestId") == request_id:
-                failed = str(params.get("errorText") or "network request failed")
+            nonlocal failure
+            rid = str(params.get("requestId") or "")
+            if active_request and rid == active_request:
+                failure = str(params.get("errorText") or "network request failed")
                 finished.set()
 
         self._cdp.on("Network.requestWillBeSent", on_request)
@@ -376,16 +412,20 @@ class BrowserWebRuntime(ProviderRuntime):
         try:
             await self._page.bring_to_front()
             textbox = await self._prompt_textbox()
+            prompt = next((m.get("content", "") for m in reversed(request.messages) if m.get("role") == "user"), "")
             yield StreamEvent(self.provider, request.request_id, EventType.REQUEST_INTERCEPTED, sequence, metadata={"transport": "cdp-network"})
             sequence += 1
-            await textbox.fill(next((m.get("content", "") for m in reversed(request.messages) if m.get("role") == "user"), ""))
+            await textbox.fill(prompt)
             await textbox.press("Enter")
             try:
+                await asyncio.wait_for(request_seen.wait(), timeout=15.0)
                 await asyncio.wait_for(finished.wait(), timeout=120.0)
-            except asyncio.TimeoutError:
-                raise TimeoutError(f"{self.provider} CDP response timed out")
-            if failed:
-                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": failed})
+            except asyncio.TimeoutError as exc:
+                raise TimeoutError(f"{self.provider} CDP response timed out") from exc
+            if nonlocal_failure[0]:
+                failure = nonlocal_failure[0]
+            if failure:
+                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": failure})
                 return
             if response_status in {401, 403}:
                 yield StreamEvent(self.provider, request.request_id, EventType.SESSION_EXPIRED, sequence, metadata={"status": response_status})
@@ -397,9 +437,10 @@ class BrowserWebRuntime(ProviderRuntime):
                 return
             yield StreamEvent(self.provider, request.request_id, EventType.STREAM_STARTED, sequence, metadata={"transport": "cdp-network", "content_type": response_type})
             sequence += 1
-            text = self.parser("".join(body_parts))
+            body = b"".join(chunks).decode("utf-8", errors="replace")
+            text = self.parser(body)
             if not text:
-                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": "provider_response_parser_returned_empty"})
+                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": "provider_response_parser_returned_empty", "response_url": response_url})
                 return
             yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=text)
             sequence += 1
