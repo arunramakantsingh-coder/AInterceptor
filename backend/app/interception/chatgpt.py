@@ -18,6 +18,7 @@ class ChatGPTRuntime(BrowserWebRuntime):
                 home_url="https://chatgpt.com/",
                 login_markers=("/auth/login", "/login"),
                 response_markers=("/backend-api/conversation", "/backend-api/codex"),
+                request_markers=("/backend-api/conversation", "/backend-api/codex"),
                 default_model="gpt-5.6-luna",
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_CHATGPT_STORAGE_STATE") or str(Path(".ainterceptor") / "chatgpt" / "storage_state.json"),
@@ -27,6 +28,5 @@ class ChatGPTRuntime(BrowserWebRuntime):
         )
 
     async def login(self) -> None:
-        """Authenticate in real system Chrome, then keep that session available over CDP."""
         self.cdp_url = ensure_chrome_cdp()
         await super().login()
