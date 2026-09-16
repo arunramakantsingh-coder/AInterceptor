@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Callable
 import uuid
 
 from app.interception.claude import ClaudeRuntime, ClaudeSessionError
 from app.interception.contracts import EventType, ProviderExecutionRequest
+
+
+DeltaCallback = Callable[[str], None]
 
 
 def _session_path() -> str:
@@ -16,7 +20,7 @@ def _session_path() -> str:
     return str(Path(".ainterceptor") / "claude" / "storage_state.json")
 
 
-async def run_claude(prompt: str) -> str:
+async def run_claude(prompt: str, on_delta: DeltaCallback | None = None) -> str:
     runtime = ClaudeRuntime(
         session_path=_session_path(),
         headless=False,
@@ -32,7 +36,10 @@ async def run_claude(prompt: str) -> str:
     try:
         async for event in runtime.execute(request):
             if event.event_type is EventType.STREAM_DELTA and event.delta:
-                print(f"STREAM_DELTA: {event.delta}", flush=True)
+                if on_delta is not None:
+                    on_delta(event.delta)
+                else:
+                    print(event.delta, end="", flush=True)
                 parts.append(event.delta)
             elif event.event_type is EventType.SESSION_EXPIRED:
                 raise ClaudeSessionError("Claude session expired")
@@ -45,7 +52,11 @@ async def run_claude(prompt: str) -> str:
         await runtime.close()
 
 
-async def chat(provider: str, prompt: str) -> str:
+async def chat(
+    provider: str,
+    prompt: str,
+    on_delta: DeltaCallback | None = None,
+) -> str:
     if provider != "claude":
         raise ValueError("Only Claude is wired to a live runtime at M1.5")
-    return await run_claude(prompt)
+    return await run_claude(prompt, on_delta=on_delta)
