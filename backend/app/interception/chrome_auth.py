@@ -93,8 +93,16 @@ def _cdp_ready(url: str) -> bool:
         return False
 
 
+def _port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
 def _free_port(start: int) -> int:
     for port in range(start, min(start + 50, 65536)):
+        if _port_in_use(port):
+            continue
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
@@ -106,6 +114,9 @@ def _free_port(start: int) -> int:
 
 
 def _launch(executable: str, profile: Path, port: int) -> None:
+    profile.mkdir(parents=True, exist_ok=True)
+    log_path = profile / "chrome_launch.log"
+    log_handle = log_path.open("a", encoding="utf-8")
     args = [
         executable,
         f"--remote-debugging-port={port}",
@@ -114,42 +125,60 @@ def _launch(executable: str, profile: Path, port: int) -> None:
         f"--user-data-dir={profile}",
         "--no-first-run",
         "--no-default-browser-check",
+        "--new-window",
     ]
     subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
         start_new_session=True,
     )
+    # The child owns the duplicated file descriptor after Popen returns.
+    log_handle.close()
 
 
 def ensure_chrome_cdp() -> str:
     """Return a localhost CDP endpoint, starting isolated system Chrome if needed."""
-    url = chrome_cdp_url()
-    if _cdp_ready(url):
-        return url
+    configured = os.getenv("AINTERCEPTOR_CHROME_CDP_URL")
+    if configured and _cdp_ready(configured):
+        return configured
 
     profile = _profile_dir()
     profile.mkdir(parents=True, exist_ok=True)
     executable = _chrome_executable()
     requested_port = _port()
 
-    # A previous Chrome can leave the default port unavailable, or a Chrome
-    # process can already own the profile without exposing CDP. Prefer the
-    # configured port, then recover with a fresh localhost port and isolated
-    # profile rather than reporting a generic startup failure.
-    profiles = [profile]
-    if (profile / "SingletonLock").exists():
-        profiles.append(profile.parent / f"chrome-profile-{int(time.time())}")
+    # The first choice is the persistent AInterceptor authentication profile.
+    # If it is locked by another Chrome instance, or the requested port belongs
+    # to another process, use a fresh isolated profile instead of allowing
+    # Chrome to hand the launch to an unrelated existing browser.
+    candidates: list[tuple[Path, int]] = []
+    stable_port = requested_port
+    stable_locked = (profile / "SingletonLock").exists()
+    stable_port_busy = _port_in_use(stable_port) and not _cdp_ready(
+        f"http://127.0.0.1:{stable_port}"
+    )
 
-    last_url = url
-    for launch_profile in profiles:
-        port = requested_port if launch_profile == profile else _free_port(requested_port)
-        if not _cdp_ready(f"http://127.0.0.1:{port}"):
-            _launch(executable, launch_profile, port)
+    if not stable_locked and not stable_port_busy:
+        candidates.append((profile, stable_port))
+
+    fallback_profile = profile.parent / f"chrome-profile-{int(time.time())}"
+    candidates.append((fallback_profile, _free_port(requested_port)))
+
+    last_url = f"http://127.0.0.1:{requested_port}"
+    for launch_profile, port in candidates:
         candidate = f"http://127.0.0.1:{port}"
-        deadline = time.monotonic() + 15.0
+        last_url = candidate
+        if _cdp_ready(candidate):
+            return candidate
+
+        try:
+            _launch(executable, launch_profile, port)
+        except OSError as exc:
+            continue
+
+        deadline = time.monotonic() + 20.0
         while time.monotonic() < deadline:
             if _cdp_ready(candidate):
                 try:
@@ -159,11 +188,11 @@ def ensure_chrome_cdp() -> str:
                     pass
                 return candidate
             time.sleep(0.25)
-        last_url = candidate
 
     raise RuntimeError(
-        f"Chrome started but CDP endpoint did not become ready: {last_url}. "
-        "Check whether Chrome is already using the AInterceptor profile or an enterprise policy blocks remote debugging."
+        f"Chrome authentication browser did not expose CDP: {last_url}. "
+        "AInterceptor requires a separate visible Chrome window with a dedicated user-data directory. "
+        "If Chrome closes immediately, inspect .ainterceptor\\chrome-profile\\chrome_launch.log."
     )
 
 
