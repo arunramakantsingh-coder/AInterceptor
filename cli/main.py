@@ -1,11 +1,11 @@
 """AInterceptor CLI entry point."""
 from __future__ import annotations
 
-from .shell import InteractiveShell
+from .shell import AIRouterShell
 
 
 def main() -> None:
-    InteractiveShell().run()
+    AIRouterShell().run()
 
 
 if __name__ == "__main__":
