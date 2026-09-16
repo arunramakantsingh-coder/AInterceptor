@@ -1,0 +1,6 @@
+{
+  "name": "chatgpt",
+  "display_name": "ChatGPT Web",
+  "transport": "web",
+  "configured": false
+}

@@ -35,11 +35,18 @@ class ClaudeRuntime(ProviderRuntime):
 
     provider = "claude"
 
-    def __init__(self, session_path: str, headless: bool = True):
+    def __init__(
+        self,
+        session_path: str,
+        headless: bool = True,
+        cdp_url: str | None = None,
+    ):
         self.session_path = session_path
         self.headless = headless
+        self.cdp_url = cdp_url
         self._pw = None
         self._browser = None
+        self._owns_browser = False
         self._context = None
         self._page = None
         self._cdp = None
@@ -52,16 +59,44 @@ class ClaudeRuntime(ProviderRuntime):
             return
         if async_playwright is None:
             raise RuntimeError("playwright not installed")
-        if not pathlib.Path(self.session_path).exists():
-            raise ClaudeSessionError("Claude storage state file does not exist")
-
         self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=self.headless)
-        self._context = await self._browser.new_context(
-            storage_state=self.session_path,
-            service_workers="block",
-        )
-        self._page = await self._context.new_page()
+
+        if self.cdp_url:
+            # Attach to the already-running authenticated Chromium session.
+            # The live M1.4 Claude Web runtime uses CDP on port 9222.
+            self._browser = await self._pw.chromium.connect_over_cdp(
+                self.cdp_url
+            )
+            self._owns_browser = False
+
+            contexts = self._browser.contexts
+            if not contexts:
+                raise ClaudeSessionError(
+                    "Claude CDP browser has no browser contexts"
+                )
+
+            self._context = contexts[0]
+
+            pages = self._context.pages
+            if pages:
+                self._page = pages[0]
+            else:
+                self._page = await self._context.new_page()
+        else:
+            if not pathlib.Path(self.session_path).exists():
+                raise ClaudeSessionError(
+                    "Claude storage state file does not exist"
+                )
+
+            self._browser = await self._pw.chromium.launch(
+                headless=self.headless
+            )
+            self._owns_browser = True
+            self._context = await self._browser.new_context(
+                storage_state=self.session_path,
+                service_workers="block",
+            )
+            self._page = await self._context.new_page()
         self._cdp = await self._context.new_cdp_session(self._page)
         self._transport = ClaudeCDPTransport(self._cdp)
         await self._transport.start()
@@ -277,7 +312,7 @@ class ClaudeRuntime(ProviderRuntime):
                 await self._context.close()
             except Exception:
                 pass
-        if self._browser is not None:
+        if self._browser is not None and self._owns_browser:
             try:
                 await self._browser.close()
             except Exception:

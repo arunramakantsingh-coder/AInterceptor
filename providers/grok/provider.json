@@ -1,0 +1,6 @@
+{
+  "name": "grok",
+  "display_name": "Grok Web",
+  "transport": "web",
+  "configured": false
+}

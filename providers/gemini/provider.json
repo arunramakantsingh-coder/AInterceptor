@@ -1,0 +1,6 @@
+{
+  "name": "gemini",
+  "display_name": "Gemini Web",
+  "transport": "web",
+  "configured": false
+}

@@ -1,0 +1,6 @@
+{
+  "name": "claude",
+  "display_name": "Claude Web",
+  "transport": "cdp-sse",
+  "configured": true
+}

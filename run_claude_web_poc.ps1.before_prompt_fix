@@ -1,0 +1,314 @@
+# AInterceptor — Claude Web Communication POC
+# Run from the AInterceptor repository root.
+# This POC does NOT modify the repository and does NOT commit anything.
+# It attaches to the already-running authenticated Chrome on CDP 9222.
+
+$ErrorActionPreference = "Stop"
+
+$script = @'
+import asyncio
+import argparse
+import base64
+import json
+import re
+import sys
+from typing import Any
+
+from playwright.async_api import async_playwright
+
+
+COMPLETION_RE = re.compile(r"/chat_conversations/[^/]+/completion$")
+
+
+def is_completion(url: str) -> bool:
+    return bool(COMPLETION_RE.search(url))
+
+
+def parse_sse(buffer: str):
+    events = []
+    while True:
+        m = re.search(r"\r?\n\r?\n", buffer)
+        if not m:
+            break
+        frame = buffer[:m.start()]
+        buffer = buffer[m.end():]
+
+        event_name = None
+        data_lines = []
+        for line in frame.splitlines():
+            if not line or line.startswith(":"):
+                continue
+            field, sep, value = line.partition(":")
+            if not sep:
+                continue
+            value = value[1:] if value.startswith(" ") else value
+            if field == "event":
+                event_name = value
+            elif field == "data":
+                data_lines.append(value)
+
+        if not data_lines:
+            continue
+
+        payload = "\n".join(data_lines).strip()
+        if payload == "[DONE]":
+            events.append({"event": event_name, "done": True, "finish_reason": "stop", "delta": ""})
+            continue
+
+        try:
+            obj = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(obj, dict):
+            continue
+
+        delta = obj.get("completion") or obj.get("delta") or ""
+        finish_reason = obj.get("stop_reason") or obj.get("finish_reason")
+
+        if isinstance(delta, dict):
+            finish_reason = finish_reason or delta.get("stop_reason") or delta.get("finish_reason")
+            delta = delta.get("text") or delta.get("content") or ""
+
+        if not isinstance(delta, str):
+            delta = ""
+
+        done = event_name == "message_stop"
+        if done and not finish_reason:
+            finish_reason = "stop"
+
+        events.append({
+            "event": event_name,
+            "done": done,
+            "finish_reason": finish_reason,
+            "delta": delta,
+            "type": obj.get("type"),
+        })
+
+    return buffer, events
+
+
+async def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cdp", default="http://127.0.0.1:9222")
+    ap.add_argument("--prompt", default="ACI-POC-001. Reply with exactly: ACI-POC-001-RECEIVED")
+    ap.add_argument("--timeout", type=float, default=60.0)
+    args = ap.parse_args()
+
+    async with async_playwright() as pw:
+        print("[1/7] Connecting to existing Chrome:", args.cdp)
+        browser = await pw.chromium.connect_over_cdp(args.cdp)
+
+        contexts = browser.contexts
+        if not contexts:
+            raise RuntimeError("No Chrome browser contexts found")
+
+        context = contexts[0]
+        pages = context.pages
+        if not pages:
+            raise RuntimeError("No Chrome pages found")
+
+        page = pages[-1]
+        print("[2/7] Page:", page.url)
+        print("[2/7] Title:", await page.title())
+
+        if "claude.ai" not in page.url:
+            raise RuntimeError("Active page is not Claude. Open the authenticated Claude tab first.")
+
+        if "/login" in page.url or "/auth" in page.url:
+            raise RuntimeError("Claude is not authenticated in the attached Chrome session.")
+
+        cdp = await context.new_cdp_session(page)
+        active_request_id = None
+        request_seen = asyncio.Event()
+        response_seen = asyncio.Event()
+        stream_enabled = asyncio.Event()
+        terminal_seen = asyncio.Event()
+        failure = None
+        raw_chunks = []
+        decoded_bytes = 0
+        sse_events = []
+        response_status = None
+        response_content_type = None
+
+        await cdp.send("Network.enable", {
+            "maxTotalBufferSize": 20 * 1024 * 1024,
+            "maxResourceBufferSize": 10 * 1024 * 1024,
+        })
+        try:
+            await cdp.send("Network.setBypassServiceWorker", {"bypass": True})
+        except Exception as exc:
+            print("[WARN] Could not bypass service workers:", exc)
+
+        def on_request(params):
+            nonlocal active_request_id
+            req = params.get("request") or {}
+            url = req.get("url", "")
+            if req.get("method") == "POST" and is_completion(url):
+                active_request_id = params.get("requestId")
+                print("[3/7] COMPLETION REQUEST:", url)
+                request_seen.set()
+
+        async def enable_stream(request_id):
+            nonlocal stream_enabled
+            try:
+                result = await cdp.send(
+                    "Network.streamResourceContent",
+                    {"requestId": request_id},
+                )
+                buffered = result.get("bufferedData") or ""
+                if buffered:
+                    data = base64.b64decode(buffered)
+                    raw_chunks.append(data)
+                    print("[STREAM] buffered bytes:", len(data))
+                stream_enabled.set()
+                print("[4/7] Network.streamResourceContent: ENABLED")
+            except Exception as exc:
+                print("[ERROR] streamResourceContent failed:", exc)
+                stream_enabled.set()
+
+        def on_response(params):
+            nonlocal response_status, response_content_type
+            request_id = params.get("requestId")
+            response = params.get("response") or {}
+            url = response.get("url", "")
+            if request_id != active_request_id or not is_completion(url):
+                return
+            response_status = int(response.get("status", 0))
+            headers = {str(k).lower(): str(v) for k, v in (response.get("headers") or {}).items()}
+            response_content_type = headers.get("content-type", "")
+            print("[4/7] RESPONSE:", response_status, response_content_type)
+            response_seen.set()
+            asyncio.create_task(enable_stream(request_id))
+
+        def on_data(params):
+            nonlocal decoded_bytes, sse_events
+            if params.get("requestId") != active_request_id:
+                return
+            encoded = params.get("data")
+            if not encoded:
+                return
+            try:
+                data = base64.b64decode(encoded)
+            except Exception as exc:
+                print("[ERROR] Invalid Network.dataReceived payload:", exc)
+                return
+            raw_chunks.append(data)
+            decoded_bytes += len(data)
+
+        def on_finished(params):
+            if params.get("requestId") == active_request_id:
+                print("[NETWORK] loadingFinished")
+
+        def on_failed(params):
+            nonlocal failure
+            if params.get("requestId") == active_request_id:
+                failure = params.get("errorText") or "network request failed"
+                print("[NETWORK] loadingFailed:", failure)
+
+        cdp.on("Network.requestWillBeSent", on_request)
+        cdp.on("Network.responseReceived", on_response)
+        cdp.on("Network.dataReceived", on_data)
+        cdp.on("Network.loadingFinished", on_finished)
+        cdp.on("Network.loadingFailed", on_failed)
+
+        print("[3/7] Sending prompt through the real Claude web composer...")
+        textbox = page.get_by_role("textbox").last
+        await textbox.fill(args.prompt)
+        await textbox.press("Enter")
+
+        try:
+            await asyncio.wait_for(request_seen.wait(), timeout=args.timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timed out waiting for Claude completion request")
+
+        try:
+            await asyncio.wait_for(response_seen.wait(), timeout=args.timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timed out waiting for Claude completion response")
+
+        try:
+            await asyncio.wait_for(stream_enabled.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            pass
+
+        # Give Network.dataReceived callbacks a short window to deliver all chunks.
+        await asyncio.sleep(2)
+
+        payload = b"".join(raw_chunks)
+        text = payload.decode("utf-8", errors="replace")
+        buffer = text
+        buffer, events = parse_sse(buffer)
+        sse_events.extend(events)
+
+        # If the final frame did not have a blank-line terminator, parse it too.
+        if buffer.strip():
+            _, tail_events = parse_sse(buffer + "\n\n")
+            sse_events.extend(tail_events)
+
+        deltas = [e["delta"] for e in sse_events if e.get("delta")]
+        terminal_events = [
+            e for e in sse_events
+            if e.get("done") or e.get("finish_reason")
+        ]
+        answer = "".join(deltas)
+
+        print()
+        print("========== AInterceptor Claude Web POC ==========")
+        print("Page authenticated:     PASS")
+        print("Completion request:     PASS" if request_seen.is_set() else "Completion request:     FAIL")
+        print("HTTP status:            ", response_status)
+        print("Content-Type:           ", response_content_type)
+        print("Stream enabled:         PASS" if stream_enabled.is_set() else "Stream enabled:         UNKNOWN")
+        print("Network chunks:         ", len(raw_chunks))
+        print("Payload bytes:          ", len(payload))
+        print("SSE events:             ", len(sse_events))
+        print("Delta events:           ", len(deltas))
+        print("Response characters:    ", len(answer))
+        print("Protocol terminal:      ", "PASS" if terminal_events else "FAIL")
+        print("Network failure after terminal:", failure or "none")
+        print()
+        print("Event sequence:")
+        for e in sse_events:
+            print("  -", e.get("event") or e.get("type"), 
+                  "delta=" + repr(e.get("delta")) if e.get("delta") else "",
+                  "finish=" + repr(e.get("finish_reason")) if e.get("finish_reason") else "",
+                  "done=" + str(e.get("done")))
+        print()
+        print("RECONSTRUCTED RESPONSE:")
+        print(answer)
+        print("=================================================")
+
+        if response_status != 200:
+            return 2
+        if "text/event-stream" not in (response_content_type or "").lower():
+            return 3
+        if not deltas:
+            return 4
+        if not terminal_events:
+            return 5
+
+        # A post-terminal ERR_ABORTED is recorded but is not itself a failure.
+        return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(asyncio.run(main()))
+    except KeyboardInterrupt:
+        raise SystemExit(130)
+    except Exception as exc:
+        print("[POC FAIL]", type(exc).__name__ + ":", exc)
+        raise SystemExit(1)
+'@
+
+$path = Join-Path (Get-Location) "scripts\poc_claude_web_roundtrip.py"
+New-Item -ItemType Directory -Force (Split-Path $path) | Out-Null
+Set-Content -Path $path -Value $script -Encoding UTF8
+
+Write-Host ""
+Write-Host "POC script created: $path" -ForegroundColor Green
+Write-Host ""
+Write-Host "Prerequisite: authenticated Claude Chrome must already be running with CDP on 127.0.0.1:9222."
+Write-Host ""
+python $path --cdp http://127.0.0.1:9222 --prompt "ACI-POC-001. Reply with exactly: ACI-POC-001-RECEIVED"
