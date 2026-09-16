@@ -18,7 +18,15 @@ class DeepSeekRuntime(BrowserWebRuntime):
                 home_url="https://chat.deepseek.com/",
                 login_markers=("/login", "/auth"),
                 response_markers=("/api/v0/chat/completion",),
+                request_markers=("/api/v0/chat/completion",),
                 default_model="deepseek-flash",
+                composer_selectors=(
+                    'textarea[placeholder*="Message"]',
+                    'textarea[placeholder*="message"]',
+                    'textarea',
+                    '[contenteditable="true"]',
+                    '[role="textbox"]',
+                ),
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE") or str(Path(".ainterceptor") / "deepseek" / "storage_state.json"),
             cdp_url=cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL") or existing_chrome_cdp(),
@@ -27,6 +35,5 @@ class DeepSeekRuntime(BrowserWebRuntime):
         )
 
     async def login(self) -> None:
-        """Authenticate in real system Chrome, then keep that session available over CDP."""
         self.cdp_url = ensure_chrome_cdp()
         await super().login()
