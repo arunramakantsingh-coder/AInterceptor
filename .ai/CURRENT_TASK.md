@@ -1,57 +1,75 @@
 # .ai/CURRENT_TASK.md
 
 ## Current Milestone
-**M1 — Single Provider Interception PoC**
+**M2.0 — AIRouter NOS Control-Plane Foundation**
 
 ## Status
-M1.3 Claude transport interceptor implementation is staged. Synthetic tests are added but have not yet been executed in a local environment.
+M1 provider-runtime boundary work remains the foundation. M2.0 now establishes the Cisco-like AIRouter command/mode architecture without moving provider transport or session ownership into the CLI.
 
 ## Goal
-Validate one provider end-to-end through the AInterceptor web-layer
-interception boundary:
+Turn the existing AInterceptor CLI prototype into a real AIRouter NOS control plane:
 
-1. establish/validate a provider web session;
-2. control/observe the provider web application's communication transport;
-3. capture streaming events incrementally;
-4. normalize those events into the AInterceptor stream/event contract;
-5. expose the normalized stream to the Orchestrator without leaking provider transport details;
-6. show the live normalized interception stream on the `/intercept` UI.
+1. require explicit `airouter` initialization;
+2. expose user EXEC, privileged EXEC and configuration modes;
+3. provide Cisco-style prompts, `?` help and explicit Tab completion;
+4. establish AI provider metadata and lifecycle configuration commands;
+5. establish shared model, routing, session, usage and credit control-plane views;
+6. keep provider transport/session mechanics behind the Interceptor boundary;
+7. retain persistent provider chat as a runtime-backed operation rather than a CLI scraping mechanism.
 
-## Completed M1.2
-- Reconciled the current `ProviderAdapter` source against the governance
-  statement without inventing a fifth method.
-- Defined `ProviderRuntime` as the M1 typed execution boundary.
-- Restored the M1 Transport/Event Contract on the current `main` lineage;
-  the earlier contract commit was not an ancestor of current `main`.
-- Recorded ADR-0007 for the runtime/legacy-adapter boundary.
+## M2.0 Implemented
+- Added `cli/nos.py` for NOS mode/state, provider metadata, real local system information and self-test reporting.
+- Replaced the prototype shell with AIRouter NOS modes:
+  - `AIRouter>` user EXEC
+  - `AIRouter#` privileged EXEC
+  - `AIRouter(config)#` global configuration
+  - `AIRouter(config-ai)#` AI subsystem configuration
+  - `AIRouter(config-ai-provider-<name>)#` provider configuration
+- Added explicit `airouter` bootstrap and NOS banner.
+- Added `show version`, `show system`, `show ai`, `show providers`, `show models`, `show routes`, `show sessions`, `show counters`, and `show credits` control-plane views.
+- Added provider configuration commands for enable/disable/login/logout/session/model/health, with runtime ownership preserved.
+- Added ChatGPT, Claude, Gemini and DeepSeek to the initial provider registry. Only Claude has an implemented runtime at this milestone.
+- Added model-registry and routing-table placeholders so future orchestration has stable CLI surfaces without inventing provider model availability.
+- Kept completion explicit (`complete_while_typing=False`) and chat input free of command autocomplete.
+- Updated CLI tests for the new mode hierarchy.
 
-## M1.3 Implementation Staged
-- Replaced Claude's page-side response `fetch()` and full-response buffering.
-- Added a provider-local Chromium CDP Network transport observer.
-- Added incremental SSE parsing for split UTF-8/network frames.
-- Kept Playwright limited to session lifecycle and prompt submission.
-- Added explicit session-expiry/recovery and stream-failure events.
-- Preserved `ClaudeInterceptor` as a compatibility facade for the legacy adapter.
-- Added synthetic parser tests; no live Claude request is part of this change.
-- Recorded ADR-0008 for the CDP streaming mechanism.
+## Architecture Boundary
+The existing M1 architecture remains authoritative:
 
-## Important Constraint
-`Network.streamResourceContent` is an experimental Chromium DevTools Protocol
-capability. M1.3 therefore establishes the implementation boundary but does
-not claim live transport compliance until the installed Chromium runtime and
-actual Claude web transport are validated.
+```text
+AIRouter CLI / Client
+        |
+        v
+Gateway
+        |
+        v
+Orchestrator
+        |
+        v
+Interceptor
+        |
+        v
+Provider Web Runtime
+```
 
-## Acceptance
-- M1 architecture boundary is demonstrably respected.
-- No provider inference API is used as the primary integration path.
-- DOM scraping is not the core extraction path.
-- Session expiry/failure is represented explicitly.
-- Synthetic contract tests cover stream normalization and failure paths.
-- No secrets are committed or logged.
-- Validation produces PASS/FAIL evidence.
-- Milestone completion follows the repository's milestone commit/checkpoint procedure.
+The CLI must not implement provider transport, browser scraping, provider-specific session mechanics, or provider inference APIs as the primary integration path.
 
-## Next Procedure
-M1.4 — execute synthetic contract tests, fix any failures, then prepare the
-local pull checkpoint. Do not perform live provider validation until M1.4 is
-PASS.
+## Next Milestone
+**M2.1 — Provider lifecycle and shared orchestration contracts**
+
+Implement the provider/service lifecycle, model registry contracts, health state, session state, request accounting, and routing decision interfaces. Claude remains the reference runtime. Do not duplicate those mechanics in the CLI.
+
+## Validation
+- Pull the feature branch locally.
+- Run the existing CLI/unit test suite.
+- Start `python -m cli.main` and verify:
+  - `airouter`
+  - `enable`
+  - `configure terminal`
+  - `ai`
+  - `provider claude`
+  - `show ...`
+  - `chat claude`
+- Do not merge to `main`.
+- Do not rebuild/reset/destroy database or migrations.
+- Do not force-push or rewrite history.
