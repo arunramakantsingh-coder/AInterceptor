@@ -11,8 +11,8 @@ dependencies = [
   "prompt-toolkit>=3.0",
 ]
 
-[tool.setuptools]
-packages = ["cli"]
+[tool.setuptools.packages.find]
+include = ["cli*", "backend*"]
 
 [project.scripts]
 bootai = "cli.main:main"
