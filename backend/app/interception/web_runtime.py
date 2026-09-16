@@ -78,9 +78,7 @@ class WebNetworkCapture:
         self._status = int(response.get("status", 0))
         headers = response.get("headers") or {}
         self._content_type = str(headers.get("content-type") or headers.get("Content-Type") or "").lower()
-        if self.spec.response_content_types and not any(
-            marker in self._content_type for marker in self.spec.response_content_types
-        ):
+        if self.spec.response_content_types and not any(marker in self._content_type for marker in self.spec.response_content_types):
             self._error = f"unexpected provider response content-type: {self._content_type or '<empty>'}"
             self._event.set()
 
@@ -106,10 +104,7 @@ class WebNetworkCapture:
 
     async def __aenter__(self) -> "WebNetworkCapture":
         self._cdp = await self.page.context.new_cdp_session(self.page)
-        await self._cdp.send("Network.enable", {
-            "maxTotalBufferSize": 50 * 1024 * 1024,
-            "maxResourceBufferSize": 10 * 1024 * 1024,
-        })
+        await self._cdp.send("Network.enable", {"maxTotalBufferSize": 50 * 1024 * 1024, "maxResourceBufferSize": 10 * 1024 * 1024})
         try:
             await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
         except Exception:
@@ -240,12 +235,29 @@ def parse_deepseek(body: str) -> str:
 
 
 def parse_gemini(body: str) -> str:
+    """Parse Gemini StreamGenerate's wrb.fr response frames."""
     candidates: list[str] = []
     for obj in _json_objects(body):
-        value = _best_text(obj)
-        if value:
-            candidates.append(value)
-    return max(candidates, key=len, default="").strip()
+        if not isinstance(obj, list) or len(obj) < 3 or obj[0] != "wrb.fr":
+            continue
+        inner_raw = obj[2]
+        if not isinstance(inner_raw, str):
+            continue
+        try:
+            inner = json.loads(inner_raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(inner, list) or len(inner) <= 4 or not inner[4]:
+            continue
+        for part in inner[4]:
+            if not isinstance(part, list) or len(part) <= 1 or not isinstance(part[1], list):
+                continue
+            for text in part[1]:
+                if isinstance(text, str) and text.strip():
+                    candidates.append(text)
+    if candidates:
+        return max(candidates, key=len).strip()
+    return _best_text(_json_objects(body)).strip()
 
 
 class BrowserWebRuntime(ProviderRuntime):
