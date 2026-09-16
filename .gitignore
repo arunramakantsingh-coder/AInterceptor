@@ -18,3 +18,4 @@ credentials.json
 .vscode/settings.json
 .DS_Store
 backend/sessions/
+.ainterceptor/
