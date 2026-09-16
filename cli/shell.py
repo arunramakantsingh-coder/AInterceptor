@@ -53,10 +53,13 @@ class AInterceptorCompleter(Completer):
 class CLIState:
     def __init__(self) -> None:
         self.provider: str | None = None
+        self.chat_mode = False
         self.running = True
 
     @property
     def prompt(self) -> str:
+        if self.chat_mode and self.provider:
+            return f"AInterceptor [{self.provider}] (chat)> "
         return f"AInterceptor [{self.provider}]> " if self.provider else "AInterceptor> "
 
 
@@ -107,9 +110,11 @@ class CommandDispatcher:
             if requested not in load_providers():
                 return f"Unknown provider: {requested}"
             self.state.provider = requested
+            self.state.chat_mode = False
             return f"Context changed to {requested}"
         if name.isdigit() and 1 <= int(name) <= len(PROVIDER_ORDER):
             self.state.provider = PROVIDER_ORDER[int(name) - 1]
+            self.state.chat_mode = False
             return f"Context changed to {self.state.provider}"
         if name == "sessions":
             return "Sessions: provider session inventory is runtime-owned."
@@ -126,6 +131,7 @@ class CommandDispatcher:
         provider = self.state.provider
         assert provider is not None
         if name == "back":
+            self.state.chat_mode = False
             self.state.provider = None
             return "Returned to global context."
         if name in {"exit", "quit"}:
@@ -142,11 +148,10 @@ class CommandDispatcher:
         if name == "doctor":
             return f"{provider}: provider context reachable; runtime health probe available through diagnostics."
         if name == "chat":
-            prompt = " ".join(args).strip()
-            if not prompt:
-                return "CHAT_PROMPT"
-            self._run_chat(provider, prompt)
-            return None
+            self.state.chat_mode = True
+            if args:
+                self._run_chat(provider, " ".join(args))
+            return "Entered chat mode. Type /exit or press Ctrl+C to return." if not args else None
         return f"Unknown provider command: {name}. Type help or ?."
 
     @staticmethod
@@ -171,14 +176,41 @@ class InteractiveShell:
         self.dispatcher = CommandDispatcher(self.state)
         history_dir = Path(".ainterceptor")
         history_dir.mkdir(parents=True, exist_ok=True)
+        history = FileHistory(str(history_dir / "cli_history"))
         self.session = PromptSession(
-            history=FileHistory(str(history_dir / "cli_history")),
+            history=history,
             completer=AInterceptorCompleter(),
-            complete_while_typing=True,
+            # Cisco-style behavior: completion is explicit (Tab), not on every keystroke.
+            complete_while_typing=False,
         )
+        self.chat_session = PromptSession(history=history, completer=None)
 
     def _refresh_completer(self) -> None:
         self.session.completer = AInterceptorCompleter(self.state.provider)
+
+    def _run_chat_mode(self) -> None:
+        provider = self.state.provider
+        if not provider:
+            self.state.chat_mode = False
+            return
+
+        print(f"Entering {provider.title()} chat mode. Type /exit or press Ctrl+C to return.")
+        while self.state.running and self.state.chat_mode:
+            try:
+                prompt = self.chat_session.prompt(self.state.prompt).strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                self.state.chat_mode = False
+                break
+
+            if not prompt:
+                continue
+            if prompt.lower() in {"/exit", "/quit", "/back"}:
+                self.state.chat_mode = False
+                print("Leaving chat mode.")
+                break
+
+            self.dispatcher._run_chat(provider, prompt)
 
     def run(self) -> None:
         print(banner())
@@ -191,6 +223,10 @@ class InteractiveShell:
         print()
 
         while self.state.running:
+            if self.state.chat_mode:
+                self._run_chat_mode()
+                continue
+
             self._refresh_completer()
             try:
                 raw = self.session.prompt(self.state.prompt)
@@ -198,18 +234,8 @@ class InteractiveShell:
                 print()
                 break
 
-            if raw.strip().lower() == "chat" and self.state.provider:
-                try:
-                    prompt = self.session.prompt(f"{self.state.provider}> ").strip()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                    continue
-                if prompt:
-                    self.dispatcher._run_chat(self.state.provider, prompt)
-                continue
-
             result = self.dispatcher.dispatch(raw)
-            if result == "CHAT_PROMPT":
-                continue
             if result:
                 print(result)
+            if self.state.chat_mode:
+                self._run_chat_mode()
