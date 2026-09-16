@@ -1,3 +1,3 @@
-"""AInterceptor command-line control plane."""
+"""AInterceptor AIRouter NOS command-line control plane."""
 
-__version__ = "0.1.0-cli-m0"
+__version__ = "0.2.0-m2.0"
