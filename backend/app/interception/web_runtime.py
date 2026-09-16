@@ -1,12 +1,14 @@
 """Shared browser-backed transport runtime for non-Claude web providers.
 
 Browser automation is limited to session establishment and prompt submission.
-Provider responses are captured at the Chromium network boundary. Provider-
-specific classes supply request matching and response normalization.
+Provider responses are captured at the Chromium CDP Network boundary, never
+from rendered provider DOM. Provider-specific classes supply request matching
+and response normalization.
 """
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import pathlib
 from dataclasses import dataclass
@@ -43,13 +45,17 @@ class WebProviderSpec:
 
 
 class WebNetworkCapture:
-    """Capture the network response belonging to the current prompt."""
+    """Correlate one prompt with its Chromium CDP Network response."""
 
     def __init__(self, page: Any, spec: WebProviderSpec) -> None:
         self.page = page
         self.spec = spec
-        self._response: Any | None = None
-        self._request_url: str | None = None
+        self._cdp: Any | None = None
+        self._request_id: str | None = None
+        self._status: int = 0
+        self._content_type = ""
+        self._body: str | None = None
+        self._error: str | None = None
         self._event = asyncio.Event()
 
     @staticmethod
@@ -57,51 +63,89 @@ class WebNetworkCapture:
         lower = (url or "").lower()
         return any(marker.lower() in lower for marker in markers)
 
-    def _on_request(self, request: Any) -> None:
-        if self._request_url is None and self._matches(
-            request.url, self.spec.response_markers + self.spec.request_markers
-        ):
-            self._request_url = request.url
+    def _on_request(self, event: dict[str, Any]) -> None:
+        if self._request_id is not None:
+            return
+        request = event.get("request") or {}
+        url = request.get("url", "")
+        if self._matches(url, self.spec.response_markers + self.spec.request_markers):
+            self._request_id = event.get("requestId")
 
-    def _on_response(self, response: Any) -> None:
-        if self._response is not None:
+    def _on_response(self, event: dict[str, Any]) -> None:
+        if self._request_id is None or event.get("requestId") != self._request_id:
             return
-        if not self._matches(response.url, self.spec.response_markers):
-            return
-        content_type = (response.headers.get("content-type") or "").lower()
+        response = event.get("response") or {}
+        self._status = int(response.get("status", 0))
+        headers = response.get("headers") or {}
+        self._content_type = str(headers.get("content-type") or headers.get("Content-Type") or "").lower()
         if self.spec.response_content_types and not any(
-            marker in content_type for marker in self.spec.response_content_types
+            marker in self._content_type for marker in self.spec.response_content_types
         ):
+            self._error = f"unexpected provider response content-type: {self._content_type or '<empty>'}"
+            self._event.set()
+
+    async def _on_finished(self, event: dict[str, Any]) -> None:
+        if self._request_id is None or event.get("requestId") != self._request_id:
             return
-        if self._request_url is not None and response.url != self._request_url:
+        try:
+            result = await self._cdp.send("Network.getResponseBody", {"requestId": self._request_id})
+            body = str(result.get("body", ""))
+            if result.get("base64Encoded"):
+                body = base64.b64decode(body).decode("utf-8", errors="replace")
+            self._body = body
+        except Exception as exc:
+            self._error = f"provider response body capture failed: {exc}"
+        finally:
+            self._event.set()
+
+    def _on_failed(self, event: dict[str, Any]) -> None:
+        if self._request_id is None or event.get("requestId") != self._request_id:
             return
-        self._response = response
+        self._error = f"provider network request failed: {event.get('errorText', 'unknown error')}"
         self._event.set()
 
     async def __aenter__(self) -> "WebNetworkCapture":
-        self.page.on("request", self._on_request)
-        self.page.on("response", self._on_response)
+        self._cdp = await self.page.context.new_cdp_session(self.page)
+        await self._cdp.send("Network.enable", {
+            "maxTotalBufferSize": 50 * 1024 * 1024,
+            "maxResourceBufferSize": 10 * 1024 * 1024,
+        })
+        try:
+            await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
+        except Exception:
+            pass
+        self._cdp.on("Network.requestWillBeSent", self._on_request)
+        self._cdp.on("Network.responseReceived", self._on_response)
+        self._cdp.on("Network.loadingFinished", lambda event: asyncio.create_task(self._on_finished(event)))
+        self._cdp.on("Network.loadingFailed", self._on_failed)
         return self
 
     async def wait(self, timeout: float = 120.0) -> tuple[int, str, str]:
         try:
             await asyncio.wait_for(self._event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
+            if self._request_id is None:
+                raise TimeoutError(f"{self.spec.provider} provider request was not observed")
             raise TimeoutError(f"{self.spec.provider} transport response timed out")
-        if self._response is None:
-            raise RuntimeError("provider response not captured")
-        return (
-            self._response.status,
-            self._response.headers.get("content-type", ""),
-            await self._response.text(),
-        )
+        if self._error:
+            raise RuntimeError(self._error)
+        if self._request_id is None:
+            raise RuntimeError(f"{self.spec.provider} provider request was not observed")
+        if self._body is None:
+            raise RuntimeError(f"{self.spec.provider} provider response body was empty or unavailable")
+        return self._status, self._content_type, self._body
 
     async def __aexit__(self, *args: Any) -> None:
-        for event, callback in (("request", self._on_request), ("response", self._on_response)):
+        if self._cdp is not None:
             try:
-                self.page.remove_listener(event, callback)
+                await self._cdp.send("Network.disable")
             except Exception:
                 pass
+            try:
+                await self._cdp.detach()
+            except Exception:
+                pass
+            self._cdp = None
 
 
 def _walk_strings(value: Any, wanted: set[str]) -> list[str]:
@@ -119,10 +163,7 @@ def _walk_strings(value: Any, wanted: set[str]) -> list[str]:
 
 
 def _best_text(value: Any) -> str:
-    candidates = _walk_strings(
-        value,
-        {"content", "text", "completion", "response", "answer", "message", "parts"},
-    )
+    candidates = _walk_strings(value, {"content", "text", "completion", "response", "answer", "message", "parts"})
     candidates = [item.strip() for item in candidates if item.strip()]
     plausible = [item for item in candidates if len(item) < 200_000]
     return max(plausible or candidates, key=len, default="")
@@ -251,9 +292,7 @@ class BrowserWebRuntime(ProviderRuntime):
         else:
             profile = pathlib.Path(".ainterceptor") / "profiles" / self.provider
             profile.mkdir(parents=True, exist_ok=True)
-            self._context = await self._pw.chromium.launch_persistent_context(
-                str(profile), headless=False if interactive else self.headless,
-            )
+            self._context = await self._pw.chromium.launch_persistent_context(str(profile), headless=False if interactive else self.headless)
             self._owns_context = True
             self._owns_browser = False
             pages = list(self._context.pages)
