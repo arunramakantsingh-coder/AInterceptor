@@ -7,6 +7,7 @@ import pathlib
 import uuid
 from typing import AsyncIterator
 
+from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.claude_transport import ClaudeCDPTransport, ClaudeSSEParser
 from app.interception.contracts import EventType, ProviderExecutionRequest, StreamEvent
 from app.interception.runtime import ProviderRuntime
@@ -35,10 +36,10 @@ class ClaudeRuntime(ProviderRuntime):
 
     Two session modes are supported:
       * storage-state mode: launch a dedicated browser from a Playwright
-        storage-state file (legacy/default behaviour).
-      * CDP attach mode: attach to an already authenticated Chromium instance
-        exposed through AINTERCEPTOR_CLAUDE_CDP_URL. The externally-owned
-        browser/context is never closed by this runtime.
+        storage-state file (fallback behaviour).
+      * CDP attach mode: attach to the isolated system Chrome instance used
+        for provider authentication. The externally-owned browser/context is
+        never closed by this runtime.
     """
 
     provider = "claude"
@@ -51,7 +52,7 @@ class ClaudeRuntime(ProviderRuntime):
     ):
         self.session_path = session_path
         self.headless = headless
-        self.cdp_url = cdp_url or os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL")
+        self.cdp_url = cdp_url or os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL") or existing_chrome_cdp()
         self._pw = None
         self._browser = None
         self._context = None
@@ -129,6 +130,51 @@ class ClaudeRuntime(ProviderRuntime):
         self._transport = ClaudeCDPTransport(self._cdp)
         await self._transport.start()
         self._started = True
+
+    async def login(self) -> None:
+        """Authenticate Claude in the same isolated visible Chrome used by all providers."""
+        if async_playwright is None:
+            raise RuntimeError("playwright not installed")
+
+        self.cdp_url = ensure_chrome_cdp()
+        self._pw = await async_playwright().start()
+        self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
+        self._owns_browser = False
+        self._owns_context = False
+        contexts = self._browser.contexts
+        if not contexts:
+            raise ClaudeSessionError("Chrome CDP browser has no browser context")
+        self._context = contexts[0]
+
+        claude_pages = [
+            page for page in self._context.pages if "claude.ai" in (page.url or "").lower()
+        ]
+        self._page = claude_pages[-1] if claude_pages else await self._context.new_page()
+        await self._page.bring_to_front()
+        if "claude.ai" not in (self._page.url or "").lower():
+            await self._page.goto("https://claude.ai/", wait_until="domcontentloaded", timeout=30_000)
+
+        def needs_login() -> bool:
+            url = (self._page.url or "").lower()
+            return "/login" in url or "/auth" in url
+
+        if needs_login():
+            print("claude: Chrome authentication window opened. Complete login in that window.")
+            print("Waiting for authenticated Claude session...")
+            for _ in range(180):
+                await asyncio.sleep(1)
+                if not needs_login():
+                    break
+
+        if needs_login():
+            raise ClaudeSessionError("Claude login was not completed")
+
+        path = self.session_path or str(pathlib.Path(".ainterceptor") / "claude" / "storage_state.json")
+        pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+        await self._context.storage_state(path=path)
+        self.session_path = path
+        self._started = True
+        print(f"claude: authenticated session saved to {path}.")
 
     async def execute(
         self, request: ProviderExecutionRequest
