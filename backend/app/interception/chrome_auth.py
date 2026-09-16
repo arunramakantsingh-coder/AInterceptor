@@ -36,7 +36,7 @@ def _profile_dir() -> Path:
     return Path(
         os.getenv("AINTERCEPTOR_CHROME_USER_DATA_DIR")
         or str(Path(".ainterceptor") / "chrome-profile")
-    ).expanduser()
+    ).expanduser().resolve()
 
 
 def _endpoint_file() -> Path:
@@ -114,6 +114,7 @@ def _free_port(start: int) -> int:
 
 
 def _launch(executable: str, profile: Path, port: int) -> None:
+    profile = profile.resolve()
     profile.mkdir(parents=True, exist_ok=True)
     log_path = profile / "chrome_launch.log"
     log_handle = log_path.open("a", encoding="utf-8")
@@ -123,10 +124,13 @@ def _launch(executable: str, profile: Path, port: int) -> None:
         "--remote-debugging-address=127.0.0.1",
         "--remote-allow-origins=*",
         f"--user-data-dir={profile}",
+        "--profile-directory=Default",
         "--no-first-run",
         "--no-default-browser-check",
         "--new-window",
     ]
+    log_handle.write("Launching isolated Chrome: " + " ".join(args) + "\n")
+    log_handle.flush()
     subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
@@ -134,7 +138,6 @@ def _launch(executable: str, profile: Path, port: int) -> None:
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    # The child owns the duplicated file descriptor after Popen returns.
     log_handle.close()
 
 
@@ -149,10 +152,10 @@ def ensure_chrome_cdp() -> str:
     executable = _chrome_executable()
     requested_port = _port()
 
-    # The first choice is the persistent AInterceptor authentication profile.
-    # If it is locked by another Chrome instance, or the requested port belongs
-    # to another process, use a fresh isolated profile instead of allowing
-    # Chrome to hand the launch to an unrelated existing browser.
+    # Never reuse a normal Chrome profile. The AInterceptor profile is always
+    # passed as an absolute user-data directory, with an explicit Default profile.
+    # If that directory is already owned by Chrome, use a fresh isolated profile
+    # and a free localhost port rather than handing control to another browser.
     candidates: list[tuple[Path, int]] = []
     stable_port = requested_port
     stable_locked = (profile / "SingletonLock").exists()
@@ -175,7 +178,7 @@ def ensure_chrome_cdp() -> str:
 
         try:
             _launch(executable, launch_profile, port)
-        except OSError as exc:
+        except OSError:
             continue
 
         deadline = time.monotonic() + 20.0
