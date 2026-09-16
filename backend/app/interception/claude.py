@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import pathlib
 import uuid
 from typing import AsyncIterator
@@ -31,13 +32,26 @@ class ClaudeRuntime(ProviderRuntime):
     Playwright is used only to establish/maintain the authenticated web
     session and submit a user-visible prompt. Response extraction happens
     through Chromium CDP Network events, never through the rendered DOM.
+
+    Two session modes are supported:
+      * storage-state mode: launch a dedicated browser from a Playwright
+        storage-state file (legacy/default behaviour).
+      * CDP attach mode: attach to an already authenticated Chromium instance
+        exposed through AINTERCEPTOR_CLAUDE_CDP_URL. The externally-owned
+        browser/context is never closed by this runtime.
     """
 
     provider = "claude"
 
-    def __init__(self, session_path: str, headless: bool = True):
+    def __init__(
+        self,
+        session_path: str | None = None,
+        headless: bool = True,
+        cdp_url: str | None = None,
+    ):
         self.session_path = session_path
         self.headless = headless
+        self.cdp_url = cdp_url or os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL")
         self._pw = None
         self._browser = None
         self._context = None
@@ -45,6 +59,8 @@ class ClaudeRuntime(ProviderRuntime):
         self._cdp = None
         self._transport: ClaudeCDPTransport | None = None
         self._started = False
+        self._owns_browser = False
+        self._owns_context = False
         self._execute_lock = asyncio.Lock()
 
     async def start(self) -> None:
@@ -52,27 +68,66 @@ class ClaudeRuntime(ProviderRuntime):
             return
         if async_playwright is None:
             raise RuntimeError("playwright not installed")
-        if not pathlib.Path(self.session_path).exists():
-            raise ClaudeSessionError("Claude storage state file does not exist")
 
         self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=self.headless)
-        self._context = await self._browser.new_context(
-            storage_state=self.session_path,
-            service_workers="block",
-        )
-        self._page = await self._context.new_page()
+
+        if self.cdp_url:
+            self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
+            self._owns_browser = False
+            self._owns_context = False
+            contexts = self._browser.contexts
+            if not contexts:
+                raise ClaudeSessionError("CDP browser has no browser context")
+            self._context = contexts[0]
+
+            claude_pages = [
+                page
+                for page in self._context.pages
+                if "claude.ai" in (page.url or "").lower()
+            ]
+            self._page = claude_pages[-1] if claude_pages else None
+            if self._page is None:
+                self._page = await self._context.new_page()
+                await self._page.goto(
+                    "https://claude.ai/",
+                    wait_until="domcontentloaded",
+                    timeout=30_000,
+                )
+        else:
+            if not self.session_path:
+                await self._pw.stop()
+                self._pw = None
+                raise ClaudeSessionError(
+                    "Claude storage state is not configured; set "
+                    "AINTERCEPTOR_CLAUDE_CDP_URL or provide session_path"
+                )
+            if not pathlib.Path(self.session_path).exists():
+                await self._pw.stop()
+                self._pw = None
+                raise ClaudeSessionError("Claude storage state file does not exist")
+
+            self._browser = await self._pw.chromium.launch(headless=self.headless)
+            self._owns_browser = True
+            self._context = await self._browser.new_context(
+                storage_state=self.session_path,
+                service_workers="block",
+            )
+            self._owns_context = True
+            self._page = await self._context.new_page()
+            await self._page.goto(
+                "https://claude.ai/",
+                wait_until="domcontentloaded",
+                timeout=30_000,
+            )
+
+        if self._page is None:
+            raise ClaudeSessionError("Claude browser has no usable page")
+        if "/login" in self._page.url or "/auth" in self._page.url:
+            raise ClaudeSessionError("Claude session is expired or not authenticated")
+
         self._cdp = await self._context.new_cdp_session(self._page)
         self._transport = ClaudeCDPTransport(self._cdp)
         await self._transport.start()
-
-        await self._page.goto(
-            "https://claude.ai/",
-            wait_until="domcontentloaded",
-            timeout=30_000,
-        )
-        if "/login" in self._page.url or "/auth" in self._page.url:
-            raise ClaudeSessionError("Claude session is expired or not authenticated")
         self._started = True
 
     async def execute(
@@ -111,6 +166,40 @@ class ClaudeRuntime(ProviderRuntime):
             parser = ClaudeSSEParser()
             response_started = False
             terminal = False
+            pending_finish_reason: str | None = None
+
+            def emit_parsed(parsed: object) -> list[StreamEvent]:
+                nonlocal sequence, terminal, pending_finish_reason
+                emitted: list[StreamEvent] = []
+                delta = getattr(parsed, "delta", "")
+                finish_reason = getattr(parsed, "finish_reason", None)
+                done = bool(getattr(parsed, "done", False))
+                if delta:
+                    emitted.append(
+                        StreamEvent(
+                            provider=self.provider,
+                            request_id=request.request_id,
+                            event_type=EventType.STREAM_DELTA,
+                            sequence=sequence,
+                            delta=delta,
+                        )
+                    )
+                    sequence += 1
+                if finish_reason:
+                    pending_finish_reason = finish_reason
+                if done:
+                    emitted.append(
+                        StreamEvent(
+                            provider=self.provider,
+                            request_id=request.request_id,
+                            event_type=EventType.STREAM_COMPLETED,
+                            sequence=sequence,
+                            finish_reason=pending_finish_reason or "stop",
+                        )
+                    )
+                    sequence += 1
+                    terminal = True
+                return emitted
 
             try:
                 async for signal in self._transport.signals(timeout=120.0):
@@ -179,25 +268,9 @@ class ClaudeRuntime(ProviderRuntime):
 
                     if signal.kind == "data":
                         for parsed in parser.feed(signal.payload):
-                            if parsed.delta:
-                                yield StreamEvent(
-                                    provider=self.provider,
-                                    request_id=request.request_id,
-                                    event_type=EventType.STREAM_DELTA,
-                                    sequence=sequence,
-                                    delta=parsed.delta,
-                                )
-                                sequence += 1
-                            if parsed.done or parsed.finish_reason:
-                                yield StreamEvent(
-                                    provider=self.provider,
-                                    request_id=request.request_id,
-                                    event_type=EventType.STREAM_COMPLETED,
-                                    sequence=sequence,
-                                    finish_reason=parsed.finish_reason or "stop",
-                                )
-                                sequence += 1
-                                terminal = True
+                            for event in emit_parsed(parsed):
+                                yield event
+                            if terminal:
                                 break
                         if terminal:
                             break
@@ -208,25 +281,9 @@ class ClaudeRuntime(ProviderRuntime):
 
                     if signal.kind == "finished":
                         for parsed in parser.finish():
-                            if parsed.delta:
-                                yield StreamEvent(
-                                    provider=self.provider,
-                                    request_id=request.request_id,
-                                    event_type=EventType.STREAM_DELTA,
-                                    sequence=sequence,
-                                    delta=parsed.delta,
-                                )
-                                sequence += 1
-                            if parsed.done or parsed.finish_reason:
-                                yield StreamEvent(
-                                    provider=self.provider,
-                                    request_id=request.request_id,
-                                    event_type=EventType.STREAM_COMPLETED,
-                                    sequence=sequence,
-                                    finish_reason=parsed.finish_reason or "stop",
-                                )
-                                sequence += 1
-                                terminal = True
+                            for event in emit_parsed(parsed):
+                                yield event
+                            if terminal:
                                 break
                         if not terminal:
                             yield StreamEvent(
@@ -234,7 +291,7 @@ class ClaudeRuntime(ProviderRuntime):
                                 request_id=request.request_id,
                                 event_type=EventType.STREAM_COMPLETED,
                                 sequence=sequence,
-                                finish_reason="stop",
+                                finish_reason=pending_finish_reason or "stop",
                             )
                         terminal = True
                         break
@@ -272,12 +329,12 @@ class ClaudeRuntime(ProviderRuntime):
                 await self._cdp.detach()
             except Exception:
                 pass
-        if self._context is not None:
+        if self._owns_context and self._context is not None:
             try:
                 await self._context.close()
             except Exception:
                 pass
-        if self._browser is not None:
+        if self._owns_browser and self._browser is not None:
             try:
                 await self._browser.close()
             except Exception:
@@ -293,6 +350,8 @@ class ClaudeRuntime(ProviderRuntime):
         self._context = None
         self._browser = None
         self._pw = None
+        self._owns_browser = False
+        self._owns_context = False
 
     @staticmethod
     def _last_user_prompt(messages: list[dict]) -> str:
@@ -307,8 +366,17 @@ class ClaudeRuntime(ProviderRuntime):
 class ClaudeInterceptor:
     """Compatibility facade for the legacy ProviderAdapter."""
 
-    def __init__(self, session_path: str, headless: bool = True):
-        self._runtime = ClaudeRuntime(session_path=session_path, headless=headless)
+    def __init__(
+        self,
+        session_path: str | None = None,
+        headless: bool = True,
+        cdp_url: str | None = None,
+    ):
+        self._runtime = ClaudeRuntime(
+            session_path=session_path,
+            headless=headless,
+            cdp_url=cdp_url,
+        )
 
     async def __aenter__(self):
         await self._runtime.start()
