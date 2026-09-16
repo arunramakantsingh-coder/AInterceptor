@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.web_runtime import BrowserWebRuntime, WebProviderSpec, parse_gemini
 
 
@@ -20,7 +21,12 @@ class GeminiRuntime(BrowserWebRuntime):
                 default_model="gemini-3.6-flash",
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_GEMINI_STORAGE_STATE") or str(Path(".ainterceptor") / "gemini" / "storage_state.json"),
-            cdp_url=cdp_url or os.getenv("AINTERCEPTOR_GEMINI_CDP_URL"),
+            cdp_url=cdp_url or os.getenv("AINTERCEPTOR_GEMINI_CDP_URL") or existing_chrome_cdp(),
             headless=headless,
             parser=parse_gemini,
         )
+
+    async def login(self) -> None:
+        """Authenticate in real system Chrome, then keep that session available over CDP."""
+        self.cdp_url = ensure_chrome_cdp()
+        await super().login()
