@@ -77,6 +77,27 @@ class ClaudeSSEParser:
         if not isinstance(data, dict):
             return None
 
+        event_type = data.get("type")
+        if event_type == "content_block_delta":
+            nested_delta = data.get("delta")
+            if isinstance(nested_delta, dict):
+                text = nested_delta.get("text")
+                return ClaudeSSEEvent(delta=text if isinstance(text, str) else "")
+            return ClaudeSSEEvent()
+
+        if event_type == "message_delta":
+            nested_delta = data.get("delta")
+            finish_reason = None
+            if isinstance(nested_delta, dict):
+                value = nested_delta.get("stop_reason")
+                if isinstance(value, str) and value:
+                    finish_reason = value
+            return ClaudeSSEEvent(finish_reason=finish_reason)
+
+        if event_type == "message_stop":
+            return ClaudeSSEEvent(done=True, finish_reason="stop")
+
+        # Backward compatibility with earlier/synthetic Claude SSE shapes.
         delta = data.get("completion") or data.get("delta") or ""
         if isinstance(delta, dict):
             delta = delta.get("text") or delta.get("content") or ""
