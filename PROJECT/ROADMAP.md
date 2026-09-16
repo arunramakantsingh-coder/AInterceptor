@@ -12,7 +12,7 @@ The repository baseline has been reconciled around the web-layer interception bo
 |---|---|---|
 | M0 | Framework & Governance Bootstrap | COMPLETE |
 | M0.1 | Architecture & Requirements Reconciliation | COMPLETE |
-| M1 | Single Provider Interception PoC | NEXT |
+| M1 | Single Provider Interception PoC | IN PROGRESS — M1.5 runtime/CLI integration |
 | M2 | Session Harvesting + Direct Transport Fast Path | PENDING |
 | M3 | Multi-Provider Interceptor Adapters | PENDING |
 | M4 | Orchestrator Engine — capability routing, fallback, rate limits, merge | PENDING |
@@ -49,3 +49,12 @@ The repository baseline has been reconciled around the web-layer interception bo
 - `/intercept` UI shows normalized live interception events/chunks.
 - Security review confirms no credentials or session secrets enter Git or ordinary logs.
 - Git diff, validation, checkpoint and roadmap evidence are recorded.
+
+## M1.5 Progress Record
+
+- Claude live SSE schema handling updated for `content_block_delta`, `message_delta`, and `message_stop`.
+- Claude runtime supports CDP attach mode through `AINTERCEPTOR_CLAUDE_CDP_URL` without requiring a storage-state file.
+- CDP-attached Chromium is treated as externally owned and is not closed by `ClaudeRuntime.close()`.
+- CLI package boundary and Claude chat wiring added; provider order remains ChatGPT, Claude, Gemini, Grok.
+- CLI test package and synthetic Claude SSE/runtime configuration tests added.
+- Full local/live validation remains to be performed after pulling this branch.
