@@ -35,14 +35,16 @@ class AInterceptorCompleter(Completer):
         self.provider = provider
 
     def get_completions(self, document, complete_event):
-        word = document.get_word_before_cursor().lower()
-        commands = self.PROVIDER if self.provider else self.GLOBAL
-        if word.startswith("use "):
-            prefix = word[4:]
+        text = document.text_before_cursor.lower()
+        if text.startswith("use "):
+            prefix = text[4:].split()[-1] if text[4:].strip() else ""
             for name in PROVIDER_ORDER:
                 if name.startswith(prefix):
                     yield Completion(name, start_position=-len(prefix))
             return
+
+        word = document.get_word_before_cursor().lower()
+        commands = self.PROVIDER if self.provider else self.GLOBAL
         for command in commands:
             if command.startswith(word):
                 yield Completion(command, start_position=-len(word))
@@ -59,6 +61,16 @@ class CLIState:
 
 
 class CommandDispatcher:
+    GLOBAL_ALIASES = {
+        "h": "help", "p": "providers", "st": "status", "u": "use",
+        "sess": "sessions", "diag": "diagnostics", "ver": "version",
+        "cl": "clear", "q": "quit", "x": "exit",
+    }
+    PROVIDER_ALIASES = {
+        "h": "help", "st": "status", "se": "session", "c": "chat",
+        "d": "diagnostics", "do": "doctor", "b": "back", "q": "exit",
+    }
+
     def __init__(self, state: CLIState) -> None:
         self.state = state
 
@@ -69,6 +81,8 @@ class CommandDispatcher:
         parts = command.split()
         name = parts[0].lower()
         args = parts[1:]
+        aliases = self.PROVIDER_ALIASES if self.state.provider else self.GLOBAL_ALIASES
+        name = aliases.get(name, name)
 
         if self.state.provider:
             return self._provider_command(name, args)
@@ -137,15 +151,18 @@ class CommandDispatcher:
 
     @staticmethod
     def _run_chat(provider: str, prompt: str) -> None:
-        print()
-        print(f"{provider.title()}:")
-        print("  ", end="", flush=True)
+        try:
+            print()
+            print(f"{provider.title()}:")
+            print("  ", end="", flush=True)
 
-        def render_delta(delta: str) -> None:
-            print(delta, end="", flush=True)
+            def render_delta(delta: str) -> None:
+                print(delta, end="", flush=True)
 
-        asyncio.run(chat(provider, prompt, on_delta=render_delta))
-        print("\n")
+            asyncio.run(chat(provider, prompt, on_delta=render_delta))
+            print("\n")
+        except Exception as exc:
+            print(f"\n% {exc}\n")
 
 
 class InteractiveShell:
