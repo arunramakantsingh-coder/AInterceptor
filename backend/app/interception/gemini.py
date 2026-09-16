@@ -18,6 +18,7 @@ class GeminiRuntime(BrowserWebRuntime):
                 home_url="https://gemini.google.com/app",
                 login_markers=("/signin", "/login"),
                 response_markers=("/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate",),
+                request_markers=("/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate",),
                 default_model="gemini-3.6-flash",
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_GEMINI_STORAGE_STATE") or str(Path(".ainterceptor") / "gemini" / "storage_state.json"),
@@ -27,6 +28,5 @@ class GeminiRuntime(BrowserWebRuntime):
         )
 
     async def login(self) -> None:
-        """Authenticate in real system Chrome, then keep that session available over CDP."""
         self.cdp_url = ensure_chrome_cdp()
         await super().login()
