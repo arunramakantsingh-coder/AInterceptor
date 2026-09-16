@@ -7,6 +7,7 @@ from typing import Any, Callable
 import uuid
 
 from app.interception.chatgpt import ChatGPTRuntime
+from app.interception.chrome_auth import existing_chrome_cdp
 from app.interception.claude import ClaudeRuntime, ClaudeSessionError
 from app.interception.contracts import EventType, ProviderExecutionRequest
 from app.interception.deepseek import DeepSeekRuntime
@@ -23,7 +24,7 @@ def runtime_for(provider: str) -> Any:
         return ClaudeRuntime(
             session_path=os.getenv("AINTERCEPTOR_CLAUDE_STORAGE_STATE") or str(Path(".ainterceptor") / "claude" / "storage_state.json"),
             headless=False,
-            cdp_url=os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL"),
+            cdp_url=os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL") or existing_chrome_cdp(),
         )
     if provider == "chatgpt":
         return ChatGPTRuntime(headless=False)
