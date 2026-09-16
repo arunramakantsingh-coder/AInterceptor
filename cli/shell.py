@@ -13,7 +13,16 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 
 from .chat import chat
-from .nos import Mode, NOSState, PROVIDERS, provider_definition
+from .nos import (
+    Mode,
+    NOSState,
+    PROVIDERS,
+    model_definition,
+    model_definitions,
+    prefix_matches,
+    provider_definition,
+    unique_prefix,
+)
 from .renderer import (
     banner,
     boot_console,
@@ -21,6 +30,7 @@ from .renderer import (
     counters_view,
     credits_view,
     help_view,
+    model_help,
     models_view,
     provider_status_view,
     providers_status,
@@ -32,13 +42,32 @@ from .renderer import (
 )
 
 
+SHOW_TOPICS = (
+    "version", "system", "ai", "providers", "models", "routes",
+    "sessions", "counters", "credits", "health",
+)
+SHOW_AI_TOPICS = (
+    "providers", "models", "routes", "sessions", "usage", "credits",
+    "prompts", "health",
+)
+
+
 class AIRouterCompleter(Completer):
+    """Completion is explicit: Tab completes, typing alone does not open a menu."""
+
     COMMANDS = {
+        Mode.BOOT: ("bootai", "airouter", "exit", "logout", "quit", "?"),
         Mode.USER_EXEC: ("enable", "show", "chat", "airouter", "logout", "exit", "?"),
-        Mode.PRIVILEGED_EXEC: ("show", "chat", "configure", "clear", "disable", "exit", "logout", "?"),
+        Mode.PRIVILEGED_EXEC: (
+            "show", "chat", "configure", "clear", "disable", "exit", "logout", "?",
+        ),
         Mode.CONFIG: ("ai", "exit", "end", "?"),
-        Mode.CONFIG_AI: ("provider", "model", "route", "prompt", "session", "api", "exit", "end", "?"),
-        Mode.CONFIG_AI_PROVIDER: ("enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?"),
+        Mode.CONFIG_AI: (
+            "provider", "model", "route", "prompt", "session", "api", "exit", "end", "?",
+        ),
+        Mode.CONFIG_AI_PROVIDER: (
+            "enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?",
+        ),
     }
 
     def __init__(self, state: NOSState) -> None:
@@ -50,11 +79,9 @@ class AIRouterCompleter(Completer):
         commands = self.COMMANDS.get(self.state.mode, ())
 
         if text.startswith("show "):
-            topics = ("version", "system", "ai", "providers", "models", "routes", "sessions", "counters", "credits", "health")
-            prefix = text[5:].split()[-1] if text[5:].strip() else ""
-            if text.startswith("show ai "):
-                topics = ("providers", "models", "routes", "sessions", "usage", "credits", "prompts", "health")
-                prefix = text[8:].split()[-1] if text[8:].strip() else ""
+            topics = SHOW_AI_TOPICS if text.startswith("show ai ") else SHOW_TOPICS
+            offset = 8 if text.startswith("show ai ") else 5
+            prefix = text[offset:].split()[-1] if text[offset:].strip() else ""
             for item in topics:
                 if item.startswith(prefix):
                     yield Completion(item, start_position=-len(prefix))
@@ -70,6 +97,13 @@ class AIRouterCompleter(Completer):
         if text.startswith("provider ") and self.state.mode == Mode.CONFIG_AI:
             prefix = text[9:].split()[-1] if text[9:].strip() else ""
             for item in (p.name for p in PROVIDERS):
+                if item.startswith(prefix):
+                    yield Completion(item, start_position=-len(prefix))
+            return
+
+        if text.startswith("model ") and self.state.mode == Mode.CONFIG_AI:
+            prefix = text[6:].split()[-1] if text[6:].strip() else ""
+            for item in (m.model_id for m in model_definitions()):
                 if item.startswith(prefix):
                     yield Completion(item, start_position=-len(prefix))
             return
@@ -113,16 +147,30 @@ class AIRouterShell:
         self.state.mode = mode
         self.session.completer = AIRouterCompleter(self.state)
 
+    @staticmethod
+    def _resolve(token: str, candidates: tuple[str, ...] | list[str]) -> str | None:
+        exact = next((item for item in candidates if item.lower() == token.lower()), None)
+        if exact:
+            return exact
+        return unique_prefix(token, candidates)
+
+    @staticmethod
+    def _prefix_help(prefix: str, candidates: tuple[str, ...] | list[str]) -> str:
+        matches = prefix_matches(prefix, candidates)
+        if not matches:
+            return ""
+        return "\n".join(f"  {item}" for item in matches)
+
     def _show(self, args: list[str]) -> str:
         if not args:
             return system_status()
-        topic = args[0].lower()
+        topic = self._resolve(args[0], SHOW_TOPICS)
         if topic == "version":
             return version_view()
         if topic == "system":
             return system_view()
         if topic == "ai":
-            subtopic = args[1].lower() if len(args) > 1 else None
+            subtopic = self._resolve(args[1], SHOW_AI_TOPICS) if len(args) > 1 else None
             if subtopic in {"providers", "provider"}:
                 return providers_status()
             if subtopic == "models":
@@ -150,7 +198,78 @@ class AIRouterShell:
             return counters_view(self.state.counters)
         if topic == "credits":
             return credits_view()
-        return f"% Unknown show topic: {topic}. Type show ?."
+        return f"% Unknown show topic: {args[0]}. Type show ?."
+
+    def _context_help(self, raw: str) -> bool:
+        """Implement Cisco-style `?` syntax; returns True when help was handled."""
+        if "?" not in raw:
+            return False
+
+        attached = raw.rstrip().endswith("?") and not raw.rstrip().endswith(" ?")
+        base = raw.rstrip()[:-1] if attached else raw.rstrip()
+        parts = base.split()
+        prefix = parts[-1] if attached and parts else ""
+
+        if self.state.mode == Mode.BOOT:
+            candidates = ("bootai", "airouter", "exit", "logout", "quit")
+            print(self._prefix_help(prefix, candidates) or "  No matching commands.")
+            return True
+
+        if not parts:
+            print(help_view(self.state.mode.value))
+            return True
+
+        first = parts[0].lower()
+        commands = AIRouterCompleter.COMMANDS.get(self.state.mode, ())
+        resolved_first = self._resolve(first, tuple(c for c in commands if c != "?"))
+
+        if len(parts) == 1 and (first == "?" or not attached and raw.strip() == "?"):
+            print(help_view(self.state.mode.value))
+            return True
+
+        if attached and len(parts) == 1:
+            matches = prefix_matches(prefix, tuple(c for c in commands if c != "?"))
+            print("\n".join(f"  {item}" for item in matches) or "  No matching commands.")
+            return True
+
+        if resolved_first is None:
+            print("  No matching commands.")
+            return True
+
+        if resolved_first == "show":
+            if len(parts) == 1:
+                print("\n".join(f"  {item}" for item in SHOW_TOPICS))
+                return True
+            if parts[1].lower() == "ai" and len(parts) >= 2:
+                prefix2 = parts[2] if len(parts) > 2 else ""
+                if attached and len(parts) >= 3:
+                    prefix2 = parts[-1]
+                print(self._prefix_help(prefix2, SHOW_AI_TOPICS) or "  No matching show ai options.")
+                return True
+            prefix2 = parts[-1] if attached else ""
+            print(self._prefix_help(prefix2, SHOW_TOPICS) or "  No matching show options.")
+            return True
+
+        if resolved_first == "configure":
+            print("  terminal    Enter configuration from terminal")
+            return True
+
+        if resolved_first == "chat":
+            print("\n".join(f"  {item}" for item in (p.name for p in PROVIDERS)))
+            return True
+
+        if resolved_first == "provider" and self.state.mode == Mode.CONFIG_AI:
+            print("\n".join(f"  {item}" for item in (p.name for p in PROVIDERS)))
+            return True
+
+        if resolved_first == "model" and self.state.mode == Mode.CONFIG_AI:
+            provider = None
+            if len(parts) >= 2:
+                provider = self._resolve(parts[1], tuple(p.name for p in PROVIDERS))
+            print(model_help(provider))
+            return True
+
+        return False
 
     def _chat(self, provider: str, initial_prompt: str | None = None, return_mode: Mode = Mode.PRIVILEGED_EXEC) -> None:
         definition = provider_definition(provider)
@@ -202,7 +321,11 @@ class AIRouterShell:
             print(f"\n% {exc}\n")
 
     def _dispatch_boot(self, name: str, args: list[str]) -> None:
-        if name == "airouter":
+        resolved = self._resolve(name, ("bootai", "airouter", "exit", "logout", "quit"))
+        if resolved == "bootai":
+            print("\nAInterceptor boot mode ready. Type 'airouter' to initialize the NOS.\n")
+            return
+        if resolved == "airouter":
             print("\n" + banner())
             print()
             print(bootstrap())
@@ -211,24 +334,26 @@ class AIRouterShell:
             print("AIRouter NOS initialized. Type ? for commands.\n")
             self._set_mode(Mode.USER_EXEC)
             return
-        if name in {"exit", "quit", "logout"}:
+        if resolved in {"exit", "quit", "logout"}:
             self.state.running = False
             return
-        if name in {"?", "help"}:
-            print("Type 'airouter' to initialize the AIRouter NOS.")
-            return
-        print(f"% Unknown boot command: {name}. Type airouter or ?.")
+        print(f"% Unknown boot command: {name}. Type ?.")
 
     def _dispatch_exec(self, name: str, args: list[str]) -> None:
         mode = self.state.mode
-        if name in {"?", "help"}:
-            print(help_view(mode.value))
-            return
-        if name == "show":
-            if args and args[0] == "?":
-                print("show version | system | ai [providers|models|routes|sessions|usage|credits] | providers | models | routes | sessions | counters | credits | health")
+        commands = tuple(c for c in AIRouterCompleter.COMMANDS[mode] if c != "?")
+        resolved = self._resolve(name, commands)
+        if resolved is None:
+            matches = prefix_matches(name, commands)
+            if matches:
+                print(f"% Ambiguous command: {name} ({', '.join(matches)})")
             else:
-                print(self._show(args))
+                print(f"% Unknown command: {name}. Type ?. ")
+            return
+        name = resolved
+
+        if name == "show":
+            print(self._show(args))
             return
         if name == "airouter":
             print("\n" + banner())
@@ -245,11 +370,21 @@ class AIRouterShell:
             elif mode == Mode.PRIVILEGED_EXEC:
                 self._set_mode(Mode.USER_EXEC)
             return
-        if name == "configure" and args and args[0] in {"terminal", "t"} and mode == Mode.PRIVILEGED_EXEC:
+        if name == "configure" and mode == Mode.PRIVILEGED_EXEC:
+            if not args:
+                print("Usage: configure terminal")
+                return
+            terminal = self._resolve(args[0], ("terminal",))
+            if terminal is None:
+                print("% Invalid configure option. Use configure ?")
+                return
             print("Enter configuration commands, one per line. End with 'end'.")
             self._set_mode(Mode.CONFIG)
             return
-        if name == "clear" and args and args[0] == "counters" and mode == Mode.PRIVILEGED_EXEC:
+        if name == "clear" and mode == Mode.PRIVILEGED_EXEC:
+            if not args or self._resolve(args[0], ("counters",)) is None:
+                print("Usage: clear counters")
+                return
             for key in self.state.counters:
                 self.state.counters[key] = 0
             print("Counters cleared.")
@@ -258,16 +393,26 @@ class AIRouterShell:
             if not args:
                 print("Usage: chat <provider> [initial prompt]")
                 return
-            provider = args[0].lower()
+            provider = self._resolve(args[0], tuple(p.name for p in PROVIDERS))
+            if provider is None:
+                print(f"% Unknown or ambiguous provider: {args[0]}")
+                return
             initial = " ".join(args[1:]) or None
             self._chat(provider, initial, return_mode=mode)
             return
-        print(f"% Unknown command: {name}. Type ?. ")
 
     def _dispatch_config(self, name: str, args: list[str]) -> None:
-        if name in {"?", "help"}:
-            print(help_view(self.state.mode.value))
+        commands = tuple(c for c in AIRouterCompleter.COMMANDS[self.state.mode] if c != "?")
+        resolved = self._resolve(name, commands)
+        if resolved is None:
+            matches = prefix_matches(name, commands)
+            if matches:
+                print(f"% Ambiguous command: {name} ({', '.join(matches)})")
+            else:
+                print(f"% Unknown command: {name}. Type ?. ")
             return
+        name = resolved
+
         if name == "exit":
             if self.state.mode == Mode.CONFIG:
                 self._set_mode(Mode.PRIVILEGED_EXEC)
@@ -283,13 +428,35 @@ class AIRouterShell:
             self._set_mode(Mode.CONFIG_AI)
             return
         if self.state.mode == Mode.CONFIG_AI and name == "provider":
-            if not args or provider_definition(args[0]) is None:
+            if not args:
                 print("Usage: provider <chatgpt|claude|gemini|deepseek>")
                 return
-            self.state.provider = args[0].lower()
+            provider = self._resolve(args[0], tuple(p.name for p in PROVIDERS))
+            if provider is None:
+                print(f"% Unknown or ambiguous provider: {args[0]}")
+                return
+            self.state.provider = provider
             self._set_mode(Mode.CONFIG_AI_PROVIDER)
             return
-        if self.state.mode == Mode.CONFIG_AI and name in {"model", "route", "prompt", "session", "api"}:
+        if self.state.mode == Mode.CONFIG_AI and name == "model":
+            if not args:
+                print(model_help())
+                return
+            provider = None
+            model_token = args[0]
+            if len(args) >= 2:
+                provider = self._resolve(args[0], tuple(p.name for p in PROVIDERS))
+                if provider is not None:
+                    model_token = args[1]
+            model = model_definition(model_token, provider)
+            if model is None:
+                print(f"% Unknown or ambiguous model: {model_token}. Type model ?")
+                return
+            self.state.selected_model = model.model_id
+            print(f"Model policy selected: {model.model_id} ({model.display_name})")
+            print("  Availability: catalog candidate; provider web discovery will validate session access.")
+            return
+        if self.state.mode == Mode.CONFIG_AI and name in {"route", "prompt", "session", "api"}:
             print(f"% {name} configuration submode is reserved for the next orchestration milestone.")
             return
         if self.state.mode == Mode.CONFIG_AI_PROVIDER:
@@ -302,16 +469,17 @@ class AIRouterShell:
                 print(provider_status_view(provider))
                 return
             if name == "model":
-                print("Model selection will use the shared model registry; no models discovered yet.")
+                print(models_view(provider))
                 return
             if name in {"login", "logout"}:
                 print(f"{provider}: authentication/session workflow remains owned by the Interceptor runtime.")
                 return
-        print(f"% Unknown command: {name}. Type ?. ")
 
     def dispatch(self, raw: str) -> None:
         command = raw.strip()
         if not command:
+            return
+        if self._context_help(command):
             return
         parts = command.split()
         name = parts[0].lower()
