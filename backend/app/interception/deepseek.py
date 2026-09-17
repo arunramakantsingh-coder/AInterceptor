@@ -55,16 +55,13 @@ class DeepSeekStreamParser:
     def _join_response_parts(cls, parts: list[str]) -> str:
         """Join fragments from a snapshot's `fragments` array.
 
-        Semantics:
-        - Each entry in the array is a DISTINCT fragment of the final answer.
-        - A later entry that cumulatively extends an earlier one is the SAME
-          fragment, replayed with more text — replace, don't duplicate.
-        - Distinct fragments are separated by a paragraph break (\n\n).
-        Never discards text.
+        Never strips leading/trailing whitespace of any fragment: DeepSeek
+        streams word boundaries as separate fragments ("sent ", "\"hi").
+        Stripping any fragment corrupts those boundaries.
         """
         assembled = ""
         for part in parts:
-            if part is None:
+            if part is None or part == "":
                 continue
             if not assembled:
                 assembled = part
@@ -86,8 +83,8 @@ class DeepSeekStreamParser:
             if str(fragment.get("type") or "").upper() == "RESPONSE":
                 parts.extend(self._text_values(fragment.get("content")))
         if parts:
-            return self._join_response_parts(parts).strip()
-        return self._choice_text.strip()
+            return self._join_response_parts(parts)
+        return self._choice_text
 
     def _resolve_index(self, raw: str) -> int | None:
         try:
@@ -261,7 +258,7 @@ class DeepSeekStreamParser:
         return self.feed(suffix)
 
     def finish(self) -> str:
-        if self._pending.strip():
+        if self._pending and self._pending.strip():
             raw = self._pending.strip()
             if raw.startswith("data:"):
                 raw = raw[5:].strip()

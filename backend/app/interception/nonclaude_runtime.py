@@ -299,7 +299,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
                         if kind == "failed":
                             raise RuntimeError(str(payload))
                         if kind == "finished":
-                            final = self.parser(body.decode("utf-8", errors="replace")).strip()
+                            final = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
                             if final and final.startswith(emitted):
                                 delta = final[len(emitted):]
                             elif final and final != emitted:
