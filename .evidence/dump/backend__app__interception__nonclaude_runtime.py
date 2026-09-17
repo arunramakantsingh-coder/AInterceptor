@@ -6,7 +6,6 @@ unchanged as the known-good streaming reference.
 from __future__ import annotations
 
 import asyncio
-import os
 import base64
 import pathlib
 from typing import Any, AsyncIterator, Callable
@@ -39,16 +38,6 @@ class NonClaudeNetworkCapture:
     def _matches(url: str, markers: tuple[str, ...]) -> bool:
         url = (url or "").lower()
         return any(marker.lower() in url for marker in markers)
-
-
-def _raw_capture_path(self) -> str | None:
-    d = os.environ.get("AINTERCEPTOR_RAW_CAPTURE_DIR")
-    if not d:
-        return None
-    p = pathlib.Path(d)
-    p.mkdir(parents=True, exist_ok=True)
-    fname = f"{self.spec.provider}_{int(__import__('time').time())}.raw"
-    return str(p / fname)
 
     def _on_request(self, event: dict[str, Any]) -> None:
         request = event.get("request") or {}
@@ -91,13 +80,6 @@ def _raw_capture_path(self) -> str | None:
             payload = base64.b64decode(data)
         except Exception:
             payload = str(data).encode("utf-8", errors="replace")
-        raw_path = getattr(self, "_raw_path", None)
-        if raw_path is None:
-            raw_path = self._raw_capture_path()
-            self._raw_path = raw_path
-        if raw_path:
-            with open(raw_path, "ab") as fh:
-                fh.write(payload)
         self._queue.put_nowait(("data", payload))
 
     def _on_finished(self, event: dict[str, Any]) -> None:

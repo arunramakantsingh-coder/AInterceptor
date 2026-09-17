@@ -1,0 +1,3 @@
+[console_scripts]
+airouter = cli.main:main
+bootai = cli.main:main
