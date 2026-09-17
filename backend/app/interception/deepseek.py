@@ -44,9 +44,6 @@ def _text_values(value: Any) -> list[str]:
         return out
     if isinstance(value, dict):
         out: list[str] = []
-        # DeepSeek has used both plain content strings and nested text/content
-        # objects in response fragments. Never treat title/metadata fields as
-        # assistant output here.
         for key in ("text", "content"):
             if key in value:
                 out.extend(_text_values(value[key]))
@@ -54,10 +51,24 @@ def _text_values(value: Any) -> list[str]:
     return []
 
 
+def _append_incremental(buffer: str, candidate: str) -> str:
+    """Merge either a true delta or a cumulative snapshot without duplication."""
+    candidate = candidate.strip()
+    if not candidate:
+        return buffer
+    if not buffer:
+        return candidate
+    if candidate == buffer or candidate.startswith(buffer):
+        return buffer + candidate[len(buffer):]
+    if buffer.startswith(candidate):
+        return buffer
+    return buffer + candidate
+
+
 def parse_deepseek_web(body: str) -> str:
-    """Extract only DeepSeek assistant RESPONSE fragments."""
+    """Extract DeepSeek assistant text while tolerating delta/snapshot variants."""
     cumulative: list[str] = []
-    deltas: list[str] = []
+    incremental = ""
 
     for obj in _json_lines(body):
         if not isinstance(obj, dict):
@@ -75,12 +86,14 @@ def parse_deepseek_web(body: str) -> str:
                     for fragment in fragments:
                         if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
                             continue
-                        cumulative.extend(_text_values(fragment.get("content")))
+                        for text in _text_values(fragment.get("content")):
+                            cumulative.append(text)
 
         path = str(obj.get("p") or "")
         op = str(obj.get("o") or "").upper()
         if path in {"response/fragments/-1/content", "/response/fragments/-1/content"} and op == "APPEND":
-            deltas.extend(_text_values(obj.get("v")))
+            for text in _text_values(obj.get("v")):
+                incremental = _append_incremental(incremental, text)
 
         choices = obj.get("choices")
         if isinstance(choices, list):
@@ -89,16 +102,16 @@ def parse_deepseek_web(body: str) -> str:
                     continue
                 delta = choice.get("delta")
                 if isinstance(delta, dict):
-                    deltas.extend(_text_values(delta.get("content") or delta.get("text")))
+                    for text in _text_values(delta.get("content") or delta.get("text")):
+                        incremental = _append_incremental(incremental, text)
                 message = choice.get("message")
                 if isinstance(message, dict):
-                    deltas.extend(_text_values(message.get("content")))
+                    for text in _text_values(message.get("content")):
+                        incremental = _append_incremental(incremental, text)
 
-    if deltas:
-        return "".join(deltas).strip()
+    if incremental:
+        return incremental.strip()
     if cumulative:
-        # A response frame can contain a cumulative snapshot. Choose the
-        # longest snapshot rather than concatenating duplicate snapshots.
         return max(cumulative, key=len).strip()
     return ""
 
