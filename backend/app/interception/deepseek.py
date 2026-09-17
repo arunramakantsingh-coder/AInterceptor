@@ -53,15 +53,24 @@ def _text_values(value: Any) -> list[str]:
 
 
 def _merge_append(buffer: str, candidate: str) -> str:
-    """Append a DeepSeek token/fragment without duplicating overlap."""
+    """Append a token or replace the buffer when the provider sent a snapshot."""
     if not candidate:
         return buffer
     if not buffer:
         return candidate
+    if candidate == buffer:
+        return buffer
     if candidate.startswith(buffer):
         return candidate
-    if buffer.startswith(candidate) or candidate == buffer:
+    if buffer.startswith(candidate):
         return buffer
+
+    # Some DeepSeek frames contain a cumulative snapshot rather than a pure
+    # token delta. If the previous state occurs intact inside the candidate,
+    # promote the candidate to the new state instead of duplicating it.
+    if len(candidate) > len(buffer) and buffer.strip() and buffer.strip() in candidate:
+        return candidate
+
     max_overlap = min(len(buffer), len(candidate))
     for overlap in range(max_overlap, 0, -1):
         if buffer[-overlap:] == candidate[:overlap]:
@@ -93,7 +102,9 @@ def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
     for item in value:
         if not isinstance(item, dict):
             continue
-        current = _apply_patch(current, str(item.get("o") or "APPEND"), item.get("v"))
+        nested_op = str(item.get("o") or "APPEND").upper()
+        nested_value = item.get("v")
+        current = _apply_patch(current, nested_op, nested_value)
     return current
 
 
