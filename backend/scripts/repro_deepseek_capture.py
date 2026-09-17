@@ -4,6 +4,13 @@
 Usage:
     python -m scripts.repro_deepseek_capture "hi how are you"
 """
+import sys, io
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 import asyncio, os, pathlib, sys, uuid
 
 RAW_DIR = pathlib.Path(".evidence/raw")
