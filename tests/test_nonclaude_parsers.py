@@ -83,7 +83,17 @@ def test_deepseek_separates_independent_response_fragments():
 
 
 def test_deepseek_collapses_cumulative_response_fragments():
-    body = 'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"First paragraph."},{"type":"RESPONSE","content":"First paragraph.\n\nSecond paragraph."}]}}}'
+    payload = {
+        "v": {
+            "response": {
+                "fragments": [
+                    {"type": "RESPONSE", "content": "First paragraph."},
+                    {"type": "RESPONSE", "content": "First paragraph.\n\nSecond paragraph."},
+                ]
+            }
+        }
+    }
+    body = "data: " + json.dumps(payload, ensure_ascii=False)
     assert parse_deepseek_web(body) == "First paragraph.\n\nSecond paragraph."
 
 
