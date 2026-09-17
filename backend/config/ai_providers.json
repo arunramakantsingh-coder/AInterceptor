@@ -14,13 +14,7 @@
       "vendor": "OpenAI",
       "status": "active",
       "transports": ["web_cdp", "api"],
-      "web": {
-        "home_url": "https://chatgpt.com/",
-        "login_markers": ["/auth/login", "/login"],
-        "response_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"],
-        "request_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"],
-        "default_model": "gpt-5.6-luna"
-      },
+      "web": {"home_url": "https://chatgpt.com/", "login_markers": ["/auth/login", "/login"], "response_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"], "request_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"], "default_model": "gpt-5.6-luna"},
       "capabilities": ["text", "vision", "reasoning", "coding", "tool_use", "web_search", "file_search", "computer_use", "multilingual"],
       "models": {
         "gpt-5.6-sol": {"role": "frontier", "strengths": ["complex_reasoning", "coding", "professional_work", "agents", "tools"], "modalities": ["text", "image"], "context_tokens": 1050000, "max_output_tokens": 128000},
@@ -49,13 +43,7 @@
       "vendor": "Google",
       "status": "active",
       "transports": ["web_cdp", "api"],
-      "web": {
-        "home_url": "https://gemini.google.com/app",
-        "login_markers": ["/signin", "/login"],
-        "response_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"],
-        "request_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"],
-        "default_model": "gemini-3.8-flash"
-      },
+      "web": {"home_url": "https://gemini.google.com/app", "login_markers": ["/signin", "/login"], "response_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"], "request_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"], "default_model": "gemini-3.8-flash"},
       "capabilities": ["text", "vision", "reasoning", "coding", "multimodal", "live", "audio", "video", "image_generation", "embedding", "robotics"],
       "models": {
         "gemini-3.8-flash": {"role": "frontier_flash", "strengths": ["software_engineering", "agents", "complex_workflows", "multimodal"]},
@@ -70,7 +58,7 @@
       "vendor": "DeepSeek",
       "status": "active",
       "transports": ["web_cdp", "api"],
-      "web": {"default_model": "deepseek-v4-pro"},
+      "web": {"home_url": "https://chat.deepseek.com/", "login_markers": ["/login", "/auth", "/sign_in", "/signin"], "response_markers": ["/api/v0/chat/completion"], "request_markers": ["/api/v0/chat/completion"], "default_model": "deepseek-flash"},
       "capabilities": ["text", "reasoning", "coding", "long_context", "api_compatible"],
       "models": {
         "deepseek-v4-pro": {"role": "frontier", "strengths": ["reasoning", "coding", "complex_tasks"]},
