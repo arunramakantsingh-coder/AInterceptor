@@ -28,7 +28,7 @@ def test_chatgpt_extracts_current_delta_patch():
         'data: {"p":"/message/content/parts/0","o":"append","v":" How can I help you today?"}',
         "data: [DONE]",
     ])
-    assert parse_chatgpt_web(body) == " How can I help you today?"
+    assert parse_chatgpt_web(body) == "Hello! How can I help you today?"
 
 
 def test_gemini_extracts_streamgenerate_candidate():
