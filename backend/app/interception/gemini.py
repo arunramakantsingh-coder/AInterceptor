@@ -9,6 +9,7 @@ from typing import Any
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
+from app.providers.catalog import provider_profile
 
 
 def _json_frames(body: str) -> list[Any]:
@@ -21,10 +22,7 @@ def _json_frames(body: str) -> list[Any]:
         raw = line.strip()
         if raw.startswith("data:"):
             raw = raw[5:].strip()
-        if not raw:
-            continue
-        # Gemini can emit a terminal marker alongside normal frames.
-        if raw == "[DONE]":
+        if not raw or raw == "[DONE]":
             continue
         try:
             frames.append(json.loads(raw))
@@ -72,24 +70,16 @@ def parse_gemini_web(body: str) -> str:
             continue
         if not isinstance(inner, list):
             continue
-
-        # The response payload is normally at slot 4. Walk that subtree
-        # rather than assuming a single fixed nesting depth; Google has
-        # changed the framing shape across Gemini Web revisions.
         payload = inner[4] if len(inner) > 4 else None
         texts = _gemini_text(payload)
         if texts:
             snapshots.append("".join(texts).strip())
-
-        # Some frames expose an explicit append operation.
         if len(inner) > 1 and isinstance(inner[1], str) and inner[1].strip():
             deltas.append(inner[1])
 
     if deltas:
         return "".join(deltas).strip()
     if snapshots:
-        # StreamGenerate may repeat cumulative snapshots. Returning the
-        # longest snapshot avoids duplicating earlier text.
         return max(snapshots, key=len).strip()
     return ""
 
@@ -98,20 +88,17 @@ class GeminiRuntime(NonClaudeWebRuntime):
     provider = "gemini"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
+        profile = provider_profile(self.provider)
+        web = profile.web
         super().__init__(
             WebProviderSpec(
-                provider="gemini",
-                home_url="https://gemini.google.com/app",
-                login_markers=("/signin", "/login"),
-                response_markers=(
-                    "/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate",
-                    "BardFrontendService/StreamGenerate",
-                ),
-                request_markers=(
-                    "/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate",
-                    "BardFrontendService/StreamGenerate",
-                ),
-                default_model="gemini-3.6-flash",
+                provider=profile.provider,
+                home_url=str(web["home_url"]),
+                login_markers=tuple(web.get("login_markers", ())),
+                response_markers=tuple(web.get("response_markers", ())),
+                request_markers=tuple(web.get("request_markers", ())),
+                default_model=web.get("default_model"),
+                composer_selectors=tuple(web.get("composer_selectors", WebProviderSpec.composer_selectors)),
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_GEMINI_STORAGE_STATE") or str(Path(".ainterceptor") / "gemini" / "storage_state.json"),
             cdp_url=cdp_url or os.getenv("AINTERCEPTOR_GEMINI_CDP_URL") or existing_chrome_cdp(),
