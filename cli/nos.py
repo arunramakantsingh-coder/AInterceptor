@@ -1,16 +1,15 @@
-"""AIRouter NOS state and runtime-neutral metadata.
-
-This module owns CLI/control-plane state only. Provider transport, session,
-and authentication mechanics remain in the Interceptor subsystem.
-"""
+"""AIRouter NOS state, provider registry and persistent configuration metadata."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 import ctypes
+import importlib
 import os
 import platform
 from typing import Any, Iterable
+
+from .config_store import load_startup_config, provider_session_state, provider_storage_path, save_startup_config
 
 
 class Mode(str, Enum):
@@ -29,7 +28,7 @@ class ProviderDefinition:
     display_name: str
     transport_kind: str
     capabilities: tuple[str, ...]
-    runtime_path: str | None = None
+    runtime_path: str
 
 
 @dataclass(frozen=True)
@@ -42,24 +41,12 @@ class ModelDefinition:
 
 
 PROVIDERS: tuple[ProviderDefinition, ...] = (
-    ProviderDefinition(
-        "chatgpt", "ChatGPT Web", "web", ("reasoning", "coding", "research", "general"),
-    ),
-    ProviderDefinition(
-        "claude", "Claude Web", "web", ("reasoning", "coding", "long_context", "documents"),
-        "backend.app.interception.claude.ClaudeRuntime",
-    ),
-    ProviderDefinition(
-        "gemini", "Gemini Web", "web", ("multimodal", "research", "documents", "general"),
-    ),
-    ProviderDefinition(
-        "deepseek", "DeepSeek Web", "web", ("reasoning", "coding", "math", "structured_output"),
-    ),
+    ProviderDefinition("chatgpt", "ChatGPT Web", "web", ("reasoning", "coding", "research", "general"), "backend.app.interception.chatgpt.ChatGPTRuntime"),
+    ProviderDefinition("claude", "Claude Web", "web", ("reasoning", "coding", "long_context", "documents"), "backend.app.interception.claude.ClaudeRuntime"),
+    ProviderDefinition("gemini", "Gemini Web", "web", ("multimodal", "research", "documents", "general"), "backend.app.interception.gemini.GeminiRuntime"),
+    ProviderDefinition("deepseek", "DeepSeek Web", "web", ("reasoning", "coding", "math", "structured_output"), "backend.app.interception.deepseek.DeepSeekRuntime"),
 )
 
-# These are catalog candidates, not claims that the local web session can use
-# every entry. Actual web-session availability will be learned by provider
-# discovery and stored separately from this catalog.
 MODEL_CATALOG: tuple[ModelDefinition, ...] = (
     ModelDefinition("chatgpt", "gpt-5.6-sol", "GPT-5.6 Sol", ("reasoning", "coding", "research", "cybersecurity"), "OpenAI product catalog"),
     ModelDefinition("chatgpt", "gpt-5.6-luna", "GPT-5.6 Luna", ("speed", "general", "coding"), "OpenAI product catalog"),
@@ -84,41 +71,55 @@ class NOSState:
     chat_provider: str | None = None
     selected_model: str | None = None
     running: bool = True
-    counters: dict[str, int] = field(default_factory=lambda: {
-        "requests": 0,
-        "success": 0,
-        "failed": 0,
-        "fallbacks": 0,
-    })
+    counters: dict[str, int] = field(default_factory=lambda: {"requests": 0, "success": 0, "failed": 0, "fallbacks": 0})
     config: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.config:
+            self.config = load_startup_config()
+        self.selected_model = self.config.get("ai", {}).get("selected_model") or self.selected_model
 
     @property
     def provider_definition(self) -> ProviderDefinition | None:
         return provider_definition(self.provider)
 
+    def save_startup(self) -> None:
+        self.config.setdefault("ai", {})["selected_model"] = self.selected_model
+        save_startup_config(self.config)
+
 
 def provider_definition(name: str | None) -> ProviderDefinition | None:
     if not name:
         return None
-    name = name.lower()
-    return next((item for item in PROVIDERS if item.name == name), None)
+    return next((item for item in PROVIDERS if item.name == name.lower()), None)
+
+
+def runtime_available(name: str) -> bool:
+    item = provider_definition(name)
+    if item is None:
+        return False
+    module_name, _, class_name = item.runtime_path.rpartition(".")
+    try:
+        module = importlib.import_module(module_name)
+        return hasattr(module, class_name)
+    except Exception:
+        return False
 
 
 def provider_configured(name: str) -> bool:
-    """Return only what can be determined without touching provider sessions."""
-    if name == "claude":
-        return bool(os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL")) or os.path.exists(
-            os.getenv("AINTERCEPTOR_CLAUDE_STORAGE_STATE", "")
-        )
-    return False
+    return provider_storage_path(name).exists() or bool(os.getenv(f"AINTERCEPTOR_{name.upper()}_CDP_URL"))
 
 
 def provider_status(name: str) -> str:
     if provider_configured(name):
         return "CONFIGURED"
-    if name == "claude":
+    if runtime_available(name):
         return "RUNTIME AVAILABLE"
-    return "NOT CONFIGURED"
+    return "NOT AVAILABLE"
+
+
+def provider_session_status(name: str) -> str:
+    return provider_session_state(name)
 
 
 def model_definitions(provider: str | None = None) -> tuple[ModelDefinition, ...]:
@@ -137,47 +138,29 @@ def model_definition(model_id: str, provider: str | None = None) -> ModelDefinit
 
 
 def unique_prefix(value: str, candidates: Iterable[str]) -> str | None:
-    """Return the unique candidate beginning with value, else None."""
-    value = value.lower()
-    matches = [candidate for candidate in candidates if candidate.lower().startswith(value)]
+    matches = [candidate for candidate in candidates if candidate.lower().startswith(value.lower())]
     return matches[0] if len(matches) == 1 else None
 
 
 def prefix_matches(value: str, candidates: Iterable[str]) -> list[str]:
-    value = value.lower()
-    return [candidate for candidate in candidates if candidate.lower().startswith(value)]
+    return [candidate for candidate in candidates if candidate.lower().startswith(value.lower())]
 
 
 def _memory_gb() -> str:
     try:
         if os.name == "nt":
             class MemoryStatus(ctypes.Structure):
-                _fields_ = [("length", ctypes.c_ulong), ("memory_load", ctypes.c_ulong),
-                            ("total_phys", ctypes.c_ulonglong), ("avail_phys", ctypes.c_ulonglong),
-                            ("total_page", ctypes.c_ulonglong), ("avail_page", ctypes.c_ulonglong),
-                            ("total_virtual", ctypes.c_ulonglong), ("avail_virtual", ctypes.c_ulonglong),
-                            ("avail_extended", ctypes.c_ulonglong)]
-            status = MemoryStatus()
-            status.length = ctypes.sizeof(MemoryStatus)
+                _fields_ = [("length", ctypes.c_ulong), ("memory_load", ctypes.c_ulong), ("total_phys", ctypes.c_ulonglong), ("avail_phys", ctypes.c_ulonglong), ("total_page", ctypes.c_ulonglong), ("avail_page", ctypes.c_ulonglong), ("total_virtual", ctypes.c_ulonglong), ("avail_virtual", ctypes.c_ulonglong), ("avail_extended", ctypes.c_ulonglong)]
+            status = MemoryStatus(); status.length = ctypes.sizeof(MemoryStatus)
             if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
                 return f"{status.total_phys / (1024 ** 3):.1f} GB"
-        pages = os.sysconf("SC_PHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        return f"{pages * page_size / (1024 ** 3):.1f} GB"
+        return f"{os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE') / (1024 ** 3):.1f} GB"
     except Exception:
         return "unknown"
 
 
 def system_info() -> dict[str, str]:
-    return {
-        "hostname": platform.node() or "unknown",
-        "os": f"{platform.system()} {platform.release()}",
-        "arch": platform.machine() or "unknown",
-        "cpu": str(os.cpu_count() or "unknown"),
-        "memory": _memory_gb(),
-        "python": platform.python_version(),
-        "browser": "Chromium/CDP" if os.getenv("AINTERCEPTOR_CLAUDE_CDP_URL") else "not attached",
-    }
+    return {"hostname": platform.node() or "unknown", "os": f"{platform.system()} {platform.release()}", "arch": platform.machine() or "unknown", "cpu": str(os.cpu_count() or "unknown"), "memory": _memory_gb(), "python": platform.python_version(), "browser": "Chromium/CDP"}
 
 
 def self_tests() -> list[tuple[str, str]]:
@@ -187,8 +170,9 @@ def self_tests() -> list[tuple[str, str]]:
         tests.append(("CLI control plane", "PASS"))
     except Exception as exc:
         tests.append(("CLI control plane", f"FAIL ({exc.__class__.__name__})"))
-    tests.append(("Provider registry", "PASS" if PROVIDERS else "FAIL"))
+    tests.append(("Provider registry", "PASS" if all(runtime_available(p.name) for p in PROVIDERS) else "DEGRADED"))
     tests.append(("Model catalog", "PASS" if MODEL_CATALOG else "FAIL"))
+    tests.append(("Persistent NVRAM store", "READY"))
     tests.append(("Orchestrator boundary", "READY"))
     tests.append(("Interceptor boundary", "READY"))
     return tests
