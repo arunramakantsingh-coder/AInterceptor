@@ -10,173 +10,190 @@ from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
 
-PATCH_PATHS = {"response/fragments/-1/content", "/response/fragments/-1/content"}
-
-
-def _json_lines(body: str) -> list[Any]:
-    text = body.lstrip()
-    if text.startswith(")]}'"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-    objects: list[Any] = []
-    for line in text.splitlines():
-        raw = line.strip()
-        if raw.startswith("data:"):
-            raw = raw[5:].strip()
-        if not raw or raw == "[DONE]":
-            continue
-        try:
-            objects.append(json.loads(raw))
-        except json.JSONDecodeError:
-            continue
-    if objects:
-        return objects
-    try:
-        return [json.loads(text)]
-    except json.JSONDecodeError:
-        return []
-
-
-def _text_values(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if isinstance(value, list):
-        out: list[str] = []
-        for item in value:
-            out.extend(_text_values(item))
-        return out
-    if isinstance(value, dict):
-        out: list[str] = []
-        for key in ("text", "content"):
-            if key in value:
-                out.extend(_text_values(value[key]))
-        return out
-    return []
-
-
-def _merge_append(buffer: str, candidate: str) -> str:
-    if not candidate:
-        return buffer
-    if not buffer:
-        return candidate
-    if candidate.startswith(buffer):
-        return candidate
-    if buffer.startswith(candidate) or candidate == buffer:
-        return buffer
-    max_overlap = min(len(buffer), len(candidate))
-    for overlap in range(max_overlap, 0, -1):
-        if buffer[-overlap:] == candidate[:overlap]:
-            return buffer + candidate[overlap:]
-    return buffer + candidate
-
-
-def _apply_patch(buffer: str, operation: str, value: Any) -> str:
-    op = operation.upper()
-    texts = _text_values(value)
-    if not texts:
-        return buffer
-    candidate = "".join(texts)
-    if op == "SET":
-        return candidate
-    if op == "APPEND":
-        return _merge_append(buffer, candidate)
-    return buffer
-
-
-def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
-    op = operation.upper()
-    if op != "BATCH":
-        return _apply_patch(buffer, op, value)
-    if not isinstance(value, list):
-        return buffer
-    current = buffer
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        current = _apply_patch(current, str(item.get("o") or "APPEND"), item.get("v"))
-    return current
-
 
 class DeepSeekStreamParser:
-    """Stateful parser for DeepSeek Web patch/snapshot streams."""
+    """Stateful parser for DeepSeek Web's SSE patch protocol.
+
+    DeepSeek emits a mutable response state. Full response snapshots replace
+    the fragment list; patch operations mutate a fragment; later frames may
+    carry only ``v`` and inherit the prior patch context. We keep the fragment
+    state rather than concatenating every observed text field.
+    """
 
     def __init__(self) -> None:
-        self._body_seen = ""
         self._pending = ""
-        self._patch_text = ""
-        self._snapshot_text = ""
+        self._body_mode = False
+        self._fragments: list[dict[str, Any]] = []
         self._active_path = ""
         self._active_op = ""
+        self._message_id: str | None = None
         self._choice_text = ""
 
-    @property
-    def current(self) -> str:
-        if self._snapshot_text:
-            return self._snapshot_text.strip()
-        if self._patch_text:
-            return self._patch_text.strip()
-        return self._choice_text.strip()
+    @staticmethod
+    def _text_values(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, list):
+            out: list[str] = []
+            for item in value:
+                out.extend(DeepSeekStreamParser._text_values(item))
+            return out
+        if isinstance(value, dict):
+            for key in ("text", "content"):
+                if key in value:
+                    return DeepSeekStreamParser._text_values(value[key])
+        return []
 
-    def _apply_object(self, obj: Any) -> None:
+    @staticmethod
+    def _clone_fragment(fragment: Any) -> dict[str, Any]:
+        if isinstance(fragment, dict):
+            return dict(fragment)
+        return {"type": "text", "content": ""}
+
+    def _resolve_index(self, raw: str) -> int | None:
+        try:
+            index = int(raw)
+        except (TypeError, ValueError):
+            return None
+        if index < 0:
+            index = len(self._fragments) + index
+        if index < 0:
+            index = 0
+        return index
+
+    def _ensure_fragment(self, index: int) -> dict[str, Any]:
+        while len(self._fragments) <= index:
+            self._fragments.append({"type": "text", "content": ""})
+        return self._fragments[index]
+
+    def _append_content(self, fragment: dict[str, Any], value: Any) -> None:
+        text = "".join(self._text_values(value))
+        if text:
+            fragment["content"] = str(fragment.get("content") or "") + text
+
+    def _apply_patch(self, path: str, operation: str, value: Any) -> None:
+        op = (operation or "APPEND").upper()
+        path = path.lstrip("/")
+
+        if path in {"response/fragments", "fragments"}:
+            if not isinstance(value, list):
+                return
+            if op == "SET":
+                self._fragments = [self._clone_fragment(item) for item in value]
+            elif op == "APPEND":
+                self._fragments.extend(self._clone_fragment(item) for item in value)
+            return
+
+        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)/content$", path)
+        if match:
+            index = self._resolve_index(match.group(1))
+            if index is None:
+                return
+            fragment = self._ensure_fragment(index)
+            if op in {"SET", "REPLACE"}:
+                values = self._text_values(value)
+                fragment["content"] = "".join(values)
+            elif op in {"APPEND", ""}:
+                self._append_content(fragment, value)
+            return
+
+        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)$", path)
+        if match:
+            index = self._resolve_index(match.group(1))
+            if index is None or not isinstance(value, dict):
+                return
+            if op in {"SET", "REPLACE"}:
+                self._fragments[index] = self._clone_fragment(value)
+            else:
+                self._ensure_fragment(index).update(self._clone_fragment(value))
+            return
+
+        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)/(\w+)$", path)
+        if match:
+            index = self._resolve_index(match.group(1))
+            if index is None:
+                return
+            self._ensure_fragment(index)[match.group(2)] = value
+
+    def _extract_snapshot(self, obj: dict[str, Any]) -> None:
+        containers: list[dict[str, Any]] = [obj]
+        if isinstance(obj.get("v"), dict):
+            containers.append(obj["v"])
+        for container in containers:
+            response = container.get("response")
+            if not isinstance(response, dict):
+                continue
+            fragments = response.get("fragments")
+            if isinstance(fragments, list):
+                self._fragments = [self._clone_fragment(item) for item in fragments]
+            message_id = response.get("message_id") or response.get("response_message_id")
+            if message_id:
+                self._message_id = str(message_id)
+            return
+
+    def _extract_choices(self, obj: dict[str, Any]) -> None:
+        choices = obj.get("choices")
+        if not isinstance(choices, list):
+            return
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta")
+            if isinstance(delta, dict):
+                values = self._text_values(delta.get("content") or delta.get("text"))
+                if values:
+                    self._choice_text += "".join(values)
+            message = choice.get("message")
+            if isinstance(message, dict):
+                values = self._text_values(message.get("content"))
+                if values:
+                    self._choice_text += "".join(values)
+
+    def _feed_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
             return
+
+        # A complete DeepSeek response snapshot is authoritative state.
+        self._extract_snapshot(obj)
+
+        # BATCH contains nested patch records with their own p/o/v fields.
+        if str(obj.get("o") or "").upper() == "BATCH" and isinstance(obj.get("v"), list):
+            for item in obj["v"]:
+                self._feed_object(item)
+            return
+
         if "p" in obj:
             self._active_path = str(obj.get("p") or "")
         if "o" in obj:
             self._active_op = str(obj.get("o") or "").upper()
-        if "v" in obj and self._active_path in PATCH_PATHS and self._active_op:
-            self._patch_text = _apply_patch_value(self._patch_text, self._active_op, obj.get("v"))
 
-        containers = [obj]
-        if isinstance(obj.get("v"), dict):
-            containers.append(obj["v"])
-        for container in containers:
-            response = container.get("response") if isinstance(container, dict) else None
-            if not isinstance(response, dict):
-                continue
-            fragments = response.get("fragments")
-            if not isinstance(fragments, list):
-                continue
-            for fragment in fragments:
-                if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
-                    continue
-                for value in _text_values(fragment.get("content")):
-                    self._snapshot_text = _merge_append(self._snapshot_text, value)
+        if "v" in obj:
+            if self._active_path:
+                self._apply_patch(self._active_path, self._active_op, obj.get("v"))
+            elif isinstance(obj.get("v"), str) and self._fragments:
+                # DeepSeek carries the active content patch forward; a truly
+                # pathless string also means append to the current fragment.
+                self._append_content(self._fragments[-1], obj.get("v"))
 
-        choices = obj.get("choices")
-        if isinstance(choices, list):
-            for choice in choices:
-                if not isinstance(choice, dict):
-                    continue
-                delta = choice.get("delta")
-                if isinstance(delta, dict):
-                    for value in _text_values(delta.get("content") or delta.get("text")):
-                        self._choice_text = _merge_append(self._choice_text, value)
-                message = choice.get("message")
-                if isinstance(message, dict):
-                    for value in _text_values(message.get("content")):
-                        self._choice_text = _merge_append(self._choice_text, value)
+        self._extract_choices(obj)
 
     def _consume_line(self, line: str) -> None:
         raw = line.strip()
         if raw.startswith(")]}'"):
-            raw = raw.split("\n", 1)[1].strip() if "\n" in raw else ""
+            raw = raw[4:].lstrip("\r\n ")
         if raw.startswith("data:"):
             raw = raw[5:].strip()
         if not raw or raw == "[DONE]":
             return
         try:
-            self._apply_object(json.loads(raw))
+            self._feed_object(json.loads(raw))
         except json.JSONDecodeError:
-            return
+            self._pending = raw
 
-    def feed(self, body: str) -> str:
-        if body.startswith(self._body_seen):
-            suffix = body[len(self._body_seen):]
-        else:
-            self.__init__()
-            suffix = body
-        self._body_seen = body
-        self._pending += suffix
+    def feed(self, chunk: str) -> str:
+        if not isinstance(chunk, str) or not chunk:
+            return self.current
+        self._pending += chunk
         lines = self._pending.splitlines(keepends=True)
         self._pending = ""
         for line in lines:
@@ -184,20 +201,20 @@ class DeepSeekStreamParser:
                 self._consume_line(line)
             else:
                 self._pending = line
-        if self._pending.strip():
-            raw = self._pending.strip()
-            candidate = raw[5:].strip() if raw.startswith("data:") else raw
-            try:
-                obj = json.loads(candidate)
-            except json.JSONDecodeError:
-                pass
-            else:
-                self._pending = ""
-                self._apply_object(obj)
         return self.current
 
-    def __call__(self, body: str) -> str:
-        return self.feed(body)
+    @property
+    def current(self) -> str:
+        response_parts: list[str] = []
+        for fragment in self._fragments:
+            if str(fragment.get("type") or "").upper() != "RESPONSE":
+                continue
+            response_parts.extend(self._text_values(fragment.get("content")))
+        if response_parts:
+            return "".join(response_parts).strip()
+        if self._choice_text:
+            return self._choice_text.strip()
+        return ""
 
     def finish(self) -> str:
         if self._pending.strip():
@@ -206,7 +223,7 @@ class DeepSeekStreamParser:
                 raw = raw[5:].strip()
             if raw != "[DONE]":
                 try:
-                    self._apply_object(json.loads(raw))
+                    self._feed_object(json.loads(raw))
                 except json.JSONDecodeError:
                     pass
             self._pending = ""
@@ -215,8 +232,7 @@ class DeepSeekStreamParser:
 
 def parse_deepseek_web(body: str) -> str:
     parser = DeepSeekStreamParser()
-    parser.feed(body)
-    return parser.finish()
+    return parser.feed(body) if body else ""
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
@@ -246,9 +262,6 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
         )
 
     async def execute(self, request):
-        # NonClaudeWebRuntime reparses the cumulative body on every CDP chunk.
-        # Give DeepSeek one parser instance per execution so patch state is
-        # carried forward exactly like ClaudeSSEParser carries SSE state.
         self.parser = DeepSeekStreamParser()
         async for event in super().execute(request):
             yield event
