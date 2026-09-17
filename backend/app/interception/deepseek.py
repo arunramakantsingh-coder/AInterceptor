@@ -41,9 +41,7 @@ class DeepSeekStreamParser:
 
     @staticmethod
     def _clone_fragment(fragment: Any) -> dict[str, Any]:
-        if isinstance(fragment, dict):
-            return dict(fragment)
-        return {"type": "RESPONSE", "content": ""}
+        return dict(fragment) if isinstance(fragment, dict) else {"type": "RESPONSE", "content": ""}
 
     @staticmethod
     def _merge_append(existing: str, incoming: str) -> str:
@@ -61,16 +59,24 @@ class DeepSeekStreamParser:
                 return existing + incoming[overlap:]
         return existing + incoming
 
+    @property
+    def current(self) -> str:
+        parts: list[str] = []
+        for fragment in self._fragments:
+            if str(fragment.get("type") or "").upper() == "RESPONSE":
+                parts.extend(self._text_values(fragment.get("content")))
+        if parts:
+            return "".join(parts).strip()
+        return self._choice_text.strip()
+
     def _resolve_index(self, raw: str) -> int | None:
         try:
             index = int(raw)
         except (TypeError, ValueError):
             return None
         if index < 0:
-            index = len(self._fragments) + index
-        if index < 0:
-            index = 0
-        return index
+            index += len(self._fragments)
+        return max(index, 0)
 
     def _ensure_fragment(self, index: int) -> dict[str, Any]:
         while len(self._fragments) <= index:
@@ -78,18 +84,23 @@ class DeepSeekStreamParser:
         return self._fragments[index]
 
     def _append_content(self, fragment: dict[str, Any], value: Any) -> None:
-        text = "".join(self._text_values(value))
-        if text:
-            fragment["content"] = self._merge_append(str(fragment.get("content") or ""), text)
+        incoming = "".join(self._text_values(value))
+        if incoming:
+            existing = "".join(self._text_values(fragment.get("content")))
+            fragment["content"] = self._merge_append(existing, incoming)
 
     def _apply_patch(self, path: str, operation: str, value: Any) -> None:
-        op = (operation or "APPEND").upper()
         path = path.lstrip("/")
+        op = (operation or "APPEND").upper()
 
-        if path in {"response/fragments", "fragments"}:
-            if not isinstance(value, list):
-                return
-            if op == "SET":
+        if op == "BATCH" and isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    self._apply_patch(str(item.get("p") or path), str(item.get("o") or "APPEND"), item.get("v"))
+            return
+
+        if path in {"response/fragments", "fragments"} and isinstance(value, list):
+            if op in {"SET", "REPLACE"}:
                 self._fragments = [self._clone_fragment(item) for item in value]
             elif op == "APPEND":
                 self._fragments.extend(self._clone_fragment(item) for item in value)
@@ -108,25 +119,18 @@ class DeepSeekStreamParser:
             return
 
         match = re.match(r"^(?:response/)?fragments/(-?\d+)$", path)
-        if match:
+        if match and isinstance(value, dict):
             index = self._resolve_index(match.group(1))
-            if index is None or not isinstance(value, dict):
+            if index is None:
                 return
             if op in {"SET", "REPLACE"}:
                 self._fragments[index] = self._clone_fragment(value)
             else:
                 self._ensure_fragment(index).update(self._clone_fragment(value))
-            return
 
-        match = re.match(r"^(?:response/)?fragments/(-?\d+)/(\w+)$", path)
-        if match:
-            index = self._resolve_index(match.group(1))
-            if index is None:
-                return
-            self._ensure_fragment(index)[match.group(2)] = value
-
-    def _extract_snapshot(self, obj: dict[str, Any]) -> None:
-        containers: list[dict[str, Any]] = [obj]
+    def _extract_snapshot(self, obj: dict[str, Any]) -> bool:
+        found = False
+        containers = [obj]
         if isinstance(obj.get("v"), dict):
             containers.append(obj["v"])
         for container in containers:
@@ -136,10 +140,13 @@ class DeepSeekStreamParser:
             fragments = response.get("fragments")
             if isinstance(fragments, list):
                 self._fragments = [self._clone_fragment(item) for item in fragments]
+                found = True
             message_id = response.get("message_id") or response.get("response_message_id")
             if message_id:
                 self._message_id = str(message_id)
-            return
+            if found:
+                return True
+        return False
 
     def _extract_choices(self, obj: dict[str, Any]) -> None:
         choices = obj.get("choices")
@@ -150,39 +157,27 @@ class DeepSeekStreamParser:
                 continue
             delta = choice.get("delta")
             if isinstance(delta, dict):
-                self._choice_text = self._merge_append(
-                    self._choice_text,
-                    "".join(self._text_values(delta.get("content") or delta.get("text"))),
-                )
+                self._choice_text = self._merge_append(self._choice_text, "".join(self._text_values(delta.get("content") or delta.get("text"))))
             message = choice.get("message")
             if isinstance(message, dict):
-                self._choice_text = self._merge_append(
-                    self._choice_text,
-                    "".join(self._text_values(message.get("content"))),
-                )
+                self._choice_text = self._merge_append(self._choice_text, "".join(self._text_values(message.get("content"))))
 
     def _feed_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
             return
-
-        self._extract_snapshot(obj)
-
-        if str(obj.get("o") or "").upper() == "BATCH" and isinstance(obj.get("v"), list):
-            for item in obj["v"]:
-                self._feed_object(item)
-            return
-
+        snapshot = self._extract_snapshot(obj)
         if "p" in obj:
             self._active_path = str(obj.get("p") or "")
         if "o" in obj:
             self._active_op = str(obj.get("o") or "").upper()
-
         if "v" in obj:
-            if self._active_path:
-                self._apply_patch(self._active_path, self._active_op, obj.get("v"))
-            elif isinstance(obj.get("v"), str) and self._fragments:
-                self._append_content(self._fragments[-1], obj.get("v"))
-
+            # Snapshot dictionaries are authoritative state and must not then
+            # be re-applied as the previous patch operation's value.
+            if not (snapshot and isinstance(obj.get("v"), dict) and "response" in obj["v"]):
+                if self._active_path:
+                    self._apply_patch(self._active_path, self._active_op, obj.get("v"))
+                elif isinstance(obj.get("v"), str) and self._fragments:
+                    self._append_content(self._fragments[-1], obj.get("v"))
         self._extract_choices(obj)
 
     def _consume_line(self, line: str) -> None:
@@ -222,17 +217,6 @@ class DeepSeekStreamParser:
         self._cumulative_body_seen = cumulative_body
         return self.feed(suffix)
 
-    @property
-    def current(self) -> str:
-        response_parts: list[str] = []
-        for fragment in self._fragments:
-            if str(fragment.get("type") or "").upper() != "RESPONSE":
-                continue
-            response_parts.extend(self._text_values(fragment.get("content")))
-        if response_parts:
-            return "".join(response_parts).strip()
-        return self._choice_text.strip()
-
     def finish(self) -> str:
         if self._pending.strip():
             raw = self._pending.strip()
@@ -257,32 +241,7 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
     provider = "deepseek"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
-        super().__init__(
-            WebProviderSpec(
-                provider="deepseek",
-                home_url="https://chat.deepseek.com/",
-                login_markers=("/login", "/auth", "/sign_in", "/signin"),
-                response_markers=("/api/v0/chat/completion",),
-                request_markers=("/api/v0/chat/completion",),
-                default_model="deepseek-flash",
-                composer_selectors=(
-                    'textarea[placeholder*="Message"]',
-                    'textarea[placeholder*="message"]',
-                    'textarea',
-                    '[contenteditable="true"]',
-                    '[role="textbox"]',
-                ),
-            ),
-            session_path=session_path or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE") or str(Path(".ainterceptor") / "deepseek" / "storage_state.json"),
-            cdp_url=cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL") or existing_chrome_cdp(),
-            headless=headless,
-            parser=parse_deepseek_web,
-        )
-
-    async def execute(self, request):
-        self.parser = DeepSeekStreamParser()
-        async for event in super().execute(request):
-            yield event
+        super().__init__(WebProviderSpec(provider="deepseek", home_url="https://chat.deepseek.com/", login_markers=("/login", "/auth", "/sign_in", "/signin"), response_markers=("/api/v0/chat/completion",), request_markers=("/api/v0/chat/completion",), default_model="deepseek-flash", composer_selectors=('textarea[placeholder*="Message"]', 'textarea[placeholder*="message"]', 'textarea', '[contenteditable="true"]', '[role="textbox"]')), session_path=session_path or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE") or str(Path(".ainterceptor") / "deepseek" / "storage_state.json"), cdp_url=cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL") or existing_chrome_cdp(), headless=headless, parser=DeepSeekStreamParser())
 
     async def login(self) -> None:
         self.cdp_url = ensure_chrome_cdp()
