@@ -12,13 +12,9 @@ from app.interception.web_runtime import WebProviderSpec
 
 
 def parse_chatgpt_web(body: str) -> str:
-    """Extract visible assistant text from ChatGPT conversation SSE.
-
-    Current ChatGPT Web streams can use full ``message`` envelopes or delta
-    patches such as ``/message/content/parts/0`` with an ``append`` value.
-    Title-generation and user-message metadata are deliberately ignored.
-    """
+    """Extract visible assistant text from ChatGPT conversation SSE."""
     candidates: list[str] = []
+    patch_parts: list[str] = []
     for line in body.lstrip().splitlines():
         raw = line.strip()
         if raw.startswith("data:"):
@@ -61,9 +57,13 @@ def parse_chatgpt_web(body: str) -> str:
         path = str(obj.get("p") or "")
         op = str(obj.get("o") or "").lower()
         patch_value = obj.get("v")
-        if "message/content/parts/" in path and op in {"append", "add", "replace"} and isinstance(patch_value, str) and patch_value.strip():
-            candidates.append(patch_value)
+        if "message/content/parts/" in path and op in {"append", "add"} and isinstance(patch_value, str) and patch_value.strip():
+            patch_parts.append(patch_value)
+        elif "message/content/parts/" in path and op == "replace" and isinstance(patch_value, str) and patch_value.strip():
+            patch_parts = [patch_value]
 
+    if patch_parts:
+        return "".join(patch_parts).strip()
     return max(candidates, key=len).strip() if candidates else ""
 
 
