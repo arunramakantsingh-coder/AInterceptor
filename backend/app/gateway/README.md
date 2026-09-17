@@ -1,6 +1,14 @@
-# Gateway
+# AIRouter Gateway
 
-Public API for external apps. OpenRouter-style key auth. Delegates to
-Orchestrator. Exposes POST /v1/chat/completions.
+Public API boundary for external applications such as CareerOS.
 
-Phase 6 implements this. Phase 1 only scaffolds the directory.
+Initial endpoints:
+- GET /v1/health
+- GET /v1/providers
+- GET /v1/models
+- GET /v1/usage
+- POST /v1/chat/completions
+
+Chat requests use Bearer authentication. Local development uses the configured AIRouter API key.
+The gateway delegates to the Orchestrator; provider browser and transport mechanics remain behind the Interceptor runtime boundary.
+Claude is the first backed provider for this API milestone.
