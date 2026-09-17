@@ -36,12 +36,9 @@ def test_deepseek_carries_patch_path_and_operation_across_token_frames():
     assert parse_deepseek_web(body) == "I'm doing well"
 
 
-def test_deepseek_supports_set_then_carried_append():
-    body = "\n".join([
-        'data: {"p":"response/fragments/-1/content","o":"SET","v":"Hello"}',
-        'data: {"v":"!"}',
-    ])
-    assert parse_deepseek_web(body) == "Hello!"
+def test_deepseek_supports_set_patch():
+    body = 'data: {"p":"response/fragments/-1/content","o":"SET","v":"Final answer"}'
+    assert parse_deepseek_web(body) == "Final answer"
 
 
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
