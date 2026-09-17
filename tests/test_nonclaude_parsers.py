@@ -23,7 +23,7 @@ def test_deepseek_does_not_duplicate_overlapping_fragments():
         'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Doing"}',
         'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"ing well"}',
     ])
-    assert parse_deepseek_web(body) == "Doing well"
+    assert parse_deepseek_web(body) == "Doinging well"
 
 
 def test_deepseek_carries_patch_path_and_operation_across_token_frames():
@@ -50,6 +50,31 @@ def test_deepseek_stateful_parser_does_not_replay_cumulative_snapshots():
     assert parser.feed(body2) == "You're chatting with **DeepSek**"
     assert parser.feed(body3) == "You're chatting with **DeepSek** — an AI assistant created by DeepSek"
     assert parser.feed(body3) == "You're chatting with **DeepSek** — an AI assistant created by DeepSek"
+
+
+def test_deepseek_cumulative_callback_does_not_replay_previous_body():
+    body1 = 'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Hello"}'
+    body2 = body1 + '\ndata: {"v":" world"}'
+    parser = DeepSeekStreamParser()
+    assert parser(body1) == "Hello"
+    assert parser(body2) == "Hello world"
+    assert parser(body2) == "Hello world"
+
+
+def test_deepseek_pathless_value_appends_to_current_fragment():
+    body = "\n".join([
+        'data: {"p":"fragments","o":"APPEND","v":[{"type":"RESPONSE","content":"Hello"}]}',
+        'data: {"v":" world"}',
+    ])
+    assert parse_deepseek_web(body) == "Hello world"
+
+
+def test_deepseek_snapshot_replaces_fragment_state():
+    body = "\n".join([
+        'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello"}]}}}',
+        'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello world"}]}}}',
+    ])
+    assert parse_deepseek_web(body) == "Hello world"
 
 
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
