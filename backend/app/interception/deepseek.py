@@ -9,6 +9,7 @@ from typing import Any
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
+from app.providers.catalog import provider_profile
 
 
 def _json_lines(body: str) -> list[Any]:
@@ -97,13 +98,7 @@ def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
 
 
 def parse_deepseek_web(body: str) -> str:
-    """Parse DeepSeek Web's stateful patch stream.
-
-    DeepSeek Web carries the patch path (``p``) and operation (``o``) across
-    tiny token frames. A later frame may therefore contain only ``v``. The
-    parser must retain the active patch context instead of treating every JSON
-    object as an independent event.
-    """
+    """Parse DeepSeek Web's stateful patch stream."""
     cumulative: list[str] = []
     patch_text = ""
     active_path = ""
@@ -173,21 +168,17 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
     provider = "deepseek"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
+        profile = provider_profile(self.provider)
+        web = profile.web
         super().__init__(
             WebProviderSpec(
-                provider="deepseek",
-                home_url="https://chat.deepseek.com/",
-                login_markers=("/login", "/auth", "/sign_in", "/signin"),
-                response_markers=("/api/v0/chat/completion",),
-                request_markers=("/api/v0/chat/completion",),
-                default_model="deepseek-flash",
-                composer_selectors=(
-                    'textarea[placeholder*="Message"]',
-                    'textarea[placeholder*="message"]',
-                    'textarea',
-                    '[contenteditable="true"]',
-                    '[role="textbox"]',
-                ),
+                provider=profile.provider,
+                home_url=str(web["home_url"]),
+                login_markers=tuple(web.get("login_markers", ())),
+                response_markers=tuple(web.get("response_markers", ())),
+                request_markers=tuple(web.get("request_markers", ())),
+                default_model=web.get("default_model"),
+                composer_selectors=tuple(web.get("composer_selectors", WebProviderSpec.composer_selectors)),
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE") or str(Path(".ainterceptor") / "deepseek" / "storage_state.json"),
             cdp_url=cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL") or existing_chrome_cdp(),
