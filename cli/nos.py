@@ -41,10 +41,10 @@ class ModelDefinition:
 
 
 PROVIDERS: tuple[ProviderDefinition, ...] = (
-    ProviderDefinition("chatgpt", "ChatGPT Web", "web", ("reasoning", "coding", "research", "general"), "backend.app.interception.chatgpt.ChatGPTRuntime"),
-    ProviderDefinition("claude", "Claude Web", "web", ("reasoning", "coding", "long_context", "documents"), "backend.app.interception.claude.ClaudeRuntime"),
-    ProviderDefinition("gemini", "Gemini Web", "web", ("multimodal", "research", "documents", "general"), "backend.app.interception.gemini.GeminiRuntime"),
-    ProviderDefinition("deepseek", "DeepSeek Web", "web", ("reasoning", "coding", "math", "structured_output"), "backend.app.interception.deepseek.DeepSeekRuntime"),
+    ProviderDefinition("chatgpt", "ChatGPT Web", "web", ("reasoning", "coding", "research", "general"), "app.interception.chatgpt.ChatGPTRuntime"),
+    ProviderDefinition("claude", "Claude Web", "web", ("reasoning", "coding", "long_context", "documents"), "app.interception.claude.ClaudeRuntime"),
+    ProviderDefinition("gemini", "Gemini Web", "web", ("multimodal", "research", "documents", "general"), "app.interception.gemini.GeminiRuntime"),
+    ProviderDefinition("deepseek", "DeepSeek Web", "web", ("reasoning", "coding", "math", "structured_output"), "app.interception.deepseek.DeepSeekRuntime"),
 )
 
 MODEL_CATALOG: tuple[ModelDefinition, ...] = (
