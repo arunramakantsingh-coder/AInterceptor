@@ -63,7 +63,7 @@ def test_deepseek_cumulative_callback_does_not_replay_previous_body():
 
 def test_deepseek_pathless_value_appends_to_current_fragment():
     body = "\n".join([
-        'data: {"p":"fragments","o":"APPEND","v":[{"type":"RESPONSE","content":"Hello"}]}',
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Hello"}',
         'data: {"v":" world"}',
     ])
     assert parse_deepseek_web(body) == "Hello world"
