@@ -13,13 +13,7 @@ from app.interception.web_runtime import WebProviderSpec
 
 
 class DeepSeekStreamParser:
-    """Stateful parser for DeepSeek Web's SSE patch protocol.
-
-    DeepSeek emits a mutable response state. Full response snapshots replace
-    the fragment list; patch operations mutate a fragment; later frames may
-    carry only ``v`` and inherit prior patch context. The parser therefore
-    reconstructs fragment state instead of concatenating every text field.
-    """
+    """Stateful parser for DeepSeek Web's SSE patch protocol."""
 
     def __init__(self) -> None:
         self._pending = ""
@@ -51,6 +45,22 @@ class DeepSeekStreamParser:
             return dict(fragment)
         return {"type": "text", "content": ""}
 
+    @staticmethod
+    def _merge_append(existing: str, incoming: str) -> str:
+        if not incoming:
+            return existing
+        if not existing:
+            return incoming
+        if incoming.startswith(existing):
+            return incoming
+        if existing.startswith(incoming) or incoming == existing:
+            return existing
+        max_overlap = min(len(existing), len(incoming))
+        for overlap in range(max_overlap, 0, -1):
+            if existing[-overlap:] == incoming[:overlap]:
+                return existing + incoming[overlap:]
+        return existing + incoming
+
     def _resolve_index(self, raw: str) -> int | None:
         try:
             index = int(raw)
@@ -70,7 +80,7 @@ class DeepSeekStreamParser:
     def _append_content(self, fragment: dict[str, Any], value: Any) -> None:
         text = "".join(self._text_values(value))
         if text:
-            fragment["content"] = str(fragment.get("content") or "") + text
+            fragment["content"] = self._merge_append(str(fragment.get("content") or ""), text)
 
     def _apply_patch(self, path: str, operation: str, value: Any) -> None:
         op = (operation or "APPEND").upper()
@@ -140,10 +150,16 @@ class DeepSeekStreamParser:
                 continue
             delta = choice.get("delta")
             if isinstance(delta, dict):
-                self._choice_text += "".join(self._text_values(delta.get("content") or delta.get("text")))
+                self._choice_text = self._merge_append(
+                    self._choice_text,
+                    "".join(self._text_values(delta.get("content") or delta.get("text"))),
+                )
             message = choice.get("message")
             if isinstance(message, dict):
-                self._choice_text += "".join(self._text_values(message.get("content")))
+                self._choice_text = self._merge_append(
+                    self._choice_text,
+                    "".join(self._text_values(message.get("content"))),
+                )
 
     def _feed_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
@@ -196,13 +212,11 @@ class DeepSeekStreamParser:
         return self.current
 
     def __call__(self, cumulative_body: str) -> str:
-        """Accept the cumulative-body callback used by NonClaudeWebRuntime."""
         if not isinstance(cumulative_body, str):
             return self.current
         if cumulative_body.startswith(self._cumulative_body_seen):
             suffix = cumulative_body[len(self._cumulative_body_seen):]
         else:
-            # Defensive recovery for a provider/runtime stream reset.
             self.__init__()
             suffix = cumulative_body
         self._cumulative_body_seen = cumulative_body
