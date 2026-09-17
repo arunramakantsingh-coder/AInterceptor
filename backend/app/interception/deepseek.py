@@ -196,6 +196,9 @@ class DeepSeekStreamParser:
                 self._apply_object(obj)
         return self.current
 
+    def __call__(self, body: str) -> str:
+        return self.feed(body)
+
     def finish(self) -> str:
         if self._pending.strip():
             raw = self._pending.strip()
@@ -241,6 +244,14 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
             headless=headless,
             parser=parse_deepseek_web,
         )
+
+    async def execute(self, request):
+        # NonClaudeWebRuntime reparses the cumulative body on every CDP chunk.
+        # Give DeepSeek one parser instance per execution so patch state is
+        # carried forward exactly like ClaudeSSEParser carries SSE state.
+        self.parser = DeepSeekStreamParser()
+        async for event in super().execute(request):
+            yield event
 
     async def login(self) -> None:
         self.cdp_url = ensure_chrome_cdp()
