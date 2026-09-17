@@ -41,21 +41,12 @@ class NonClaudeNetworkCapture:
         url = (url or "").lower()
         return any(marker.lower() in url for marker in markers)
 
-
-def _raw_capture_path(self) -> str | None:
-    d = os.environ.get("AINTERCEPTOR_RAW_CAPTURE_DIR")
-    if not d:
-        return None
-    p = pathlib.Path(d)
-    p.mkdir(parents=True, exist_ok=True)
-    fname = f"{self.spec.provider}_{int(__import__('time').time())}.raw"
-    return str(p / fname)
-
     def _on_request(self, event: dict[str, Any]) -> None:
         request = event.get("request") or {}
         if str(request.get("method") or "").upper() != "POST":
             return
-        if not self._matches(str(request.get("url") or ""), self.spec.response_markers + self.spec.request_markers):
+        if not self._matches(str(request.get("url") or ""),
+                             self.spec.response_markers + self.spec.request_markers):
             return
         request_id = str(event.get("requestId") or "")
         if request_id:
@@ -109,9 +100,23 @@ def _raw_capture_path(self) -> str | None:
         if str(event.get("requestId") or "") == self._active_id:
             self._queue.put_nowait(("failed", event.get("errorText") or "network request failed"))
 
+    def _raw_capture_path(self) -> str | None:
+        d = os.environ.get("AINTERCEPTOR_RAW_CAPTURE_DIR")
+        if not d:
+            return None
+        p = pathlib.Path(d)
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p / f"{self.spec.provider}_{int(__import__('time').time())}.raw")
+
     async def __aenter__(self) -> "NonClaudeNetworkCapture":
         self._cdp = await self.page.context.new_cdp_session(self.page)
-        await self._cdp.send("Network.enable", {"maxTotalBufferSize": 50 * 1024 * 1024, "maxResourceBufferSize": 10 * 1024 * 1024})
+        try:
+            await self._cdp.send("Network.enable", {
+                "maxTotalBufferSize": 50 * 1024 * 1024,
+                "maxResourceBufferSize": 10 * 1024 * 1024,
+            })
+        except Exception:
+            pass
         try:
             await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
         except Exception:
@@ -123,7 +128,7 @@ def _raw_capture_path(self) -> str | None:
         self._cdp.on("Network.loadingFailed", self._on_failed)
         return self
 
-    async def events(self, timeout: float = 120.0) -> AsyncIterator[tuple[str, Any]]:
+    async def events(self, timeout: float = 120.0):
         while True:
             try:
                 item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
@@ -146,7 +151,6 @@ def _raw_capture_path(self) -> str | None:
             except Exception:
                 pass
             self._cdp = None
-
 
 class NonClaudeWebRuntime(ProviderRuntime):
     """Reusable runtime boundary for the three non-Claude web providers."""
