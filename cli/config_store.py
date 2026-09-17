@@ -10,7 +10,6 @@ import pathlib
 from datetime import datetime, timezone
 from typing import Any
 
-
 NVRAM_DIR = pathlib.Path(".ainterceptor") / "nvram"
 STARTUP_CONFIG = NVRAM_DIR / "startup-config.json"
 
@@ -22,14 +21,7 @@ def default_config() -> dict[str, Any]:
         "hostname": "AIRouter",
         "config_register": "0x2102",
         "boot": {"config_file": "nvram:startup-config.json"},
-        "ai": {
-            "selected_model": None,
-            "providers": {},
-            "routes": {},
-            "prompts": {},
-            "session": {},
-            "api": {},
-        },
+        "ai": {"selected_model": None, "providers": {}, "routes": {}, "prompts": {}, "session": {}, "api": {}},
     }
 
 
@@ -65,9 +57,28 @@ def startup_config_exists() -> bool:
 
 
 def startup_config_text() -> str:
-    if not STARTUP_CONFIG.exists():
-        return "! No startup configuration saved.\n"
-    return STARTUP_CONFIG.read_text(encoding="utf-8")
+    """Render persisted NVRAM as Cisco-style configuration commands."""
+    cfg = load_startup_config()
+    ai = cfg.get("ai", {})
+    providers = ai.get("providers", {}) if isinstance(ai.get("providers"), dict) else {}
+    lines = ["!", "! AIRouter startup configuration", "!", f"version {cfg.get('software_version', '0.2.0-m2')}", f"hostname {cfg.get('hostname', 'AIRouter')}", f"config-register {cfg.get('config_register', '0x2102')}", "", "ai"]
+    selected = ai.get("selected_model")
+    if selected:
+        lines.append(f" model {selected}")
+    for provider, entry in sorted(providers.items()):
+        if not isinstance(entry, dict):
+            continue
+        lines.append(f" provider {provider}")
+        lines.append("  enable" if entry.get("enabled") else "  disable")
+        if entry.get("authenticated"):
+            lines.append("  session authenticated")
+            lines.append(f"  session storage-state {entry.get('session_path', f'.ainterceptor/{provider}/storage_state.json')}")
+    for name, value in (ai.get("routes", {}) or {}).items():
+        lines.append(f" route {name} {value}")
+    for name, value in (ai.get("prompts", {}) or {}).items():
+        lines.append(f" prompt {name} {value}")
+    lines.extend([" exit", "!", "end"])
+    return "\n".join(lines) + "\n"
 
 
 def provider_storage_path(provider: str) -> pathlib.Path:
