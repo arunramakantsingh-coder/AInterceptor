@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "catalog_version": "2026-09-17",
+  "description": "Configuration-driven AI provider and model catalog for AInterceptor. Secrets are never stored here.",
+  "routing": {
+    "default_strategy": "capability_match",
+    "allow_provider_fallback": true,
+    "prefer_active_providers": true,
+    "require_explicit_model_for_specialized_tasks": false
+  },
+  "providers": {
+    "chatgpt": {
+      "display_name": "ChatGPT / OpenAI",
+      "vendor": "OpenAI",
+      "status": "active",
+      "transports": ["web_cdp", "api"],
+      "web": {
+        "home_url": "https://chatgpt.com/",
+        "login_markers": ["/auth/login", "/login"],
+        "response_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"],
+        "request_markers": ["/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"],
+        "default_model": "gpt-5.6-luna"
+      },
+      "capabilities": ["text", "vision", "reasoning", "coding", "tool_use", "web_search", "file_search", "computer_use", "multilingual"],
+      "models": {
+        "gpt-5.6-sol": {"role": "frontier", "strengths": ["complex_reasoning", "coding", "professional_work", "agents", "tools"], "modalities": ["text", "image"], "context_tokens": 1050000, "max_output_tokens": 128000},
+        "gpt-5.6-terra": {"role": "balanced", "strengths": ["general_reasoning", "coding", "cost_balance", "tools"], "modalities": ["text", "image"], "context_tokens": 1050000, "max_output_tokens": 128000},
+        "gpt-5.6-luna": {"role": "efficient", "strengths": ["high_volume", "low_cost", "general_chat", "coding"], "modalities": ["text", "image"], "context_tokens": 1050000, "max_output_tokens": 128000}
+      }
+    },
+    "claude": {
+      "display_name": "Claude",
+      "vendor": "Anthropic",
+      "status": "active",
+      "transports": ["web_cdp", "api"],
+      "web": {"home_url": "https://claude.ai/"},
+      "capabilities": ["text", "vision", "reasoning", "coding", "analysis", "agentic_workflows", "document_creation"],
+      "models": {
+        "claude-opus-4-8": {"role": "frontier", "strengths": ["complex_reasoning", "advanced_coding", "agents"]},
+        "claude-opus-4-6": {"role": "frontier", "strengths": ["reasoning", "coding", "agentic_workflows"]},
+        "claude-sonnet-5": {"role": "balanced", "strengths": ["coding", "reasoning", "instruction_following", "agents"]},
+        "claude-sonnet-4-6": {"role": "balanced", "strengths": ["reasoning", "coding", "analysis"]},
+        "claude-haiku-4-5-20251001": {"role": "efficient", "strengths": ["latency", "high_throughput", "general_tasks"]}
+      },
+      "architecture_note": "Dedicated Claude runtime and transport are the known-good browser streaming reference and must remain isolated from non-Claude transport changes."
+    },
+    "gemini": {
+      "display_name": "Gemini",
+      "vendor": "Google",
+      "status": "active",
+      "transports": ["web_cdp", "api"],
+      "web": {
+        "home_url": "https://gemini.google.com/app",
+        "login_markers": ["/signin", "/login"],
+        "response_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"],
+        "request_markers": ["/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate", "BardFrontendService/StreamGenerate"],
+        "default_model": "gemini-3.8-flash"
+      },
+      "capabilities": ["text", "vision", "reasoning", "coding", "multimodal", "live", "audio", "video", "image_generation", "embedding", "robotics"],
+      "models": {
+        "gemini-3.8-flash": {"role": "frontier_flash", "strengths": ["software_engineering", "agents", "complex_workflows", "multimodal"]},
+        "gemini-3.7-flash": {"role": "balanced", "strengths": ["coding", "agentic_workflows", "multi_step_execution"]},
+        "gemini-3.6-flash": {"role": "balanced", "strengths": ["speed", "multimodal", "general_tasks"]},
+        "gemini-3.1-pro-preview": {"role": "reasoning", "strengths": ["complex_reasoning", "multimodal", "advanced_tasks"]},
+        "gemini-3.1-flash-lite": {"role": "efficient", "strengths": ["high_volume", "low_latency"]}
+      }
+    },
+    "deepseek": {
+      "display_name": "DeepSeek",
+      "vendor": "DeepSeek",
+      "status": "active",
+      "transports": ["web_cdp", "api"],
+      "web": {"default_model": "deepseek-v4-pro"},
+      "capabilities": ["text", "reasoning", "coding", "long_context", "api_compatible"],
+      "models": {
+        "deepseek-v4-pro": {"role": "frontier", "strengths": ["reasoning", "coding", "complex_tasks"]},
+        "deepseek-flash": {"role": "efficient", "strengths": ["speed", "cost_efficiency", "general_tasks"]}
+      }
+    },
+    "grok": {
+      "display_name": "Grok",
+      "vendor": "xAI",
+      "status": "catalog_only",
+      "transports": ["api", "web_cdp"],
+      "capabilities": ["text", "reasoning", "coding", "tool_use", "image_input", "web_search", "x_search", "voice", "image_generation", "video_generation"],
+      "models": {
+        "grok-4.6": {"role": "frontier", "strengths": ["coding", "agentic_tool_calling", "reasoning", "general_chat"], "context_tokens": 500000},
+        "grok-imagine-image-2": {"role": "image", "strengths": ["image_generation", "image_editing"]},
+        "grok-imagine-video-1.5": {"role": "video", "strengths": ["video_generation"]}
+      }
+    },
+    "mistral": {
+      "display_name": "Mistral AI",
+      "vendor": "Mistral AI",
+      "status": "catalog_only",
+      "transports": ["api", "local"],
+      "capabilities": ["text", "vision", "reasoning", "coding", "ocr", "audio", "transcription", "tts", "moderation", "embedding"],
+      "models": {
+        "mistral-medium-3.5": {"role": "frontier", "strengths": ["multimodal", "coding", "agentic_workflows"]},
+        "mistral-small-4": {"role": "efficient", "strengths": ["instruct", "reasoning", "coding"]},
+        "mistral-large-3": {"role": "generalist", "strengths": ["multimodal", "general_reasoning"]},
+        "codestral": {"role": "coding", "strengths": ["code_completion", "software_engineering"]},
+        "ocr-4.1": {"role": "document", "strengths": ["ocr", "document_understanding"]}
+      }
+    },
+    "qwen": {
+      "display_name": "Qwen",
+      "vendor": "Alibaba / Qwen Team",
+      "status": "catalog_only",
+      "transports": ["api", "local"],
+      "capabilities": ["text", "reasoning", "coding", "math", "multilingual", "open_weight"],
+      "models": {
+        "qwen3-235b-a22b": {"role": "frontier_open_weight", "strengths": ["coding", "math", "reasoning", "general_capabilities"]},
+        "qwen3-30b-a3b": {"role": "efficient_open_weight", "strengths": ["reasoning", "coding", "general_tasks"]},
+        "qwen3-4b": {"role": "edge", "strengths": ["local_inference", "general_tasks"]}
+      }
+    },
+    "perplexity": {
+      "display_name": "Perplexity",
+      "vendor": "Perplexity AI",
+      "status": "catalog_only",
+      "transports": ["api"],
+      "capabilities": ["text", "reasoning", "web_search", "citations", "research"],
+      "models": {
+        "sonar": {"role": "web_grounded", "strengths": ["fast_web_search", "current_information"]},
+        "sonar-pro": {"role": "advanced_web_grounded", "strengths": ["reasoning", "web_search", "citations"]},
+        "sonar-reasoning-pro": {"role": "reasoning", "strengths": ["multi_step_reasoning", "search"]},
+        "sonar-deep-research": {"role": "research", "strengths": ["deep_research", "citations"]}
+      }
+    }
+  }
+}
