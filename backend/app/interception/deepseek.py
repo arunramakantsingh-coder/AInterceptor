@@ -11,16 +11,11 @@ from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
 
 
-def parse_deepseek_web(body: str) -> str:
-    """Extract only DeepSeek Web assistant RESPONSE fragments.
-
-    DeepSeek also emits metadata/title information around a completion. Do not
-    treat a top-level generic ``response`` string as the assistant answer.
-    The Web stream's canonical answer path is response.fragments where the
-    fragment type is RESPONSE and content is the visible answer.
-    """
-    candidates: list[str] = []
+def _json_lines(body: str) -> list[Any]:
     text = body.lstrip()
+    if text.startswith(")]}'"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+    objects: list[Any] = []
     for line in text.splitlines():
         raw = line.strip()
         if raw.startswith("data:"):
@@ -28,31 +23,64 @@ def parse_deepseek_web(body: str) -> str:
         if not raw or raw == "[DONE]":
             continue
         try:
-            obj: Any = json.loads(raw)
+            objects.append(json.loads(raw))
         except json.JSONDecodeError:
             continue
+    if objects:
+        return objects
+    try:
+        return [json.loads(text)]
+    except json.JSONDecodeError:
+        return []
+
+
+def _text_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            out.extend(_text_values(item))
+        return out
+    if isinstance(value, dict):
+        out: list[str] = []
+        # DeepSeek has used both plain content strings and nested text/content
+        # objects in response fragments. Never treat title/metadata fields as
+        # assistant output here.
+        for key in ("text", "content"):
+            if key in value:
+                out.extend(_text_values(value[key]))
+        return out
+    return []
+
+
+def parse_deepseek_web(body: str) -> str:
+    """Extract only DeepSeek assistant RESPONSE fragments."""
+    cumulative: list[str] = []
+    deltas: list[str] = []
+
+    for obj in _json_lines(body):
         if not isinstance(obj, dict):
             continue
 
-        v = obj.get("v")
-        if isinstance(v, dict):
-            response = v.get("response")
+        containers = [obj]
+        if isinstance(obj.get("v"), dict):
+            containers.append(obj["v"])
+
+        for container in containers:
+            response = container.get("response") if isinstance(container, dict) else None
             if isinstance(response, dict):
                 fragments = response.get("fragments")
                 if isinstance(fragments, list):
                     for fragment in fragments:
-                        if not isinstance(fragment, dict):
+                        if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
                             continue
-                        if fragment.get("type") == "RESPONSE":
-                            content = fragment.get("content")
-                            if isinstance(content, str) and content.strip():
-                                candidates.append(content)
+                        cumulative.extend(_text_values(fragment.get("content")))
 
-        path = obj.get("p")
-        if path == "response/fragments/-1/content" and obj.get("o") == "APPEND":
-            value = obj.get("v")
-            if isinstance(value, str) and value.strip():
-                candidates.append(value)
+        path = str(obj.get("p") or "")
+        op = str(obj.get("o") or "").upper()
+        if path in {"response/fragments/-1/content", "/response/fragments/-1/content"} and op == "APPEND":
+            deltas.extend(_text_values(obj.get("v")))
 
         choices = obj.get("choices")
         if isinstance(choices, list):
@@ -61,18 +89,18 @@ def parse_deepseek_web(body: str) -> str:
                     continue
                 delta = choice.get("delta")
                 if isinstance(delta, dict):
-                    content = delta.get("content")
-                    if isinstance(content, str) and content.strip():
-                        candidates.append(content)
+                    deltas.extend(_text_values(delta.get("content") or delta.get("text")))
                 message = choice.get("message")
                 if isinstance(message, dict):
-                    content = message.get("content")
-                    if isinstance(content, str) and content.strip():
-                        candidates.append(content)
+                    deltas.extend(_text_values(message.get("content")))
 
-    if not candidates:
-        return ""
-    return max(candidates, key=len).strip()
+    if deltas:
+        return "".join(deltas).strip()
+    if cumulative:
+        # A response frame can contain a cumulative snapshot. Choose the
+        # longest snapshot rather than concatenating duplicate snapshots.
+        return max(cumulative, key=len).strip()
+    return ""
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
@@ -83,7 +111,7 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
             WebProviderSpec(
                 provider="deepseek",
                 home_url="https://chat.deepseek.com/",
-                login_markers=("/login", "/auth"),
+                login_markers=("/login", "/auth", "/sign_in", "/signin"),
                 response_markers=("/api/v0/chat/completion",),
                 request_markers=("/api/v0/chat/completion",),
                 default_model="deepseek-flash",
