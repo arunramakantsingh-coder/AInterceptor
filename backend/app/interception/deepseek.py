@@ -157,10 +157,16 @@ class DeepSeekStreamParser:
                 continue
             delta = choice.get("delta")
             if isinstance(delta, dict):
-                self._choice_text = self._merge_append(self._choice_text, "".join(self._text_values(delta.get("content") or delta.get("text"))))
+                self._choice_text = self._merge_append(
+                    self._choice_text,
+                    "".join(self._text_values(delta.get("content") or delta.get("text"))),
+                )
             message = choice.get("message")
             if isinstance(message, dict):
-                self._choice_text = self._merge_append(self._choice_text, "".join(self._text_values(message.get("content"))))
+                self._choice_text = self._merge_append(
+                    self._choice_text,
+                    "".join(self._text_values(message.get("content"))),
+                )
 
     def _feed_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
@@ -171,8 +177,6 @@ class DeepSeekStreamParser:
         if "o" in obj:
             self._active_op = str(obj.get("o") or "").upper()
         if "v" in obj:
-            # Snapshot dictionaries are authoritative state and must not then
-            # be re-applied as the previous patch operation's value.
             if not (snapshot and isinstance(obj.get("v"), dict) and "response" in obj["v"]):
                 if self._active_path:
                     self._apply_patch(self._active_path, self._active_op, obj.get("v"))
@@ -204,6 +208,22 @@ class DeepSeekStreamParser:
                 self._consume_line(line)
             else:
                 self._pending = line
+
+        # CDP may deliver one complete SSE/JSON frame without its terminating
+        # newline. Parse it immediately; retain it only when it is incomplete.
+        if self._pending.strip():
+            raw = self._pending.strip()
+            candidate = raw[5:].strip() if raw.startswith("data:") else raw
+            if candidate != "[DONE]":
+                try:
+                    obj = json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+                else:
+                    self._pending = ""
+                    self._feed_object(obj)
+            else:
+                self._pending = ""
         return self.current
 
     def __call__(self, cumulative_body: str) -> str:
