@@ -176,8 +176,18 @@ class NonClaudeWebRuntime(ProviderRuntime):
             raise WebProviderSessionError("playwright is not installed")
         if self._pw is None:
             self._pw = await async_playwright().start()
-        if not self.cdp_url:
+        # Hard-enforce registry. If an env override was NOT explicitly set,
+        # we IGNORE any prior self.cdp_url value (it may have been set
+        # accidentally by a caller or by a stale default).
+        env_key = f"AINTERCEPTOR_{self.provider.upper()}_CDP_URL"
+        env_val = os.environ.get(env_key)
+        if env_val == "":
+            self.cdp_url = None
+        elif env_val:
+            self.cdp_url = env_val
+        else:
             self.cdp_url = provider_registry.cdp_url(self.provider)
+        print(f"[interception] {self.provider}: CDP -> {self.cdp_url}")
         if self.cdp_url:
             self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
             contexts = self._browser.contexts

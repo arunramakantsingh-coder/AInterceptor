@@ -1,4 +1,3 @@
-"""DeepSeek Web runtime using browser transport interception."""
 from __future__ import annotations
 
 import json
@@ -12,6 +11,8 @@ from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
 
 
+"""DeepSeek Web runtime using browser transport interception."""
+from app.interception import registry as provider_registry
 class DeepSeekStreamParser:
     """Stateful parser for DeepSeek Web's SSE patch protocol."""
 
@@ -294,9 +295,37 @@ def parse_deepseek_web(body: str) -> str:
 class DeepSeekRuntime(NonClaudeWebRuntime):
     provider = "deepseek"
 
-    def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
-        super().__init__(WebProviderSpec(provider="deepseek", home_url="https://chat.deepseek.com/", login_markers=("/login", "/auth", "/sign_in", "/signin"), response_markers=("/api/v0/chat/completion",), request_markers=("/api/v0/chat/completion",), default_model="deepseek-flash", composer_selectors=('textarea[placeholder*="Message"]', 'textarea[placeholder*="message"]', 'textarea', '[contenteditable="true"]', '[role="textbox"]')), session_path=session_path or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE") or str(Path(".ainterceptor") / "deepseek" / "storage_state.json"), cdp_url=cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL") or existing_chrome_cdp(), headless=headless, parser=DeepSeekStreamParser())
-
-    async def login(self) -> None:
-        self.cdp_url = ensure_chrome_cdp()
-        await super().login()
+    def __init__(
+        self,
+        session_path: str | None = None,
+        headless: bool = False,
+        cdp_url: str | None = None,
+    ) -> None:
+        spec = WebProviderSpec(
+            provider="deepseek",
+            home_url="https://chat.deepseek.com/",
+            login_markers=("/login", "/auth", "/sign_in", "/signin"),
+            response_markers=("/api/v0/chat/completion",),
+            request_markers=("/api/v0/chat/completion",),
+            default_model="deepseek-flash",
+            composer_selectors=(
+                'textarea[placeholder*="Message"]',
+                'textarea[placeholder*="message"]',
+                "textarea",
+                '[contenteditable="true"]',
+                '[role="textbox"]',
+            ),
+        )
+        # Resolve CDP ONLY through the registry; never fall back to the shared
+        # "existing_chrome_cdp()" (which points at whichever browser is running
+        # for Claude — a cross-provider leak that caused prompts to appear in
+        # the wrong chat).
+        explicit = cdp_url or os.getenv("AINTERCEPTOR_DEEPSEEK_CDP_URL")
+        resolved = explicit if explicit is not None else provider_registry.cdp_url("deepseek")
+        sp = (
+            session_path
+            or os.getenv("AINTERCEPTOR_DEEPSEEK_STORAGE_STATE")
+            or str(pathlib.Path(".ainterceptor") / "deepseek" / "storage_state.json")
+        )
+        super().__init__(spec, session_path=sp, cdp_url=resolved,
+                         headless=headless, parser=DeepSeekStreamParser())
