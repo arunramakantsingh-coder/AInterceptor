@@ -1,6 +1,7 @@
 """ChatGPT Web runtime using browser transport interception."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -11,12 +12,14 @@ from app.interception.web_runtime import WebProviderSpec
 
 
 def parse_chatgpt_web(body: str) -> str:
-    """Extract assistant text from ChatGPT conversation SSE frames."""
-    import json
+    """Extract visible assistant text from ChatGPT conversation SSE.
 
+    Current ChatGPT Web streams can use full ``message`` envelopes or delta
+    patches such as ``/message/content/parts/0`` with an ``append`` value.
+    Title-generation and user-message metadata are deliberately ignored.
+    """
     candidates: list[str] = []
-    text = body.lstrip()
-    for line in text.splitlines():
+    for line in body.lstrip().splitlines():
         raw = line.strip()
         if raw.startswith("data:"):
             raw = raw[5:].strip()
@@ -28,21 +31,39 @@ def parse_chatgpt_web(body: str) -> str:
             continue
         if not isinstance(obj, dict):
             continue
+
         message = obj.get("message")
-        if not isinstance(message, dict):
-            continue
-        author = message.get("author")
-        if isinstance(author, dict) and author.get("role") not in {None, "assistant"}:
-            continue
-        content = message.get("content")
-        if isinstance(content, dict):
-            parts = content.get("parts")
-            if isinstance(parts, list):
-                for part in parts:
-                    if isinstance(part, str) and part.strip():
-                        candidates.append(part)
-        elif isinstance(content, str) and content.strip():
-            candidates.append(content)
+        if isinstance(message, dict):
+            author = message.get("author")
+            role = author.get("role") if isinstance(author, dict) else None
+            if role in {None, "assistant"}:
+                content = message.get("content")
+                if isinstance(content, dict):
+                    parts = content.get("parts")
+                    if isinstance(parts, list):
+                        candidates.extend(part for part in parts if isinstance(part, str) and part.strip())
+                elif isinstance(content, str) and content.strip():
+                    candidates.append(content)
+
+        value = obj.get("v")
+        if isinstance(value, dict):
+            nested = value.get("message")
+            if isinstance(nested, dict):
+                author = nested.get("author")
+                role = author.get("role") if isinstance(author, dict) else None
+                if role == "assistant":
+                    content = nested.get("content")
+                    if isinstance(content, dict):
+                        parts = content.get("parts")
+                        if isinstance(parts, list):
+                            candidates.extend(part for part in parts if isinstance(part, str) and part.strip())
+
+        path = str(obj.get("p") or "")
+        op = str(obj.get("o") or "").lower()
+        patch_value = obj.get("v")
+        if "message/content/parts/" in path and op in {"append", "add", "replace"} and isinstance(patch_value, str) and patch_value.strip():
+            candidates.append(patch_value)
+
     return max(candidates, key=len).strip() if candidates else ""
 
 
