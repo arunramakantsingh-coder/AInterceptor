@@ -9,6 +9,7 @@ from typing import Any
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
+from app.providers.catalog import provider_profile
 
 
 def _json_lines(body: str) -> list[Any]:
@@ -94,8 +95,6 @@ def parse_chatgpt_web(body: str) -> str:
             elif op == "replace":
                 patches = values.copy()
 
-        # Some current response envelopes carry the assistant text in a
-        # delta/message object without a patch path.
         if isinstance(obj.get("delta"), dict):
             full_candidates.extend(_strings(obj["delta"]))
 
@@ -104,8 +103,6 @@ def parse_chatgpt_web(body: str) -> str:
     if full_candidates:
         return max(full_candidates, key=len).strip()
     if cumulative:
-        # Prefer the longest cumulative snapshot; joining every snapshot would
-        # duplicate the same assistant text across conversation frames.
         return max(cumulative, key=len).strip()
     return ""
 
@@ -114,22 +111,17 @@ class ChatGPTRuntime(NonClaudeWebRuntime):
     provider = "chatgpt"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
+        profile = provider_profile(self.provider)
+        web = profile.web
         super().__init__(
             WebProviderSpec(
-                provider="chatgpt",
-                home_url="https://chatgpt.com/",
-                login_markers=("/auth/login", "/login"),
-                response_markers=(
-                    "/backend-api/conversation",
-                    "/backend-api/f/conversation",
-                    "/backend-api/codex",
-                ),
-                request_markers=(
-                    "/backend-api/conversation",
-                    "/backend-api/f/conversation",
-                    "/backend-api/codex",
-                ),
-                default_model="gpt-5.6-luna",
+                provider=profile.provider,
+                home_url=str(web["home_url"]),
+                login_markers=tuple(web.get("login_markers", ())),
+                response_markers=tuple(web.get("response_markers", ())),
+                request_markers=tuple(web.get("request_markers", ())),
+                default_model=web.get("default_model"),
+                composer_selectors=tuple(web.get("composer_selectors", WebProviderSpec.composer_selectors)),
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_CHATGPT_STORAGE_STATE") or str(Path(".ainterceptor") / "chatgpt" / "storage_state.json"),
             cdp_url=cdp_url or os.getenv("AINTERCEPTOR_CHATGPT_CDP_URL") or existing_chrome_cdp(),
