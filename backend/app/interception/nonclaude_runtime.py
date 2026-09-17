@@ -176,9 +176,10 @@ class NonClaudeWebRuntime(ProviderRuntime):
             raise WebProviderSessionError("playwright is not installed")
         if self._pw is None:
             self._pw = await async_playwright().start()
-        # Hard-enforce registry. If an env override was NOT explicitly set,
-        # we IGNORE any prior self.cdp_url value (it may have been set
-        # accidentally by a caller or by a stale default).
+
+        # CDP resolution: registry-first, env override honored, never fall
+        # back to a shared "existing_chrome_cdp()" that could attach us to
+        # another provider's browser.
         env_key = f"AINTERCEPTOR_{self.provider.upper()}_CDP_URL"
         env_val = os.environ.get(env_key)
         if env_val == "":
@@ -188,6 +189,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
         else:
             self.cdp_url = provider_registry.cdp_url(self.provider)
         print(f"[interception] {self.provider}: CDP -> {self.cdp_url}")
+
         if self.cdp_url:
             self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
             contexts = self._browser.contexts
@@ -196,7 +198,8 @@ class NonClaudeWebRuntime(ProviderRuntime):
             self._context = contexts[0]
             self._owns_browser = self._owns_context = False
             host = urlparse(self.spec.home_url).netloc
-            pages = [p for p in self._context.pages if host == urlparse(p.url or "").netloc]
+            pages = [p for p in self._context.pages
+                     if host == urlparse(p.url or "").netloc]
             self._page = pages[-1] if pages else await self._context.new_page()
         elif self.session_path and pathlib.Path(self.session_path).exists():
             self._browser = await self._pw.chromium.launch(headless=self.headless)
@@ -206,13 +209,15 @@ class NonClaudeWebRuntime(ProviderRuntime):
         else:
             profile = pathlib.Path(".ainterceptor") / "profiles" / self.provider
             profile.mkdir(parents=True, exist_ok=True)
-            self._context = await self._pw.chromium.launch_persistent_context(str(profile), headless=False if interactive else self.headless)
+            self._context = await self._pw.chromium.launch_persistent_context(
+                str(profile), headless=False if interactive else self.headless)
             self._owns_context = True
             pages = list(self._context.pages)
             self._page = pages[-1] if pages else await self._context.new_page()
-        if urlparse(self._page.url or "").netloc != urlparse(self.spec.home_url).netloc:
-            await self._page.goto(self.spec.home_url, wait_until="domcontentloaded", timeout=30_000)
 
+        if urlparse(self._page.url or "").netloc != urlparse(self.spec.home_url).netloc:
+            await self._page.goto(self.spec.home_url, wait_until="domcontentloaded",
+                                  timeout=30_000)
     def _is_login_page(self) -> bool:
         url = (self._page.url or "").lower()
         return any(marker.lower() in url for marker in self.spec.login_markers)
