@@ -77,6 +77,16 @@ def test_deepseek_snapshot_replaces_fragment_state():
     assert parse_deepseek_web(body) == "Hello world"
 
 
+def test_deepseek_separates_independent_response_fragments():
+    body = 'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"First paragraph."},{"type":"RESPONSE","content":"Second paragraph."}]}}}'
+    assert parse_deepseek_web(body) == "First paragraph.\n\nSecond paragraph."
+
+
+def test_deepseek_collapses_cumulative_response_fragments():
+    body = 'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"First paragraph."},{"type":"RESPONSE","content":"First paragraph.\n\nSecond paragraph."}]}}}'
+    assert parse_deepseek_web(body) == "First paragraph.\n\nSecond paragraph."
+
+
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
     body = "\n".join([
         'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello!"}]}}}',
