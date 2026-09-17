@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,13 +17,13 @@ class DeepSeekStreamParser:
 
     DeepSeek emits a mutable response state. Full response snapshots replace
     the fragment list; patch operations mutate a fragment; later frames may
-    carry only ``v`` and inherit the prior patch context. We keep the fragment
-    state rather than concatenating every observed text field.
+    carry only ``v`` and inherit prior patch context. The parser therefore
+    reconstructs fragment state instead of concatenating every text field.
     """
 
     def __init__(self) -> None:
         self._pending = ""
-        self._body_mode = False
+        self._cumulative_body_seen = ""
         self._fragments: list[dict[str, Any]] = []
         self._active_path = ""
         self._active_op = ""
@@ -84,20 +85,19 @@ class DeepSeekStreamParser:
                 self._fragments.extend(self._clone_fragment(item) for item in value)
             return
 
-        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)/content$", path)
+        match = re.match(r"^(?:response/)?fragments/(-?\d+)/content$", path)
         if match:
             index = self._resolve_index(match.group(1))
             if index is None:
                 return
             fragment = self._ensure_fragment(index)
             if op in {"SET", "REPLACE"}:
-                values = self._text_values(value)
-                fragment["content"] = "".join(values)
+                fragment["content"] = "".join(self._text_values(value))
             elif op in {"APPEND", ""}:
                 self._append_content(fragment, value)
             return
 
-        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)$", path)
+        match = re.match(r"^(?:response/)?fragments/(-?\d+)$", path)
         if match:
             index = self._resolve_index(match.group(1))
             if index is None or not isinstance(value, dict):
@@ -108,7 +108,7 @@ class DeepSeekStreamParser:
                 self._ensure_fragment(index).update(self._clone_fragment(value))
             return
 
-        match = __import__("re").match(r"^(?:response/)?fragments/(-?\d+)/(\w+)$", path)
+        match = re.match(r"^(?:response/)?fragments/(-?\d+)/(\w+)$", path)
         if match:
             index = self._resolve_index(match.group(1))
             if index is None:
@@ -140,23 +140,17 @@ class DeepSeekStreamParser:
                 continue
             delta = choice.get("delta")
             if isinstance(delta, dict):
-                values = self._text_values(delta.get("content") or delta.get("text"))
-                if values:
-                    self._choice_text += "".join(values)
+                self._choice_text += "".join(self._text_values(delta.get("content") or delta.get("text")))
             message = choice.get("message")
             if isinstance(message, dict):
-                values = self._text_values(message.get("content"))
-                if values:
-                    self._choice_text += "".join(values)
+                self._choice_text += "".join(self._text_values(message.get("content")))
 
     def _feed_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
             return
 
-        # A complete DeepSeek response snapshot is authoritative state.
         self._extract_snapshot(obj)
 
-        # BATCH contains nested patch records with their own p/o/v fields.
         if str(obj.get("o") or "").upper() == "BATCH" and isinstance(obj.get("v"), list):
             for item in obj["v"]:
                 self._feed_object(item)
@@ -171,8 +165,6 @@ class DeepSeekStreamParser:
             if self._active_path:
                 self._apply_patch(self._active_path, self._active_op, obj.get("v"))
             elif isinstance(obj.get("v"), str) and self._fragments:
-                # DeepSeek carries the active content patch forward; a truly
-                # pathless string also means append to the current fragment.
                 self._append_content(self._fragments[-1], obj.get("v"))
 
         self._extract_choices(obj)
@@ -203,6 +195,19 @@ class DeepSeekStreamParser:
                 self._pending = line
         return self.current
 
+    def __call__(self, cumulative_body: str) -> str:
+        """Accept the cumulative-body callback used by NonClaudeWebRuntime."""
+        if not isinstance(cumulative_body, str):
+            return self.current
+        if cumulative_body.startswith(self._cumulative_body_seen):
+            suffix = cumulative_body[len(self._cumulative_body_seen):]
+        else:
+            # Defensive recovery for a provider/runtime stream reset.
+            self.__init__()
+            suffix = cumulative_body
+        self._cumulative_body_seen = cumulative_body
+        return self.feed(suffix)
+
     @property
     def current(self) -> str:
         response_parts: list[str] = []
@@ -212,9 +217,7 @@ class DeepSeekStreamParser:
             response_parts.extend(self._text_values(fragment.get("content")))
         if response_parts:
             return "".join(response_parts).strip()
-        if self._choice_text:
-            return self._choice_text.strip()
-        return ""
+        return self._choice_text.strip()
 
     def finish(self) -> str:
         if self._pending.strip():
@@ -232,7 +235,8 @@ class DeepSeekStreamParser:
 
 def parse_deepseek_web(body: str) -> str:
     parser = DeepSeekStreamParser()
-    return parser.feed(body) if body else ""
+    parser.feed(body)
+    return parser.finish()
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
