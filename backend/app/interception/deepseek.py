@@ -52,23 +52,44 @@ def _text_values(value: Any) -> list[str]:
 
 
 def _append_incremental(buffer: str, candidate: str) -> str:
-    """Merge either a true delta or a cumulative snapshot without duplication."""
+    """Merge a delta/snapshot while removing repeated prefix/suffix overlap."""
     candidate = candidate.strip()
     if not candidate:
         return buffer
     if not buffer:
         return candidate
-    if candidate == buffer or candidate.startswith(buffer):
-        return buffer + candidate[len(buffer):]
+    if candidate == buffer:
+        return buffer
+    if candidate.startswith(buffer):
+        return candidate
     if buffer.startswith(candidate):
         return buffer
+
+    # A web stream may expose token fragments and snapshot fragments in the
+    # same transport.  Do not append text that is already the suffix of the
+    # assembled buffer (for example ``Doing`` + ``ing`` must stay ``Doing``).
+    max_overlap = min(len(buffer), len(candidate))
+    for overlap in range(max_overlap, 0, -1):
+        if buffer[-overlap:] == candidate[:overlap]:
+            return buffer + candidate[overlap:]
     return buffer + candidate
 
 
 def parse_deepseek_web(body: str) -> str:
-    """Extract DeepSeek assistant text while tolerating delta/snapshot variants."""
+    """Extract DeepSeek assistant text without mixing protocol channels.
+
+    Claude's known-good path parses each SSE frame once and emits only the
+    delta represented by that frame.  DeepSeek Web can expose the same answer
+    through response-fragment snapshots, APPEND patches, or OpenAI-shaped
+    choices.  We first identify the DeepSeek Web fragment protocol and use one
+    representation consistently; choices are only a fallback when that web
+    protocol is absent.
+    """
     cumulative: list[str] = []
     incremental = ""
+    deepseek_web_seen = False
+    patch_seen = False
+    choice_candidates: list[str] = []
 
     for obj in _json_lines(body):
         if not isinstance(obj, dict):
@@ -83,6 +104,7 @@ def parse_deepseek_web(body: str) -> str:
             if isinstance(response, dict):
                 fragments = response.get("fragments")
                 if isinstance(fragments, list):
+                    deepseek_web_seen = True
                     for fragment in fragments:
                         if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
                             continue
@@ -92,6 +114,8 @@ def parse_deepseek_web(body: str) -> str:
         path = str(obj.get("p") or "")
         op = str(obj.get("o") or "").upper()
         if path in {"response/fragments/-1/content", "/response/fragments/-1/content"} and op == "APPEND":
+            deepseek_web_seen = True
+            patch_seen = True
             for text in _text_values(obj.get("v")):
                 incremental = _append_incremental(incremental, text)
 
@@ -102,18 +126,23 @@ def parse_deepseek_web(body: str) -> str:
                     continue
                 delta = choice.get("delta")
                 if isinstance(delta, dict):
-                    for text in _text_values(delta.get("content") or delta.get("text")):
-                        incremental = _append_incremental(incremental, text)
+                    choice_candidates.extend(_text_values(delta.get("content") or delta.get("text")))
                 message = choice.get("message")
                 if isinstance(message, dict):
-                    for text in _text_values(message.get("content")):
-                        incremental = _append_incremental(incremental, text)
+                    choice_candidates.extend(_text_values(message.get("content")))
 
-    if incremental:
-        return incremental.strip()
-    if cumulative:
-        return max(cumulative, key=len).strip()
-    return ""
+    if deepseek_web_seen:
+        if incremental:
+            return incremental.strip()
+        if cumulative:
+            return max(cumulative, key=len).strip()
+        return ""
+
+    # Only use OpenAI-shaped choices when the DeepSeek Web fragment protocol
+    # was not present, avoiding double assembly from two views of one answer.
+    for text in choice_candidates:
+        incremental = _append_incremental(incremental, text)
+    return incremental.strip()
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
