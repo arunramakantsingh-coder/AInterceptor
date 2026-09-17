@@ -87,3 +87,9 @@ def provider_storage_path(provider: str) -> pathlib.Path:
 
 def provider_session_state(provider: str) -> str:
     return "AUTHENTICATED" if provider_storage_path(provider).exists() else "NOT AUTHENTICATED"
+
+
+# Backward-compatible public name used by the CLI shell. Keep this alias so
+# the AIRouter frontend cannot fail to start because of a helper rename.
+def provider_session_status(provider: str) -> str:
+    return provider_session_state(provider)
