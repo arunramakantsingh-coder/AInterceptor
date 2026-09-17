@@ -9,14 +9,11 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 
 from .chat import chat, login_provider
+from .config_store import STARTUP_CONFIG, provider_session_status, startup_config_text
 from .nos import Mode, NOSState, PROVIDERS, model_definition, model_definitions, prefix_matches, provider_definition, unique_prefix
-from .renderer import (
-    banner, boot_console, bootstrap, counters_view, credits_view, help_view,
-    model_help, models_view, provider_status_view, providers_status, routes_view,
-    sessions_view, system_status, system_view, version_view,
-)
+from .renderer import banner, boot_console, boot_view, bootstrap, counters_view, credits_view, health_view, help_view, model_help, models_view, provider_status_view, providers_status, routes_view, sessions_view, system_status, system_view, version_view
 
-SHOW_TOPICS = ("version", "system", "ai", "providers", "models", "routes", "sessions", "counters", "credits", "health", "running-config")
+SHOW_TOPICS = ("version", "system", "ai", "providers", "models", "routes", "sessions", "counters", "credits", "health", "boot", "running-config", "startup-config")
 SHOW_AI_TOPICS = ("providers", "models", "routes", "sessions", "usage", "credits", "prompts", "health")
 
 
@@ -24,7 +21,7 @@ class AIRouterCompleter(Completer):
     COMMANDS = {
         Mode.BOOT: ("bootai", "airouter", "exit", "logout", "quit", "?"),
         Mode.USER_EXEC: ("enable", "show", "chat", "airouter", "logout", "exit", "?"),
-        Mode.PRIVILEGED_EXEC: ("show", "chat", "configure", "clear", "disable", "exit", "logout", "?"),
+        Mode.PRIVILEGED_EXEC: ("show", "chat", "configure", "copy", "write", "clear", "disable", "exit", "logout", "?"),
         Mode.CONFIG: ("ai", "exit", "end", "?"),
         Mode.CONFIG_AI: ("provider", "model", "route", "prompt", "session", "api", "exit", "end", "?"),
         Mode.CONFIG_AI_PROVIDER: ("enable", "disable", "login", "logout", "session", "model", "health", "exit", "end", "?"),
@@ -91,43 +88,58 @@ class AIRouterShell:
         exact = next((x for x in candidates if x.lower() == token.lower()), None)
         return exact or unique_prefix(token, candidates)
 
+    def _running_config(self) -> str:
+        cfg = self.state.config
+        ai = cfg.setdefault("ai", {})
+        providers = ai.setdefault("providers", {})
+        lines = ["!", "! AIRouter running configuration", "!", f"version {cfg.get('software_version', '0.2.0-m2')}", f"hostname {cfg.get('hostname', 'AIRouter')}", f"config-register {cfg.get('config_register', '0x2102')}", "", "ai"]
+        if self.state.selected_model:
+            lines.append(f" model {self.state.selected_model}")
+        for item in PROVIDERS:
+            entry = providers.get(item.name)
+            if not isinstance(entry, dict):
+                continue
+            lines.append(f" provider {item.name}")
+            lines.append("  enable" if entry.get("enabled") else "  disable")
+            if entry.get("authenticated"):
+                lines.append("  session authenticated")
+                lines.append(f"  session storage-state {entry.get('session_path', '.ainterceptor/' + item.name + '/storage_state.json')}")
+        routes = ai.get("routes", {})
+        for name, value in routes.items():
+            lines.append(f" route {name} {value}")
+        prompts = ai.get("prompts", {})
+        for name, value in prompts.items():
+            lines.append(f" prompt {name} {value}")
+        lines.extend([" exit", "!", "end"])
+        return "\n".join(lines)
+
     def _show(self, args: list[str]) -> str:
-        if not args: return system_status()
+        if not args:
+            return system_status()
         topic = self._resolve(args[0], SHOW_TOPICS)
         if topic == "version": return version_view()
         if topic == "system": return system_view()
+        if topic == "boot": return boot_view()
         if topic == "running-config": return self._running_config()
+        if topic == "startup-config": return startup_config_text().rstrip()
         if topic == "ai":
             sub = self._resolve(args[1], SHOW_AI_TOPICS) if len(args) > 1 else None
-            if sub in {"providers", "provider"}: return providers_status()
+            if sub == "providers": return providers_status()
             if sub == "models": return models_view()
             if sub == "routes": return routes_view()
             if sub == "sessions": return sessions_view()
             if sub in {"usage", "counters"}: return counters_view(self.state.counters)
             if sub == "credits": return credits_view()
-            return system_status()
+            if sub == "health": return health_view()
+            return self._running_config()
         if topic in {"providers", "provider"}: return providers_status()
         if topic == "models": return models_view()
         if topic == "routes": return routes_view()
         if topic == "sessions": return sessions_view()
         if topic == "counters": return counters_view(self.state.counters)
         if topic == "credits": return credits_view()
-        if topic == "health": return system_status()
+        if topic == "health": return health_view()
         return f"% Unknown show topic: {args[0]}. Type show ?."
-
-    def _running_config(self) -> str:
-        lines = ["!", "! AIRouter running configuration", "!", "version 0.2.0-m2", ""]
-        providers = self.state.config.get("providers", {})
-        lines.append("ai")
-        if self.state.selected_model:
-            lines.append(f" model {self.state.selected_model}")
-        for item in PROVIDERS:
-            if item.name in providers:
-                lines.append(f" provider {item.name}")
-                lines.append("  enable" if providers[item.name] else "  disable")
-        lines.append(" exit")
-        lines.extend(["!", "end"])
-        return "\n".join(lines)
 
     def _context_help(self, raw: str) -> bool:
         if "?" not in raw: return False
@@ -140,8 +152,7 @@ class AIRouterShell:
         commands = tuple(x for x in AIRouterCompleter.COMMANDS.get(self.state.mode, ()) if x != "?")
         resolved = self._resolve(first, commands)
         if attached and len(parts) == 1:
-            print("\n".join(f"  {x}" for x in prefix_matches(parts[-1], commands)) or "  No matching commands.")
-            return True
+            print("\n".join(f"  {x}" for x in prefix_matches(parts[-1], commands)) or "  No matching commands."); return True
         if resolved is None:
             print("  No matching commands."); return True
         if resolved == "show":
@@ -152,8 +163,7 @@ class AIRouterShell:
                 print("\n".join(f"  {x}" for x in prefix_matches(prefix, SHOW_AI_TOPICS)) or "  No matching show ai options."); return True
             prefix = parts[-1] if attached else ""
             print("\n".join(f"  {x}" for x in prefix_matches(prefix, SHOW_TOPICS)) or "  No matching show options."); return True
-        if resolved == "configure":
-            print("  terminal    Enter configuration from terminal"); return True
+        if resolved == "configure": print("  terminal    Enter configuration from terminal"); return True
         if resolved in {"chat", "provider"}:
             print("\n".join(f"  {p.name}" for p in PROVIDERS)); return True
         if resolved == "model" and self.state.mode == Mode.CONFIG_AI:
@@ -172,8 +182,7 @@ class AIRouterShell:
         if initial_prompt: self._run_chat(provider, initial_prompt)
         while self.state.running and self.state.mode == Mode.CHAT:
             try: prompt = self.chat_session.prompt("AIRouter(chat)> ").strip()
-            except (EOFError, KeyboardInterrupt):
-                self._set_mode(return_mode); print(); return
+            except (EOFError, KeyboardInterrupt): self._set_mode(return_mode); print(); return
             if not prompt: continue
             if prompt.lower() in {"/exit", "/quit", "/back"}:
                 self._set_mode(return_mode); print("Returning to AIRouter."); return
@@ -192,17 +201,28 @@ class AIRouterShell:
 
     def _login(self, provider: str) -> None:
         try:
-            asyncio.run(login_provider(provider))
+            result = asyncio.run(login_provider(provider))
+            entry = self.state.config.setdefault("ai", {}).setdefault("providers", {}).setdefault(provider, {})
+            entry.update({"authenticated": True, "session_path": result.get("session_path") or f".ainterceptor/{provider}/storage_state.json"})
+            self.state.config["ai"]["providers"][provider] = entry
+            self.state.save_startup()
+            print(f"{provider}: runtime configuration updated; startup config is ready to save/boot.")
         except Exception as exc:
             print(f"% {provider} login failed: {exc}")
+
+    def _save_running_config(self) -> None:
+        self.state.config.setdefault("ai", {})["selected_model"] = self.state.selected_model
+        from .config_store import save_startup_config
+        save_startup_config(self.state.config)
+        print(f"Building configuration... [OK]\n[OK] startup-config saved to {STARTUP_CONFIG}")
 
     def _dispatch_boot(self, name: str) -> None:
         resolved = self._resolve(name, ("bootai", "airouter", "exit", "logout", "quit"))
         if resolved == "airouter":
             print("\n" + banner()); print(); print(bootstrap()); print(providers_status()); print("\nAIRouter NOS initialized. Type ? for commands.\n"); self._set_mode(Mode.USER_EXEC); return
-        if resolved == "bootai": print("AInterceptor boot mode ready. Type 'airouter' to initialize the NOS."); return
+        if resolved == "bootai": print("AInterceptor boot mode ready. Startup configuration is loaded from persistent NVRAM at NOS initialization."); return
         if resolved in {"exit", "logout", "quit"}: self.state.running = False; return
-        print(f"% Unknown boot command: {name}. Type ?.")
+        print(f"% Unknown boot command: {name}. Type ?." )
 
     def _dispatch_exec(self, name: str, args: list[str]) -> None:
         commands = tuple(x for x in AIRouterCompleter.COMMANDS[self.state.mode] if x != "?")
@@ -221,6 +241,10 @@ class AIRouterShell:
         if resolved == "configure" and self.state.mode == Mode.PRIVILEGED_EXEC:
             if not args or self._resolve(args[0], ("terminal",)) is None: print("Usage: configure terminal"); return
             print("Enter configuration commands, one per line. End with 'end'."); self._set_mode(Mode.CONFIG); return
+        if resolved in {"copy", "write"} and self.state.mode == Mode.PRIVILEGED_EXEC:
+            if resolved == "write" or (args and args[0].lower() in {"running-config", "run"} and len(args) > 1 and args[1].lower() in {"startup-config", "start"}):
+                self._save_running_config(); return
+            print("Usage: copy running-config startup-config"); return
         if resolved == "clear" and self.state.mode == Mode.PRIVILEGED_EXEC:
             if not args or self._resolve(args[0], ("counters",)) is None: print("Usage: clear counters"); return
             for key in self.state.counters: self.state.counters[key] = 0
@@ -254,15 +278,18 @@ class AIRouterShell:
                 if provider: token = args[1]
             model = model_definition(token, provider)
             if model is None: print(f"% Unknown or ambiguous model: {token}. Type model ?"); return
-            self.state.selected_model = model.model_id; print(f"Model policy selected: {model.model_id} ({model.display_name})"); return
+            self.state.selected_model = model.model_id; self.state.config.setdefault("ai", {})["selected_model"] = model.model_id; print(f"Model policy selected: {model.model_id} ({model.display_name})"); return
         if self.state.mode == Mode.CONFIG_AI and resolved in {"route", "prompt", "session", "api"}:
             print(f"% {resolved} configuration submode is reserved for the next orchestration milestone."); return
         if self.state.mode == Mode.CONFIG_AI_PROVIDER:
             provider = self.state.provider or "provider"
+            entry = self.state.config.setdefault("ai", {}).setdefault("providers", {}).setdefault(provider, {})
             if resolved in {"enable", "disable"}:
-                self.state.config.setdefault("providers", {})[provider] = resolved == "enable"; print(f"{provider}: routing policy {'enabled' if resolved == 'enable' else 'disabled'}."); return
+                entry["enabled"] = resolved == "enable"
+                print(f"{provider}: routing policy {'enabled' if resolved == 'enable' else 'disabled'}."); return
             if resolved == "login": self._login(provider); return
-            if resolved == "logout": print(f"{provider}: session logout will be implemented through the provider session manager."); return
+            if resolved == "logout":
+                entry["authenticated"] = False; print(f"{provider}: runtime session marked unauthenticated."); return
             if resolved in {"session", "health"}: print(provider_status_view(provider)); return
             if resolved == "model": print(models_view(provider)); return
 
