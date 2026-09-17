@@ -2,7 +2,7 @@ import json
 
 from app.interception.chatgpt import parse_chatgpt_web
 from app.interception.deepseek import parse_deepseek_web
-from app.interception.web_runtime import parse_gemini
+from app.interception.gemini import parse_gemini_web
 
 
 def test_deepseek_uses_response_fragment_not_title_metadata():
@@ -11,6 +11,11 @@ def test_deepseek_uses_response_fragment_not_title_metadata():
         'data: {"response":"Greeting"}',
     ])
     assert parse_deepseek_web(body) == "Hello! How can I help you today?"
+
+
+def test_deepseek_handles_nested_response_fragment_text():
+    body = 'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":{"text":"Hello from DeepSeek"}}]}}}'
+    assert parse_deepseek_web(body) == "Hello from DeepSeek"
 
 
 def test_chatgpt_extracts_assistant_message_only():
@@ -31,7 +36,18 @@ def test_chatgpt_extracts_current_delta_patch():
     assert parse_chatgpt_web(body) == "Hello! How can I help you today?"
 
 
+def test_chatgpt_handles_replace_patch_list():
+    body = 'data: {"p":"/message/content/parts/0","o":"replace","v":["Final answer"]}'
+    assert parse_chatgpt_web(body) == "Final answer"
+
+
 def test_gemini_extracts_streamgenerate_candidate():
     inner = json.dumps([None, None, None, None, [[None, ["Hello! How can I help you today?"]]]])
     body = json.dumps(["wrb.fr", None, inner, None])
-    assert parse_gemini(body) == "Hello! How can I help you today?"
+    assert parse_gemini_web(body) == "Hello! How can I help you today?"
+
+
+def test_gemini_accepts_xssi_prefixed_frame():
+    inner = json.dumps([None, None, None, None, [[None, ["Hello from Gemini"]]]])
+    body = ")]}'\n" + json.dumps(["wrb.fr", None, inner, None])
+    assert parse_gemini_web(body) == "Hello from Gemini"
