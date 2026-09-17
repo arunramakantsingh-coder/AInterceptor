@@ -28,6 +28,7 @@ export function Nav() {
       <a href="/status" style={S.link}>Status</a>
       <a href="/intercept" style={S.link}>Intercept</a>
       <a href="/sessions" style={S.link}>Sessions</a>
+      <a href="/gateway" style={S.link}>Gateway</a>
       <a href="/rollback" style={S.link}>Rollback</a>
     </nav>
   );
