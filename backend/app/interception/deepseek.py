@@ -45,18 +45,9 @@ class DeepSeekStreamParser:
 
     @staticmethod
     def _merge_append(existing: str, incoming: str) -> str:
+        """Apply an APPEND value literally; never guess overlap at character level."""
         if not incoming:
             return existing
-        if not existing:
-            return incoming
-        if incoming.startswith(existing):
-            return incoming
-        if existing.startswith(incoming) or incoming == existing:
-            return existing
-        max_overlap = min(len(existing), len(incoming))
-        for overlap in range(max_overlap, 0, -1):
-            if existing[-overlap:] == incoming[:overlap]:
-                return existing + incoming[overlap:]
         return existing + incoming
 
     @classmethod
@@ -70,13 +61,10 @@ class DeepSeekStreamParser:
             if not assembled:
                 assembled = part
             elif part.startswith(assembled):
-                # A later fragment is a cumulative snapshot of the response.
                 assembled = part
             elif assembled.startswith(part) or part == assembled:
-                # Older/replayed cumulative fragment; keep the current state.
                 continue
             else:
-                # Independent rendered fragment: keep the UI paragraph boundary.
                 assembled = f"{assembled}\n\n{part}"
         return assembled
 
@@ -230,8 +218,6 @@ class DeepSeekStreamParser:
             else:
                 self._pending = line
 
-        # CDP may deliver one complete SSE/JSON frame without its terminating
-        # newline. Parse it immediately; retain it only when it is incomplete.
         if self._pending.strip():
             raw = self._pending.strip()
             candidate = raw[5:].strip() if raw.startswith("data:") else raw
