@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from app.interception.contracts import EventType, ProviderExecutionRequest, StreamEvent
 from app.interception.runtime import ProviderRuntime
 from app.interception.web_runtime import WebProviderSessionError, WebProviderSpec
+from app.interception import registry as provider_registry
 
 try:
     from playwright.async_api import async_playwright
@@ -171,6 +172,8 @@ class NonClaudeWebRuntime(ProviderRuntime):
             raise WebProviderSessionError("playwright is not installed")
         if self._pw is None:
             self._pw = await async_playwright().start()
+        if not self.cdp_url:
+            self.cdp_url = provider_registry.cdp_url(self.provider)
         if self.cdp_url:
             self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
             contexts = self._browser.contexts

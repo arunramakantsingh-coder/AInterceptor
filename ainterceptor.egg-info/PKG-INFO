@@ -1,6 +1,0 @@
-Metadata-Version: 2.4
-Name: ainterceptor
-Version: 0.2.0
-Summary: AInterceptor AIRouter control-plane CLI
-Requires-Python: >=3.12
-Requires-Dist: prompt-toolkit>=3.0

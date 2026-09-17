@@ -16,6 +16,7 @@ class DeepSeekStreamParser:
     """Stateful parser for DeepSeek Web's SSE patch protocol."""
 
     def __init__(self) -> None:
+        self._path_buffers: dict[str, str] = {}
         self._pending = ""
         self._cumulative_body_seen = ""
         self._fragments: list[dict[str, Any]] = []
@@ -52,20 +53,30 @@ class DeepSeekStreamParser:
 
     @classmethod
     def _join_response_parts(cls, parts: list[str]) -> str:
-        """Join distinct DeepSeek response fragments without replaying cumulative blocks."""
+        """Join fragments from a snapshot's `fragments` array.
+
+        Semantics:
+        - Each entry in the array is a DISTINCT fragment of the final answer.
+        - A later entry that cumulatively extends an earlier one is the SAME
+          fragment, replayed with more text — replace, don't duplicate.
+        - Distinct fragments are separated by a paragraph break (\n\n).
+        Never discards text.
+        """
         assembled = ""
-        for raw_part in parts:
-            part = raw_part.strip()
-            if not part:
+        for part in parts:
+            if part is None:
                 continue
             if not assembled:
                 assembled = part
-            elif part.startswith(assembled):
-                assembled = part
-            elif assembled.startswith(part) or part == assembled:
                 continue
-            else:
-                assembled = f"{assembled}\n\n{part}"
+            if part == assembled:
+                continue
+            if part.startswith(assembled):
+                assembled = part
+                continue
+            if assembled.startswith(part):
+                continue
+            assembled = f"{assembled}\n\n{part}"
         return assembled
 
     @property
@@ -121,10 +132,15 @@ class DeepSeekStreamParser:
             if index is None:
                 return
             fragment = self._ensure_fragment(index)
+            incoming = "".join(self._text_values(value))
             if op in {"SET", "REPLACE"}:
-                fragment["content"] = "".join(self._text_values(value))
+                fragment["content"] = incoming
+                self._path_buffers[path] = incoming
             elif op in {"APPEND", ""}:
-                self._append_content(fragment, value)
+                prior = self._path_buffers.get(path, "")
+                # Literal append: preserve every character
+                fragment["content"] = prior + incoming
+                self._path_buffers[path] = fragment["content"]
             return
 
         match = re.match(r"^(?:response/)?fragments/(-?\d+)$", path)

@@ -19,3 +19,8 @@ credentials.json
 .DS_Store
 backend/sessions/
 .ainterceptor/
+.evidence/dump/
+ainterceptor.egg-info/
+discover_layout.py
+scripts/bootstrap/find_capture.py
+scripts/bootstrap/snapshot_parser.py
