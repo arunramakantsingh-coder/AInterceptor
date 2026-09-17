@@ -8,12 +8,11 @@ import uuid
 
 from app.interception.chatgpt import ChatGPTRuntime
 from app.interception.chrome_auth import existing_chrome_cdp
-from app.interception.claude import ClaudeRuntime, ClaudeSessionError
+from app.interception.claude import ClaudeRuntime
 from app.interception.contracts import EventType, ProviderExecutionRequest
 from app.interception.deepseek import DeepSeekRuntime
 from app.interception.gemini import GeminiRuntime
 from app.interception.web_runtime import WebProviderSessionError
-
 
 DeltaCallback = Callable[[str], None]
 
@@ -37,11 +36,7 @@ def runtime_for(provider: str) -> Any:
 
 async def run_provider(provider: str, prompt: str, on_delta: DeltaCallback | None = None) -> str:
     runtime = runtime_for(provider)
-    request = ProviderExecutionRequest(
-        provider=provider,
-        request_id=str(uuid.uuid4()),
-        messages=[{"role": "user", "content": prompt}],
-    )
+    request = ProviderExecutionRequest(provider=provider, request_id=str(uuid.uuid4()), messages=[{"role": "user", "content": prompt}])
     parts: list[str] = []
     try:
         async for event in runtime.execute(request):
@@ -62,13 +57,15 @@ async def run_provider(provider: str, prompt: str, on_delta: DeltaCallback | Non
         await runtime.close()
 
 
-async def login_provider(provider: str) -> None:
+async def login_provider(provider: str) -> dict[str, str]:
     runtime = runtime_for(provider)
     try:
         login = getattr(runtime, "login", None)
         if login is None:
             raise RuntimeError(f"{provider} runtime does not expose interactive login")
         await login()
+        session_path = getattr(runtime, "session_path", None)
+        return {"provider": provider, "session_path": str(session_path or "")}
     finally:
         await runtime.close()
 
