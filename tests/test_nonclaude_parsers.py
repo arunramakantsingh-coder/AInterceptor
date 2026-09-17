@@ -18,6 +18,37 @@ def test_deepseek_handles_nested_response_fragment_text():
     assert parse_deepseek_web(body) == "Hello from DeepSeek"
 
 
+def test_deepseek_does_not_duplicate_overlapping_fragments():
+    body = "\n".join([
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Doing"}',
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"ing well"}',
+    ])
+    assert parse_deepseek_web(body) == "Doing well"
+
+
+def test_deepseek_carries_patch_path_and_operation_across_token_frames():
+    body = "\n".join([
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"I"}',
+        'data: {"v":"\'m"}',
+        'data: {"v":" doing"}',
+        'data: {"v":" well"}',
+    ])
+    assert parse_deepseek_web(body) == "I'm doing well"
+
+
+def test_deepseek_supports_set_patch():
+    body = 'data: {"p":"response/fragments/-1/content","o":"SET","v":"Final answer"}'
+    assert parse_deepseek_web(body) == "Final answer"
+
+
+def test_deepseek_prefers_web_fragments_over_openai_choice_view():
+    body = "\n".join([
+        'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello!"}]}}}',
+        'data: {"choices":[{"delta":{"content":"Hello!"}}]}',
+    ])
+    assert parse_deepseek_web(body) == "Hello!"
+
+
 def test_chatgpt_extracts_assistant_message_only():
     body = "\n".join([
         'data: {"message":{"author":{"role":"user"},"content":{"parts":["hi"]}}}',

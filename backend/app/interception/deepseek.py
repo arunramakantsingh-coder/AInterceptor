@@ -44,9 +44,6 @@ def _text_values(value: Any) -> list[str]:
         return out
     if isinstance(value, dict):
         out: list[str] = []
-        # DeepSeek has used both plain content strings and nested text/content
-        # objects in response fragments. Never treat title/metadata fields as
-        # assistant output here.
         for key in ("text", "content"):
             if key in value:
                 out.extend(_text_values(value[key]))
@@ -54,33 +51,98 @@ def _text_values(value: Any) -> list[str]:
     return []
 
 
+def _merge_append(buffer: str, candidate: str) -> str:
+    """Append a DeepSeek token/fragment without duplicating overlap."""
+    if not candidate:
+        return buffer
+    if not buffer:
+        return candidate
+    if candidate.startswith(buffer):
+        return candidate
+    if buffer.startswith(candidate) or candidate == buffer:
+        return buffer
+    max_overlap = min(len(buffer), len(candidate))
+    for overlap in range(max_overlap, 0, -1):
+        if buffer[-overlap:] == candidate[:overlap]:
+            return buffer + candidate[overlap:]
+    return buffer + candidate
+
+
+def _apply_patch(buffer: str, operation: str, value: Any) -> str:
+    op = operation.upper()
+    texts = _text_values(value)
+    if not texts:
+        return buffer
+    candidate = "".join(texts)
+    if op == "SET":
+        return candidate
+    if op == "APPEND":
+        return _merge_append(buffer, candidate)
+    return buffer
+
+
+def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
+    """Apply one DeepSeek patch, including nested BATCH operations."""
+    op = operation.upper()
+    if op != "BATCH":
+        return _apply_patch(buffer, op, value)
+    if not isinstance(value, list):
+        return buffer
+    current = buffer
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        current = _apply_patch(current, str(item.get("o") or "APPEND"), item.get("v"))
+    return current
+
+
 def parse_deepseek_web(body: str) -> str:
-    """Extract only DeepSeek assistant RESPONSE fragments."""
+    """Parse DeepSeek Web's stateful patch stream.
+
+    DeepSeek Web carries the patch path (``p``) and operation (``o``) across
+    tiny token frames. A later frame may therefore contain only ``v``. The
+    parser must retain the active patch context instead of treating every JSON
+    object as an independent event.
+    """
     cumulative: list[str] = []
-    deltas: list[str] = []
+    patch_text = ""
+    active_path = ""
+    active_op = ""
+    deepseek_web_seen = False
+    choice_candidates: list[str] = []
+
+    def apply_patch(path: str, operation: str, value: Any) -> None:
+        nonlocal patch_text, deepseek_web_seen
+        if path not in {"response/fragments/-1/content", "/response/fragments/-1/content"}:
+            return
+        deepseek_web_seen = True
+        patch_text = _apply_patch_value(patch_text, operation, value)
 
     for obj in _json_lines(body):
         if not isinstance(obj, dict):
             continue
+        if "p" in obj:
+            active_path = str(obj.get("p") or "")
+        if "o" in obj:
+            active_op = str(obj.get("o") or "").upper()
+        if "v" in obj and active_path and active_op:
+            apply_patch(active_path, active_op, obj.get("v"))
 
         containers = [obj]
         if isinstance(obj.get("v"), dict):
             containers.append(obj["v"])
-
         for container in containers:
             response = container.get("response") if isinstance(container, dict) else None
-            if isinstance(response, dict):
-                fragments = response.get("fragments")
-                if isinstance(fragments, list):
-                    for fragment in fragments:
-                        if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
-                            continue
-                        cumulative.extend(_text_values(fragment.get("content")))
-
-        path = str(obj.get("p") or "")
-        op = str(obj.get("o") or "").upper()
-        if path in {"response/fragments/-1/content", "/response/fragments/-1/content"} and op == "APPEND":
-            deltas.extend(_text_values(obj.get("v")))
+            if not isinstance(response, dict):
+                continue
+            fragments = response.get("fragments")
+            if not isinstance(fragments, list):
+                continue
+            deepseek_web_seen = True
+            for fragment in fragments:
+                if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
+                    continue
+                cumulative.extend(_text_values(fragment.get("content")))
 
         choices = obj.get("choices")
         if isinstance(choices, list):
@@ -89,18 +151,22 @@ def parse_deepseek_web(body: str) -> str:
                     continue
                 delta = choice.get("delta")
                 if isinstance(delta, dict):
-                    deltas.extend(_text_values(delta.get("content") or delta.get("text")))
+                    choice_candidates.extend(_text_values(delta.get("content") or delta.get("text")))
                 message = choice.get("message")
                 if isinstance(message, dict):
-                    deltas.extend(_text_values(message.get("content")))
+                    choice_candidates.extend(_text_values(message.get("content")))
 
-    if deltas:
-        return "".join(deltas).strip()
-    if cumulative:
-        # A response frame can contain a cumulative snapshot. Choose the
-        # longest snapshot rather than concatenating duplicate snapshots.
-        return max(cumulative, key=len).strip()
-    return ""
+    if deepseek_web_seen:
+        if patch_text:
+            return patch_text.strip()
+        if cumulative:
+            return max(cumulative, key=len).strip()
+        return ""
+    if patch_text:
+        return patch_text.strip()
+    for text in choice_candidates:
+        patch_text = _merge_append(patch_text, text)
+    return patch_text.strip()
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
