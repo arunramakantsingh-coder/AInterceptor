@@ -11,60 +11,103 @@ from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
 
 
-def parse_chatgpt_web(body: str) -> str:
-    """Extract visible assistant text from ChatGPT conversation SSE."""
-    candidates: list[str] = []
-    patch_parts: list[str] = []
-    for line in body.lstrip().splitlines():
+def _json_lines(body: str) -> list[Any]:
+    """Decode SSE/JSONL and tolerate compact or prefixed response bodies."""
+    text = body.lstrip()
+    if text.startswith(")]}'"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+    objects: list[Any] = []
+    for line in text.splitlines():
         raw = line.strip()
         if raw.startswith("data:"):
             raw = raw[5:].strip()
         if not raw or raw == "[DONE]":
             continue
         try:
-            obj: Any = json.loads(raw)
+            objects.append(json.loads(raw))
         except json.JSONDecodeError:
             continue
+    if objects:
+        return objects
+    try:
+        return [json.loads(text)]
+    except json.JSONDecodeError:
+        return []
+
+
+def _strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            out.extend(_strings(item))
+        return out
+    if isinstance(value, dict):
+        out: list[str] = []
+        for key in ("text", "content", "parts", "value"):
+            if key in value:
+                out.extend(_strings(value[key]))
+        return out
+    return []
+
+
+def parse_chatgpt_web(body: str) -> str:
+    """Extract visible assistant text from current ChatGPT conversation formats."""
+    cumulative: list[str] = []
+    patches: list[str] = []
+    full_candidates: list[str] = []
+
+    for obj in _json_lines(body):
         if not isinstance(obj, dict):
             continue
 
-        message = obj.get("message")
-        if isinstance(message, dict):
+        for container in (obj, obj.get("v") if isinstance(obj.get("v"), dict) else None):
+            if not isinstance(container, dict):
+                continue
+            message = container.get("message")
+            if not isinstance(message, dict):
+                continue
             author = message.get("author")
             role = author.get("role") if isinstance(author, dict) else None
-            if role in {None, "assistant"}:
-                content = message.get("content")
-                if isinstance(content, dict):
-                    parts = content.get("parts")
-                    if isinstance(parts, list):
-                        candidates.extend(part for part in parts if isinstance(part, str) and part.strip())
-                elif isinstance(content, str) and content.strip():
-                    candidates.append(content)
-
-        value = obj.get("v")
-        if isinstance(value, dict):
-            nested = value.get("message")
-            if isinstance(nested, dict):
-                author = nested.get("author")
-                role = author.get("role") if isinstance(author, dict) else None
-                if role == "assistant":
-                    content = nested.get("content")
-                    if isinstance(content, dict):
-                        parts = content.get("parts")
-                        if isinstance(parts, list):
-                            candidates.extend(part for part in parts if isinstance(part, str) and part.strip())
+            if role not in {None, "assistant"}:
+                continue
+            content = message.get("content")
+            if isinstance(content, dict):
+                parts = content.get("parts")
+                if isinstance(parts, list):
+                    text = "".join(x for x in parts if isinstance(x, str))
+                    if text.strip():
+                        cumulative.append(text)
+                elif isinstance(content.get("text"), str):
+                    cumulative.append(content["text"])
+            elif isinstance(content, str) and content.strip():
+                cumulative.append(content)
 
         path = str(obj.get("p") or "")
         op = str(obj.get("o") or "").lower()
-        patch_value = obj.get("v")
-        if "message/content/parts/" in path and op in {"append", "add"} and isinstance(patch_value, str) and patch_value.strip():
-            patch_parts.append(patch_value)
-        elif "message/content/parts/" in path and op == "replace" and isinstance(patch_value, str) and patch_value.strip():
-            patch_parts = [patch_value]
+        value = obj.get("v")
+        if "/message/content/parts/" in path or "message/content/parts/" in path:
+            values = _strings(value)
+            if op in {"append", "add"}:
+                patches.extend(values)
+            elif op == "replace":
+                patches = values.copy()
 
-    if patch_parts:
-        return "".join(patch_parts).strip()
-    return max(candidates, key=len).strip() if candidates else ""
+        # Some current response envelopes carry the assistant text in a
+        # delta/message object without a patch path.
+        if isinstance(obj.get("delta"), dict):
+            full_candidates.extend(_strings(obj["delta"]))
+
+    if patches:
+        return "".join(patches).strip()
+    if full_candidates:
+        return max(full_candidates, key=len).strip()
+    if cumulative:
+        # Prefer the longest cumulative snapshot; joining every snapshot would
+        # duplicate the same assistant text across conversation frames.
+        return max(cumulative, key=len).strip()
+    return ""
 
 
 class ChatGPTRuntime(NonClaudeWebRuntime):
@@ -76,8 +119,16 @@ class ChatGPTRuntime(NonClaudeWebRuntime):
                 provider="chatgpt",
                 home_url="https://chatgpt.com/",
                 login_markers=("/auth/login", "/login"),
-                response_markers=("/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"),
-                request_markers=("/backend-api/conversation", "/backend-api/f/conversation", "/backend-api/codex"),
+                response_markers=(
+                    "/backend-api/conversation",
+                    "/backend-api/f/conversation",
+                    "/backend-api/codex",
+                ),
+                request_markers=(
+                    "/backend-api/conversation",
+                    "/backend-api/f/conversation",
+                    "/backend-api/codex",
+                ),
                 default_model="gpt-5.6-luna",
             ),
             session_path=session_path or os.getenv("AINTERCEPTOR_CHATGPT_STORAGE_STATE") or str(Path(".ainterceptor") / "chatgpt" / "storage_state.json"),
