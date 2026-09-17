@@ -23,7 +23,7 @@ def test_deepseek_does_not_duplicate_overlapping_fragments():
         'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Doing"}',
         'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"ing well"}',
     ])
-    assert parse_deepseek_web(body) == "Doinging well"
+    assert parse_deepseek_web(body) == "Doing well"
 
 
 def test_deepseek_carries_patch_path_and_operation_across_token_frames():
