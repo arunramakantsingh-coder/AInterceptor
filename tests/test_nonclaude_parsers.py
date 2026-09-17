@@ -1,7 +1,7 @@
 import json
 
 from app.interception.chatgpt import parse_chatgpt_web
-from app.interception.deepseek import parse_deepseek_web
+from app.interception.deepseek import DeepSeekStreamParser, parse_deepseek_web
 from app.interception.gemini import parse_gemini_web
 
 
@@ -39,6 +39,17 @@ def test_deepseek_carries_patch_path_and_operation_across_token_frames():
 def test_deepseek_supports_set_patch():
     body = 'data: {"p":"response/fragments/-1/content","o":"SET","v":"Final answer"}'
     assert parse_deepseek_web(body) == "Final answer"
+
+
+def test_deepseek_stateful_parser_does_not_replay_cumulative_snapshots():
+    body1 = 'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"You\'re"}'
+    body2 = body1 + '\ndata: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"You\'re chatting with **DeepSek**"}]}}}'
+    body3 = body2 + '\ndata: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"You\'re chatting with **DeepSek** — an AI assistant created by DeepSek"}]}}}'
+    parser = DeepSeekStreamParser()
+    assert parser.feed(body1) == "You're"
+    assert parser.feed(body2) == "You're chatting with **DeepSek**"
+    assert parser.feed(body3) == "You're chatting with **DeepSek** — an AI assistant created by DeepSek"
+    assert parser.feed(body3) == "You're chatting with **DeepSek** — an AI assistant created by DeepSek"
 
 
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
