@@ -41,6 +41,15 @@ def test_deepseek_supports_set_patch():
     assert parse_deepseek_web(body) == "Final answer"
 
 
+def test_deepseek_collapses_cumulative_append_snapshots():
+    body = "\n".join([
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Hello"}',
+        'data: {"v":"Hello world"}',
+        'data: {"v":"Hello world from DeepSeek"}',
+    ])
+    assert parse_deepseek_web(body) == "Hello world from DeepSeek"
+
+
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
     body = "\n".join([
         'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello!"}]}}}',
