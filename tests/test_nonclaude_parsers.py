@@ -18,10 +18,10 @@ def test_deepseek_handles_nested_response_fragment_text():
     assert parse_deepseek_web(body) == "Hello from DeepSeek"
 
 
-def test_deepseek_does_not_duplicate_overlapping_fragments():
+def test_deepseek_appends_token_fragments_literally():
     body = "\n".join([
         'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"Doing"}',
-        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"ing well"}',
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":" well"}',
     ])
     assert parse_deepseek_web(body) == "Doing well"
 
