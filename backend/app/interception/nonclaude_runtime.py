@@ -285,16 +285,17 @@ class NonClaudeWebRuntime(ProviderRuntime):
                         if kind == "data":
                             body.extend(payload)
                             current = self.parser(body.decode("utf-8", errors="replace"))
+                            # Emit ONLY when the parser output strictly extends the emitted prefix.
+                            # Never re-emit an earlier body: that's the class of bug that
+                            # collapses "hi how are you" into "hi are you".
                             if current and current.startswith(emitted):
                                 delta = current[len(emitted):]
-                            elif current and len(current) > len(emitted):
-                                delta = current
                             else:
                                 delta = ""
                             if delta:
                                 yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=delta)
                                 sequence += 1
-                                emitted = current if current.startswith(emitted) else emitted + delta
+                                emitted = current
                             continue
                         if kind == "failed":
                             raise RuntimeError(str(payload))
@@ -302,8 +303,6 @@ class NonClaudeWebRuntime(ProviderRuntime):
                             final = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
                             if final and final.startswith(emitted):
                                 delta = final[len(emitted):]
-                            elif final and final != emitted:
-                                delta = final
                             else:
                                 delta = ""
                             if delta:
