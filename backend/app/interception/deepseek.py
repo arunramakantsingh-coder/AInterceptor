@@ -53,24 +53,15 @@ def _text_values(value: Any) -> list[str]:
 
 
 def _merge_append(buffer: str, candidate: str) -> str:
-    """Append a token or replace the buffer when the provider sent a snapshot."""
+    """Append a DeepSeek token/fragment without duplicating overlap."""
     if not candidate:
         return buffer
     if not buffer:
         return candidate
-    if candidate == buffer:
-        return buffer
     if candidate.startswith(buffer):
         return candidate
-    if buffer.startswith(candidate):
+    if buffer.startswith(candidate) or candidate == buffer:
         return buffer
-
-    # Some DeepSeek frames contain a cumulative snapshot rather than a pure
-    # token delta. If the previous state occurs intact inside the candidate,
-    # promote the candidate to the new state instead of duplicating it.
-    if len(candidate) > len(buffer) and buffer.strip() and buffer.strip() in candidate:
-        return candidate
-
     max_overlap = min(len(buffer), len(candidate))
     for overlap in range(max_overlap, 0, -1):
         if buffer[-overlap:] == candidate[:overlap]:
