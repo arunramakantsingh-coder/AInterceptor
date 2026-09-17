@@ -26,6 +26,24 @@ def test_deepseek_does_not_duplicate_overlapping_fragments():
     assert parse_deepseek_web(body) == "Doing well"
 
 
+def test_deepseek_carries_patch_path_and_operation_across_token_frames():
+    body = "\n".join([
+        'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"I"}',
+        'data: {"v":"\'m"}',
+        'data: {"v":" doing"}',
+        'data: {"v":" well"}',
+    ])
+    assert parse_deepseek_web(body) == "I'm doing well"
+
+
+def test_deepseek_supports_set_then_carried_append():
+    body = "\n".join([
+        'data: {"p":"response/fragments/-1/content","o":"SET","v":"Hello"}',
+        'data: {"v":"!"}',
+    ])
+    assert parse_deepseek_web(body) == "Hello!"
+
+
 def test_deepseek_prefers_web_fragments_over_openai_choice_view():
     body = "\n".join([
         'data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"Hello!"}]}}}',
