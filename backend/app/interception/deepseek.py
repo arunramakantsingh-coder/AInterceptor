@@ -59,6 +59,27 @@ class DeepSeekStreamParser:
                 return existing + incoming[overlap:]
         return existing + incoming
 
+    @classmethod
+    def _join_response_parts(cls, parts: list[str]) -> str:
+        """Join distinct DeepSeek response fragments without replaying cumulative blocks."""
+        assembled = ""
+        for raw_part in parts:
+            part = raw_part.strip()
+            if not part:
+                continue
+            if not assembled:
+                assembled = part
+            elif part.startswith(assembled):
+                # A later fragment is a cumulative snapshot of the response.
+                assembled = part
+            elif assembled.startswith(part) or part == assembled:
+                # Older/replayed cumulative fragment; keep the current state.
+                continue
+            else:
+                # Independent rendered fragment: keep the UI paragraph boundary.
+                assembled = f"{assembled}\n\n{part}"
+        return assembled
+
     @property
     def current(self) -> str:
         parts: list[str] = []
@@ -66,7 +87,7 @@ class DeepSeekStreamParser:
             if str(fragment.get("type") or "").upper() == "RESPONSE":
                 parts.extend(self._text_values(fragment.get("content")))
         if parts:
-            return "".join(parts).strip()
+            return self._join_response_parts(parts).strip()
         return self._choice_text.strip()
 
     def _resolve_index(self, raw: str) -> int | None:
