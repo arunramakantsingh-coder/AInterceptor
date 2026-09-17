@@ -43,7 +43,7 @@ class DeepSeekStreamParser:
     def _clone_fragment(fragment: Any) -> dict[str, Any]:
         if isinstance(fragment, dict):
             return dict(fragment)
-        return {"type": "text", "content": ""}
+        return {"type": "RESPONSE", "content": ""}
 
     @staticmethod
     def _merge_append(existing: str, incoming: str) -> str:
@@ -74,7 +74,7 @@ class DeepSeekStreamParser:
 
     def _ensure_fragment(self, index: int) -> dict[str, Any]:
         while len(self._fragments) <= index:
-            self._fragments.append({"type": "text", "content": ""})
+            self._fragments.append({"type": "RESPONSE", "content": ""})
         return self._fragments[index]
 
     def _append_content(self, fragment: dict[str, Any], value: Any) -> None:
