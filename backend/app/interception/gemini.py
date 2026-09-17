@@ -5,10 +5,11 @@ import os
 from pathlib import Path
 
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
-from app.interception.web_runtime import BrowserWebRuntime, WebProviderSpec, parse_gemini
+from app.interception.nonclaude_runtime import NonClaudeWebRuntime
+from app.interception.web_runtime import WebProviderSpec, parse_gemini
 
 
-class GeminiRuntime(BrowserWebRuntime):
+class GeminiRuntime(NonClaudeWebRuntime):
     provider = "gemini"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
