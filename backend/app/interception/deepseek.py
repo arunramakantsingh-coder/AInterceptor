@@ -10,6 +10,8 @@ from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
 from app.interception.nonclaude_runtime import NonClaudeWebRuntime
 from app.interception.web_runtime import WebProviderSpec
 
+PATCH_PATHS = {"response/fragments/-1/content", "/response/fragments/-1/content"}
+
 
 def _json_lines(body: str) -> list[Any]:
     text = body.lstrip()
@@ -52,7 +54,6 @@ def _text_values(value: Any) -> list[str]:
 
 
 def _merge_append(buffer: str, candidate: str) -> str:
-    """Append a DeepSeek token/fragment without duplicating overlap."""
     if not candidate:
         return buffer
     if not buffer:
@@ -82,7 +83,6 @@ def _apply_patch(buffer: str, operation: str, value: Any) -> str:
 
 
 def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
-    """Apply one DeepSeek patch, including nested BATCH operations."""
     op = operation.upper()
     if op != "BATCH":
         return _apply_patch(buffer, op, value)
@@ -96,37 +96,35 @@ def _apply_patch_value(buffer: str, operation: str, value: Any) -> str:
     return current
 
 
-def parse_deepseek_web(body: str) -> str:
-    """Parse DeepSeek Web's stateful patch stream.
+class DeepSeekStreamParser:
+    """Stateful parser for DeepSeek Web patch/snapshot streams."""
 
-    DeepSeek Web carries the patch path (``p``) and operation (``o``) across
-    tiny token frames. A later frame may therefore contain only ``v``. The
-    parser must retain the active patch context instead of treating every JSON
-    object as an independent event.
-    """
-    cumulative: list[str] = []
-    patch_text = ""
-    active_path = ""
-    active_op = ""
-    deepseek_web_seen = False
-    choice_candidates: list[str] = []
+    def __init__(self) -> None:
+        self._body_seen = ""
+        self._pending = ""
+        self._patch_text = ""
+        self._snapshot_text = ""
+        self._active_path = ""
+        self._active_op = ""
+        self._choice_text = ""
 
-    def apply_patch(path: str, operation: str, value: Any) -> None:
-        nonlocal patch_text, deepseek_web_seen
-        if path not in {"response/fragments/-1/content", "/response/fragments/-1/content"}:
-            return
-        deepseek_web_seen = True
-        patch_text = _apply_patch_value(patch_text, operation, value)
+    @property
+    def current(self) -> str:
+        if self._snapshot_text:
+            return self._snapshot_text.strip()
+        if self._patch_text:
+            return self._patch_text.strip()
+        return self._choice_text.strip()
 
-    for obj in _json_lines(body):
+    def _apply_object(self, obj: Any) -> None:
         if not isinstance(obj, dict):
-            continue
+            return
         if "p" in obj:
-            active_path = str(obj.get("p") or "")
+            self._active_path = str(obj.get("p") or "")
         if "o" in obj:
-            active_op = str(obj.get("o") or "").upper()
-        if "v" in obj and active_path and active_op:
-            apply_patch(active_path, active_op, obj.get("v"))
+            self._active_op = str(obj.get("o") or "").upper()
+        if "v" in obj and self._active_path in PATCH_PATHS and self._active_op:
+            self._patch_text = _apply_patch_value(self._patch_text, self._active_op, obj.get("v"))
 
         containers = [obj]
         if isinstance(obj.get("v"), dict):
@@ -138,11 +136,11 @@ def parse_deepseek_web(body: str) -> str:
             fragments = response.get("fragments")
             if not isinstance(fragments, list):
                 continue
-            deepseek_web_seen = True
             for fragment in fragments:
                 if not isinstance(fragment, dict) or fragment.get("type") != "RESPONSE":
                     continue
-                cumulative.extend(_text_values(fragment.get("content")))
+                for value in _text_values(fragment.get("content")):
+                    self._snapshot_text = _merge_append(self._snapshot_text, value)
 
         choices = obj.get("choices")
         if isinstance(choices, list):
@@ -151,22 +149,71 @@ def parse_deepseek_web(body: str) -> str:
                     continue
                 delta = choice.get("delta")
                 if isinstance(delta, dict):
-                    choice_candidates.extend(_text_values(delta.get("content") or delta.get("text")))
+                    for value in _text_values(delta.get("content") or delta.get("text")):
+                        self._choice_text = _merge_append(self._choice_text, value)
                 message = choice.get("message")
                 if isinstance(message, dict):
-                    choice_candidates.extend(_text_values(message.get("content")))
+                    for value in _text_values(message.get("content")):
+                        self._choice_text = _merge_append(self._choice_text, value)
 
-    if deepseek_web_seen:
-        if patch_text:
-            return patch_text.strip()
-        if cumulative:
-            return max(cumulative, key=len).strip()
-        return ""
-    if patch_text:
-        return patch_text.strip()
-    for text in choice_candidates:
-        patch_text = _merge_append(patch_text, text)
-    return patch_text.strip()
+    def _consume_line(self, line: str) -> None:
+        raw = line.strip()
+        if raw.startswith(")]}'"):
+            raw = raw.split("\n", 1)[1].strip() if "\n" in raw else ""
+        if raw.startswith("data:"):
+            raw = raw[5:].strip()
+        if not raw or raw == "[DONE]":
+            return
+        try:
+            self._apply_object(json.loads(raw))
+        except json.JSONDecodeError:
+            return
+
+    def feed(self, body: str) -> str:
+        if body.startswith(self._body_seen):
+            suffix = body[len(self._body_seen):]
+        else:
+            self.__init__()
+            suffix = body
+        self._body_seen = body
+        self._pending += suffix
+        lines = self._pending.splitlines(keepends=True)
+        self._pending = ""
+        for line in lines:
+            if line.endswith(("\n", "\r")):
+                self._consume_line(line)
+            else:
+                self._pending = line
+        if self._pending.strip():
+            raw = self._pending.strip()
+            candidate = raw[5:].strip() if raw.startswith("data:") else raw
+            try:
+                obj = json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+            else:
+                self._pending = ""
+                self._apply_object(obj)
+        return self.current
+
+    def finish(self) -> str:
+        if self._pending.strip():
+            raw = self._pending.strip()
+            if raw.startswith("data:"):
+                raw = raw[5:].strip()
+            if raw != "[DONE]":
+                try:
+                    self._apply_object(json.loads(raw))
+                except json.JSONDecodeError:
+                    pass
+            self._pending = ""
+        return self.current
+
+
+def parse_deepseek_web(body: str) -> str:
+    parser = DeepSeekStreamParser()
+    parser.feed(body)
+    return parser.finish()
 
 
 class DeepSeekRuntime(NonClaudeWebRuntime):
