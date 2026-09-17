@@ -3,44 +3,29 @@ from __future__ import annotations
 
 from . import __version__
 from .config_store import STARTUP_CONFIG, load_startup_config, provider_session_status
-from .nos import MODEL_CATALOG, PROVIDERS, model_definitions, provider_configured, provider_status, runtime_available, self_tests, system_info
+from .nos import MODEL_CATALOG, PROVIDERS, model_definitions, provider_status, runtime_available, self_tests, system_info
 
 WIDTH = 72
 RULE = "─" * WIDTH
 
 
 def boot_console() -> str:
-    return "\n".join((
-        "╔════════════════════════════════════════════════════════════════════════╗",
-        "║                              AInterceptor                              ║",
-        "║                       AI Router Control Console                         ║",
-        "╚════════════════════════════════════════════════════════════════════════╝",
-        "",
-        "Type 'bootai' to enter AInterceptor-BOOT mode.",
-    ))
+    return "\n".join(("╔════════════════════════════════════════════════════════════════════════╗", "║                              AInterceptor                              ║", "║                       AI Router Control Console                         ║", "╚════════════════════════════════════════════════════════════════════════╝", "", "Type 'bootai' to enter AInterceptor-BOOT mode."))
 
 
 def banner() -> str:
-    return "\n".join((
-        "╔════════════════════════════════════════════════════════════════════════╗",
-        "║                            A I R O U T E R                             ║",
-        "║                    AI ROUTER OPERATING SYSTEM                          ║",
-        "║                         AInterceptor Project                            ║",
-        "╚════════════════════════════════════════════════════════════════════════╝",
-    ))
+    return "\n".join(("╔════════════════════════════════════════════════════════════════════════╗", "║                            A I R O U T E R                             ║", "║                    AI ROUTER OPERATING SYSTEM                          ║", "║                         AInterceptor Project                            ║", "╚════════════════════════════════════════════════════════════════════════╝"))
 
 
 def bootstrap() -> str:
-    lines = [f"AIRouter Software, Version {__version__}", "AI ROUTER OPERATING SYSTEM", "Copyright (c) 2026 AInterceptor Project", "", "Initializing AI Routing Subsystem ............... done", "Initializing Provider Interceptor Engine ........ done", "Initializing Session Manager .................... done", "Initializing Model Registry ...................... ready", "Initializing Usage & Credit Engine .............. ready", "Initializing Orchestrator ....................... ready", "", "Hardware:"]
     info = system_info()
+    cfg = load_startup_config()
+    lines = [f"AIRouter Software, Version {__version__}", "AI ROUTER OPERATING SYSTEM", "Copyright (c) 2026 AInterceptor Project", "", "Subsystem status:", "  CLI control plane                  PASS", "  Provider registry                  PASS" if all(runtime_available(p.name) for p in PROVIDERS) else "  Provider registry                  DEGRADED", "  Interceptor runtimes               " + ("PASS" if all(runtime_available(p.name) for p in PROVIDERS) else "DEGRADED"), "  Gateway                            SCAFFOLD", "  Orchestrator                       SCAFFOLD", "  Session/NVRAM store                READY", "  Model registry                     READY", "  Usage/Credit engine                NOT IMPLEMENTED", "", "Hardware:"]
     lines.extend(f"  {key.title():<10}: {value}" for key, value in info.items())
+    lines.extend(("", f"  Startup config : {STARTUP_CONFIG}", f"  Config register: {cfg.get('config_register', '0x2102')}"))
     lines.append("")
     lines.append("Self-tests:")
     lines.extend(f"  {name:<30} {status}" for name, status in self_tests())
-    lines.append("")
-    cfg = load_startup_config()
-    lines.append(f"  Startup config : {STARTUP_CONFIG}")
-    lines.append(f"  Config register: {cfg.get('config_register', '0x2102')}")
     return "\n".join(lines)
 
 
@@ -59,18 +44,19 @@ def provider_status_view(provider: str) -> str:
     item = next((p for p in PROVIDERS if p.name == provider), None)
     if item is None:
         return f"% Unknown provider: {provider}"
-    storage = ".ainterceptor/{}/storage_state.json".format(provider)
+    storage = f".ainterceptor/{provider}/storage_state.json"
     return "\n".join((f"Provider:     {item.display_name}", f"Status:       {provider_status(provider)}", f"Runtime:      {'AVAILABLE' if runtime_available(provider) else 'UNAVAILABLE'}", f"Session:      {provider_session_status(provider)}", f"Storage:      {storage}", f"Transport:    {item.transport_kind}", f"Capabilities: {', '.join(item.capabilities)}", f"Runtime Path: {item.runtime_path}"))
 
 
 def system_status() -> str:
     info = system_info()
-    return "\n".join(("System Status", RULE, "  Gateway              READY", "  Orchestrator         READY", "  Interceptor          READY", "  Session Manager      READY", "  Model Registry       READY", "  Usage/Credit Engine  READY", f"  Hostname             {info['hostname']}", f"  OS                   {info['os']}", f"  CPU                  {info['cpu']}", f"  Memory               {info['memory']}", f"  Python               {info['python']}"))
+    interceptor = "READY" if all(runtime_available(p.name) for p in PROVIDERS) else "DEGRADED"
+    return "\n".join(("System Status", RULE, "  CLI Control Plane      READY", "  Gateway                SCAFFOLD", "  Orchestrator           SCAFFOLD", f"  Interceptor            {interceptor}", "  Session/NVRAM Manager  READY", "  Model Registry         READY", "  Usage/Credit Engine    NOT IMPLEMENTED", f"  Hostname               {info['hostname']}", f"  OS                     {info['os']}", f"  CPU                    {info['cpu']}", f"  Memory                 {info['memory']}", f"  Python                 {info['python']}"))
 
 
 def version_view() -> str:
     cfg = load_startup_config()
-    return "\n".join((f"AIRouter Software, Version {__version__}", "AIRouter NOS control plane", "AInterceptor web-layer AI routing project", f"Configuration register: {cfg.get('config_register', '0x2102')}", f"Startup configuration: {STARTUP_CONFIG}", "Boot mode: persistent startup configuration"))
+    return "\n".join((f"AIRouter Software, Version {__version__}", "AIRouter NOS control plane", "AInterceptor web-layer AI routing project", f"Configuration register: {cfg.get('config_register', '0x2102')}", f"Startup configuration: {STARTUP_CONFIG}", "Boot source: persistent startup configuration"))
 
 
 def system_view() -> str:
@@ -118,7 +104,7 @@ def counters_view(counters: dict[str, int]) -> str:
 
 
 def credits_view() -> str:
-    return "\n".join(("AI Credit Ledger", RULE, "  Provider credit/balance collection: NOT CONFIGURED", "  No fabricated balances are displayed."))
+    return "\n".join(("AI Credit Ledger", RULE, "  Provider credit/balance collection: NOT IMPLEMENTED", "  No fabricated balances are displayed."))
 
 
 def health_view() -> str:
