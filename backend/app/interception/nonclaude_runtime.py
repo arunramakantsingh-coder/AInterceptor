@@ -1,13 +1,12 @@
 """Shared browser runtime for ChatGPT, Gemini and DeepSeek.
 
-Claude intentionally does not use this module. Claude's dedicated transport is
-left untouched because it is the known-good reference implementation.
+Claude intentionally does not use this module. Its dedicated transport remains
+unchanged as the known-good streaming reference.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import pathlib
 from typing import Any, AsyncIterator, Callable
 from urllib.parse import urlparse
@@ -23,121 +22,99 @@ except ImportError:
 
 
 class NonClaudeNetworkCapture:
-    """Capture the provider POST response after prompt submission.
+    """CDP response capture using the same Network streaming path as Claude."""
 
-    Multiple matching POSTs can occur for one UI action (for example a
-    response request plus ancillary provider activity). We therefore inspect
-    every matching completed body and select the first body that the
-    provider-specific parser can identify as an actual answer. This prevents
-    chat titles/metadata from being mistaken for assistant output.
-    """
-
-    def __init__(self, page: Any, spec: WebProviderSpec, parser: Callable[[str], str]) -> None:
+    def __init__(self, page: Any, spec: WebProviderSpec) -> None:
         self.page = page
         self.spec = spec
-        self.parser = parser
         self._cdp: Any | None = None
         self._candidate_ids: set[str] = set()
-        self._seen_ids: set[str] = set()
-        self._status_by_id: dict[str, int] = {}
-        self._content_type_by_id: dict[str, str] = {}
-        self._answer: tuple[str, int, str, str] | None = None
-        self._error: str | None = None
-        self._event = asyncio.Event()
+        self._active_id: str | None = None
+        self._status = 0
+        self._content_type = ""
+        self._queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
 
     @staticmethod
     def _matches(url: str, markers: tuple[str, ...]) -> bool:
-        lower = (url or "").lower()
-        return any(marker.lower() in lower for marker in markers)
+        url = (url or "").lower()
+        return any(marker.lower() in url for marker in markers)
 
     def _on_request(self, event: dict[str, Any]) -> None:
         request = event.get("request") or {}
-        method = str(request.get("method") or "").upper()
-        url = str(request.get("url") or "")
-        if method != "POST":
+        if str(request.get("method") or "").upper() != "POST":
             return
-        if not self._matches(url, self.spec.response_markers + self.spec.request_markers):
+        if not self._matches(str(request.get("url") or ""), self.spec.response_markers + self.spec.request_markers):
             return
-        request_id = event.get("requestId")
+        request_id = str(event.get("requestId") or "")
         if request_id:
-            self._candidate_ids.add(str(request_id))
+            self._candidate_ids.add(request_id)
 
     def _on_response(self, event: dict[str, Any]) -> None:
         request_id = str(event.get("requestId") or "")
-        if request_id not in self._candidate_ids:
+        if request_id not in self._candidate_ids or self._active_id is not None:
             return
         response = event.get("response") or {}
-        self._status_by_id[request_id] = int(response.get("status", 0))
+        self._active_id = request_id
+        self._status = int(response.get("status", 0))
         headers = response.get("headers") or {}
-        self._content_type_by_id[request_id] = str(
-            headers.get("content-type") or headers.get("Content-Type") or ""
-        ).lower()
+        self._content_type = str(headers.get("content-type") or headers.get("Content-Type") or "").lower()
+        self._queue.put_nowait(("response_started", (self._status, self._content_type)))
+        asyncio.create_task(self._start_stream(request_id))
 
-    async def _on_finished(self, event: dict[str, Any]) -> None:
-        request_id = str(event.get("requestId") or "")
-        if request_id not in self._candidate_ids or request_id in self._seen_ids:
-            return
-        self._seen_ids.add(request_id)
+    async def _start_stream(self, request_id: str) -> None:
         try:
-            result = await self._cdp.send("Network.getResponseBody", {"requestId": request_id})
-            body = str(result.get("body", ""))
-            if result.get("base64Encoded"):
-                body = base64.b64decode(body).decode("utf-8", errors="replace")
-            if not body.strip():
-                return
-            text = self.parser(body)
-            status = self._status_by_id.get(request_id, 0)
-            content_type = self._content_type_by_id.get(request_id, "")
-            if status >= 400:
-                if status in {401, 403}:
-                    self._error = f"SESSION:{status}"
-                elif self._error is None:
-                    self._error = f"HTTP:{status}"
-                self._event.set()
-                return
-            if text.strip():
-                self._answer = (text.strip(), status, content_type, request_id)
-                self._event.set()
+            result = await self._cdp.send("Network.streamResourceContent", {"requestId": request_id})
+            buffered = result.get("bufferedData") or ""
+            if buffered:
+                self._queue.put_nowait(("data", base64.b64decode(buffered)))
         except Exception as exc:
-            self._error = f"provider response body capture failed: {exc}"
-            self._event.set()
+            self._queue.put_nowait(("failed", f"provider response streaming failed: {exc}"))
+
+    def _on_data(self, event: dict[str, Any]) -> None:
+        if str(event.get("requestId") or "") != self._active_id:
+            return
+        data = event.get("data")
+        if not data:
+            return
+        try:
+            payload = base64.b64decode(data)
+        except Exception:
+            payload = str(data).encode("utf-8", errors="replace")
+        self._queue.put_nowait(("data", payload))
+
+    def _on_finished(self, event: dict[str, Any]) -> None:
+        if str(event.get("requestId") or "") == self._active_id:
+            self._queue.put_nowait(("finished", None))
 
     def _on_failed(self, event: dict[str, Any]) -> None:
-        request_id = str(event.get("requestId") or "")
-        if request_id not in self._candidate_ids:
-            return
-        self._error = f"provider network request failed: {event.get('errorText', 'unknown error')}"
-        self._event.set()
+        if str(event.get("requestId") or "") == self._active_id:
+            self._queue.put_nowait(("failed", event.get("errorText") or "network request failed"))
 
     async def __aenter__(self) -> "NonClaudeNetworkCapture":
         self._cdp = await self.page.context.new_cdp_session(self.page)
-        await self._cdp.send(
-            "Network.enable",
-            {"maxTotalBufferSize": 50 * 1024 * 1024, "maxResourceBufferSize": 10 * 1024 * 1024},
-        )
+        await self._cdp.send("Network.enable", {"maxTotalBufferSize": 50 * 1024 * 1024, "maxResourceBufferSize": 10 * 1024 * 1024})
         try:
             await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
         except Exception:
             pass
         self._cdp.on("Network.requestWillBeSent", self._on_request)
         self._cdp.on("Network.responseReceived", self._on_response)
-        self._cdp.on("Network.loadingFinished", lambda event: asyncio.create_task(self._on_finished(event)))
+        self._cdp.on("Network.dataReceived", self._on_data)
+        self._cdp.on("Network.loadingFinished", self._on_finished)
         self._cdp.on("Network.loadingFailed", self._on_failed)
         return self
 
-    async def wait(self, timeout: float = 120.0) -> tuple[int, str, str]:
-        try:
-            await asyncio.wait_for(self._event.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
-            if not self._candidate_ids:
-                raise TimeoutError(f"{self.spec.provider} provider POST was not observed")
-            raise TimeoutError(f"{self.spec.provider} provider answer response timed out")
-        if self._answer is not None:
-            text, status, content_type, _ = self._answer
-            return status, content_type, text
-        if self._error == "SESSION:401" or self._error == "SESSION:403":
-            raise WebProviderSessionError(f"{self.spec.provider} session expired")
-        raise RuntimeError(self._error or f"{self.spec.provider} response did not contain an assistant answer")
+    async def events(self, timeout: float = 120.0) -> AsyncIterator[tuple[str, Any]]:
+        while True:
+            try:
+                item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                if not self._candidate_ids:
+                    raise TimeoutError(f"{self.spec.provider} provider POST was not observed")
+                raise TimeoutError(f"{self.spec.provider} provider response timed out")
+            yield item
+            if item[0] in {"finished", "failed"}:
+                return
 
     async def __aexit__(self, *args: Any) -> None:
         if self._cdp is not None:
@@ -155,14 +132,7 @@ class NonClaudeNetworkCapture:
 class NonClaudeWebRuntime(ProviderRuntime):
     """Reusable runtime boundary for the three non-Claude web providers."""
 
-    def __init__(
-        self,
-        spec: WebProviderSpec,
-        session_path: str | None,
-        cdp_url: str | None,
-        headless: bool,
-        parser: Callable[[str], str],
-    ) -> None:
+    def __init__(self, spec: WebProviderSpec, session_path: str | None, cdp_url: str | None, headless: bool, parser: Callable[[str], str]) -> None:
         self.spec = spec
         self.provider = spec.provider
         self.session_path = session_path
@@ -201,16 +171,11 @@ class NonClaudeWebRuntime(ProviderRuntime):
         else:
             profile = pathlib.Path(".ainterceptor") / "profiles" / self.provider
             profile.mkdir(parents=True, exist_ok=True)
-            self._context = await self._pw.chromium.launch_persistent_context(
-                str(profile), headless=False if interactive else self.headless
-            )
+            self._context = await self._pw.chromium.launch_persistent_context(str(profile), headless=False if interactive else self.headless)
             self._owns_context = True
-            self._owns_browser = False
             pages = list(self._context.pages)
             self._page = pages[-1] if pages else await self._context.new_page()
-        current_host = urlparse(self._page.url or "").netloc
-        home_host = urlparse(self.spec.home_url).netloc
-        if current_host != home_host:
+        if urlparse(self._page.url or "").netloc != urlparse(self.spec.home_url).netloc:
             await self._page.goto(self.spec.home_url, wait_until="domcontentloaded", timeout=30_000)
 
     def _is_login_page(self) -> bool:
@@ -220,7 +185,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
     async def start(self) -> None:
         if self._started:
             return
-        await self._ensure_page(interactive=False)
+        await self._ensure_page()
         if self._is_login_page():
             raise WebProviderSessionError(f"{self.provider} session is not authenticated; use provider login")
         self._started = True
@@ -246,14 +211,13 @@ class NonClaudeWebRuntime(ProviderRuntime):
     async def _prompt_textbox(self) -> Any:
         for selector in self.spec.composer_selectors:
             locator = self._page.locator(selector)
-            count = await locator.count()
-            for index in range(count - 1, -1, -1):
+            for index in range(await locator.count() - 1, -1, -1):
                 candidate = locator.nth(index)
                 try:
                     if await candidate.is_visible() and await candidate.is_editable():
                         return candidate
                 except Exception:
-                    continue
+                    pass
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
     async def execute(self, request: ProviderExecutionRequest) -> AsyncIterator[StreamEvent]:
@@ -265,8 +229,10 @@ class NonClaudeWebRuntime(ProviderRuntime):
             raise ValueError("execution requires a non-empty user message")
         async with self._lock:
             sequence = 0
-            async with NonClaudeNetworkCapture(self._page, self.spec, self.parser) as capture:
-                yield StreamEvent(self.provider, request.request_id, EventType.REQUEST_INTERCEPTED, sequence, metadata={"transport": "chromium-cdp-network", "correlation": "provider-post-and-parser"})
+            emitted = ""
+            body = bytearray()
+            async with NonClaudeNetworkCapture(self._page, self.spec) as capture:
+                yield StreamEvent(self.provider, request.request_id, EventType.REQUEST_INTERCEPTED, sequence, metadata={"transport": "chromium-cdp-network", "correlation": "provider-post-and-stream"})
                 sequence += 1
                 try:
                     await self._page.bring_to_front()
@@ -277,26 +243,53 @@ class NonClaudeWebRuntime(ProviderRuntime):
                     yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": f"prompt_submission_failed: {exc}"})
                     return
                 try:
-                    status, content_type, text = await capture.wait()
-                except WebProviderSessionError:
-                    yield StreamEvent(self.provider, request.request_id, EventType.SESSION_EXPIRED, sequence, metadata={"reason": "provider_session_expired"})
-                    sequence += 1
-                    yield StreamEvent(self.provider, request.request_id, EventType.SESSION_RECOVERY_REQUIRED, sequence, metadata={"reason": "provider_authentication_failed"})
-                    return
+                    async for kind, payload in capture.events():
+                        if kind == "response_started":
+                            status, content_type = payload
+                            if status in {401, 403}:
+                                yield StreamEvent(self.provider, request.request_id, EventType.SESSION_EXPIRED, sequence, metadata={"status": status})
+                                sequence += 1
+                                yield StreamEvent(self.provider, request.request_id, EventType.SESSION_RECOVERY_REQUIRED, sequence, metadata={"reason": "provider_authentication_failed"})
+                                return
+                            if status >= 400:
+                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"status": status})
+                                return
+                            yield StreamEvent(self.provider, request.request_id, EventType.STREAM_STARTED, sequence, metadata={"transport": "chromium-cdp-network", "content_type": content_type})
+                            sequence += 1
+                            continue
+                        if kind == "data":
+                            body.extend(payload)
+                            current = self.parser(body.decode("utf-8", errors="replace"))
+                            if current and current.startswith(emitted):
+                                delta = current[len(emitted):]
+                            elif current and len(current) > len(emitted):
+                                delta = current
+                            else:
+                                delta = ""
+                            if delta:
+                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=delta)
+                                sequence += 1
+                                emitted = current if current.startswith(emitted) else emitted + delta
+                            continue
+                        if kind == "failed":
+                            raise RuntimeError(str(payload))
+                        if kind == "finished":
+                            final = self.parser(body.decode("utf-8", errors="replace")).strip()
+                            if final and final.startswith(emitted):
+                                delta = final[len(emitted):]
+                            elif final and final != emitted:
+                                delta = final
+                            else:
+                                delta = ""
+                            if delta:
+                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=delta)
+                                sequence += 1
+                            yield StreamEvent(self.provider, request.request_id, EventType.STREAM_COMPLETED, sequence, finish_reason="stop")
+                            return
                 except TimeoutError as exc:
                     yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": str(exc)})
-                    return
                 except Exception as exc:
                     yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": str(exc)})
-                    return
-                if status >= 400:
-                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"status": status})
-                    return
-                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_STARTED, sequence, metadata={"transport": "chromium-cdp-network", "content_type": content_type})
-                sequence += 1
-                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=text)
-                sequence += 1
-                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_COMPLETED, sequence, finish_reason="stop")
 
     async def close(self) -> None:
         self._started = False
