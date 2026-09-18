@@ -1,4 +1,12 @@
-"""Path B — drive a real Chrome.
+﻿import pathlib, subprocess, sys
+
+ROOT = pathlib.Path.cwd()
+BE   = ROOT / "backend" / "app"
+
+# ═══════════════════════════════════════════════════════════════
+# 1. Rewrite path_b.py with CDP-to-host + Shadow DOM traversal
+# ═══════════════════════════════════════════════════════════════
+(BE / "runtime" / "path_b.py").write_text('''"""Path B — drive a real Chrome.
 
 Two modes:
   1. HOST CDP (default in Docker): connect to a Chrome running on the
@@ -318,3 +326,88 @@ async def stream_b(provider: str, session_state: dict, prompt: str) -> AsyncIter
         errors.append(f"headless: {e}")
 
     raise PathBError(" | ".join(errors))
+''', encoding="utf-8", newline="\n")
+print("  [OK] path_b.py — host CDP + in-container headless + Shadow DOM")
+
+# ═══════════════════════════════════════════════════════════════
+# 2. docker-compose: allow host.docker.internal
+# ═══════════════════════════════════════════════════════════════
+dc = ROOT / "docker-compose.yml"
+txt = dc.read_text(encoding="utf-8")
+if "extra_hosts" not in txt:
+    txt = txt.replace(
+        "    ports:\n      - \"8000:8000\"",
+        "    ports:\n      - \"8000:8000\"\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\"",
+        1,
+    )
+    dc.write_text(txt, encoding="utf-8", newline="\n")
+    print("  [OK] docker-compose: extra_hosts host.docker.internal")
+
+# ═══════════════════════════════════════════════════════════════
+# 3. .env — default host CDP base
+# ═══════════════════════════════════════════════════════════════
+env_p = ROOT / ".env"
+env_txt = env_p.read_text(encoding="utf-8")
+if "AINTERCEPTOR_HOST_CDP_BASE" not in env_txt:
+    env_txt = env_txt.rstrip() + "\nAINTERCEPTOR_HOST_CDP_BASE=host.docker.internal\n"
+    env_p.write_text(env_txt, encoding="utf-8", newline="\n")
+    print("  [OK] .env: AINTERCEPTOR_HOST_CDP_BASE=host.docker.internal")
+
+# compose env
+if "AINTERCEPTOR_HOST_CDP_BASE" not in txt:
+    txt = txt.replace(
+        '      AINTERCEPTOR_PATH_A_DEBUG: "1"',
+        '      AINTERCEPTOR_PATH_A_DEBUG: "1"\n      AINTERCEPTOR_HOST_CDP_BASE: "host.docker.internal"',
+        1,
+    )
+    dc.write_text(txt, encoding="utf-8", newline="\n")
+    print("  [OK] docker-compose passes AINTERCEPTOR_HOST_CDP_BASE")
+
+# ═══════════════════════════════════════════════════════════════
+# 4. Syntax
+# ═══════════════════════════════════════════════════════════════
+import ast
+try:
+    ast.parse((BE / "runtime" / "path_b.py").read_text(encoding="utf-8"))
+except SyntaxError as e:
+    print("[FAIL]", e); sys.exit(1)
+print("  [OK] syntax valid")
+
+def git(a):
+    return subprocess.run(["git"]+a, cwd=ROOT, capture_output=True, text=True)
+git(["add","-A"])
+r = git(["commit","-m",
+         "feat(path_b): connect to host Chrome via CDP; Shadow DOM composer; in-container fallback"])
+print((r.stdout.strip() or r.stderr.strip())[:400])
+
+print()
+print("=" * 66)
+print("NOW DO THIS ON WINDOWS:")
+print()
+print("  # 1. Make sure all 4 Chromes are running off-screen on Windows")
+print("  #    (the script we built earlier)")
+print("  powershell -ExecutionPolicy Bypass -File scripts\\start_browsers_offscreen.ps1 -Provider deepseek")
+print("  powershell -ExecutionPolicy Bypass -File scripts\\start_browsers_offscreen.ps1 -Provider claude")
+print("  powershell -ExecutionPolicy Bypass -File scripts\\start_browsers_offscreen.ps1 -Provider chatgpt")
+print("  powershell -ExecutionPolicy Bypass -File scripts\\start_browsers_offscreen.ps1 -Provider gemini")
+print()
+print("  # 2. Verify the 4 ports are listening")
+print("  netstat -ano | findstr \":9222 :9223 :9224 :9225\"")
+print()
+print("  # 3. Rebuild the container")
+print("  docker compose up -d --build api")
+print("  Start-Sleep 15")
+print()
+print("  # 4. Re-test all four")
+print("  foreach ($p in @('deepseek','claude','chatgpt','gemini')) {")
+print("    $envFile = Get-Content .\\.env.test")
+print("    $APIKEY = ($envFile | Where-Object { $_ -like 'API_KEY=*' }) -replace '^API_KEY=', ''")
+print("    $json = \\\"{`\\\"model`\\\":`\\\"$p`\\\",`\\\"messages`\\\":[{`\\\"role`\\\":`\\\"user`\\\",`\\\"content`\\\":`\\\"hi in one word`\\\"}],`\\\"stream`\\\":true}\\\"")
+print("    Set-Content body.json $json -Encoding ascii -NoNewline")
+print("    Write-Host \\\"`n=== $p ===\\\" -ForegroundColor Cyan")
+print("    curl.exe -s -N -X POST http://localhost:8000/v1/chat/completions -H \\\"Authorization: Bearer $APIKEY\\\" -H \\\"Content-Type: application/json\\\" --data-binary \\\"@body.json\\\"")
+print("  }")
+print()
+print("  # 5. Debug if any provider fails")
+print("  docker compose logs --tail=100 api | Select-String 'path_a|path_b'")
+print("=" * 66)

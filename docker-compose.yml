@@ -23,6 +23,7 @@ services:
     env_file: .env
     environment:
       AINTERCEPTOR_PATH_A_DEBUG: "1"
+      AINTERCEPTOR_HOST_CDP_BASE: "host.docker.internal"
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-airouter}:${POSTGRES_PASSWORD:-airouter_dev}@db:5432/${POSTGRES_DB:-airouter}
     volumes:
       - ./sessions:/app/sessions
@@ -30,6 +31,8 @@ services:
       - ./.ainterceptor:/app/.ainterceptor
     ports:
       - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     command: >
       sh -c "alembic -c /app/alembic.ini upgrade head &&
