@@ -47,4 +47,5 @@ Write-Host "    Ctrl+C to stop"
 Write-Host ""
 
 $env:PYTHONPATH = "backend"
-& "$venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+$env:AINTERCEPTOR_NO_WATCHDOG = "1"
+& "$venv\Scripts\python.exe" -m app.runtime.daemon
