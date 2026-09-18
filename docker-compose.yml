@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airouter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airouter_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-airouter}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airouter}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-airouter}:${POSTGRES_PASSWORD:-airouter_dev}@db:5432/${POSTGRES_DB:-airouter}
+    volumes:
+      - ./sessions:/app/sessions
+      - ./logs:/app/logs
+      - ./.ainterceptor:/app/.ainterceptor
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    command: >
+      sh -c "alembic -c /app/alembic.ini upgrade head &&
+             uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
