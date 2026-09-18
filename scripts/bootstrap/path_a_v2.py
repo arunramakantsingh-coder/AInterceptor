@@ -1,4 +1,13 @@
-"""Path A — direct HTTPS with harvested session cookies.
+﻿import pathlib, subprocess, sys, os
+
+ROOT = pathlib.Path.cwd()
+BE = ROOT / "backend" / "app"
+(BE / "runtime").mkdir(parents=True, exist_ok=True)
+
+# ═══════════════════════════════════════════════════════════════
+# path_a.py — unified Path A dispatcher (SSE / NDJSON)
+# ═══════════════════════════════════════════════════════════════
+(BE / "runtime" / "path_a.py").write_text('''"""Path A — direct HTTPS with harvested session cookies.
 
 Each provider has its own streamer function. All yield plain text deltas.
 No provider-specific logic lives outside this file.
@@ -445,3 +454,15 @@ async def stream(provider: str, session_state: dict, prompt: str) -> AsyncIterat
         raise PathAError(f"{provider}: no path A implementation (use path B)")
     async for delta in fn(session_state, prompt):
         yield delta
+''', encoding="utf-8", newline="\n")
+print("  [OK] path_a.py — 8 providers wired (deepseek, claude, mistral, qwen, huggingchat, perplexity, grok; gemini deferred to Path B; chatgpt/poe Path B)")
+
+# ─── commit ───
+def git(a):
+    return subprocess.run(["git"]+a, cwd=ROOT, capture_output=True, text=True)
+git(["add","-A"])
+r = git(["commit","-m",
+         "feat(phase-2): Path A parsers for deepseek, claude, mistral, qwen, huggingchat, perplexity, grok"])
+print((r.stdout.strip() or r.stderr.strip())[:400])
+print()
+print("Next: update dispatcher + register providers, then test deepseek live.")
