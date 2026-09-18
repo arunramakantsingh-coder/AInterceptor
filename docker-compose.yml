@@ -22,6 +22,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
+      AINTERCEPTOR_PATH_A_DEBUG: "1"
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-airouter}:${POSTGRES_PASSWORD:-airouter_dev}@db:5432/${POSTGRES_DB:-airouter}
     volumes:
       - ./sessions:/app/sessions

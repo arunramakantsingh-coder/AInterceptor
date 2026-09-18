@@ -63,10 +63,24 @@ async def chat(body: ChatIn,
     captured = {"text": "", "status": "ok"}
 
     async def gen():
+        delta_count = 0
+        error_msg = None
         try:
             async for delta in stream_reply(provider, state, prompt):
                 captured["text"] += delta
+                delta_count += 1
                 yield _openai_chunk(body.model, delta)
+            if delta_count == 0:
+                # Provider stream ended with no text — surface a diagnostic
+                err = {"error": {
+                    "message": f"{provider} returned no text (path A got HTTP 200 but no parsable deltas). "
+                               f"Set AINTERCEPTOR_PATH_A_DEBUG=1 in .env and retry to see raw lines.",
+                    "type": "empty_stream",
+                }}
+                yield f"data: {json.dumps(err)}\n\n"
+                captured["status"] = "empty_stream"
+            else:
+                captured["status"] = "ok"
             yield _openai_chunk(body.model, "", "stop")
             yield "data: [DONE]\n\n"
         except ProviderUnavailable as e:
@@ -80,13 +94,16 @@ async def chat(body: ChatIn,
             yield f"data: {json.dumps(err)}\n\n"
             yield "data: [DONE]\n\n"
         finally:
-            db.add(UsageEvent(
-                user_id=user.id, api_key_id=key.id,
-                provider=provider, model=body.model,
-                tokens_in=len(prompt), tokens_out=len(captured["text"]),
-                latency_ms=int((time.monotonic() - t0) * 1000),
-                status=captured["status"], path="A"))
-            key.last_used_at = datetime.now(timezone.utc)
-            db.commit()
+            try:
+                db.add(UsageEvent(
+                    user_id=user.id, api_key_id=key.id,
+                    provider=provider, model=body.model,
+                    tokens_in=len(prompt), tokens_out=len(captured["text"]),
+                    latency_ms=int((time.monotonic() - t0) * 1000),
+                    status=captured["status"], path="A"))
+                key.last_used_at = datetime.now(timezone.utc)
+                db.commit()
+            except Exception:
+                pass
 
     return StreamingResponse(gen(), media_type="text/event-stream")

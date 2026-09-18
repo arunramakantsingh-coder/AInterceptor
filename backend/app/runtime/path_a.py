@@ -4,7 +4,13 @@ Each provider has its own streamer function. All yield plain text deltas.
 No provider-specific logic lives outside this file.
 """
 from __future__ import annotations
-import json, re, time
+import json, re, time, os, sys
+
+DEBUG = os.environ.get('AINTERCEPTOR_PATH_A_DEBUG') == '1'
+
+def _dbg(*a):
+    if DEBUG:
+        print('[path_a]', *a, file=sys.stderr, flush=True)
 from typing import AsyncIterator, Callable
 import httpx
 
@@ -54,15 +60,29 @@ async def _stream_deepseek(state: dict, prompt: str) -> AsyncIterator[str]:
         "search_enabled": False,
     }
     fragments: dict[int, str] = {}
+    _dbg("deepseek POST -> chat.deepseek.com/api/v0/chat/completion")
+    _dbg("deepseek cookies:", list(cookies.keys()))
+    _dbg("deepseek body:", body)
+    raw_lines = 0
+    parsed_objs = 0
+    emitted = 0
     async with httpx.AsyncClient(cookies=cookies, timeout=180.0, follow_redirects=True) as c:
         async with c.stream("POST",
                             "https://chat.deepseek.com/api/v0/chat/completion",
                             headers=headers, json=body) as r:
+            _dbg("deepseek HTTP status:", r.status_code)
             if r.status_code in (401, 403):
+                body_txt = await r.aread()
+                _dbg("deepseek 4xx body:", body_txt[:500])
                 raise PathAError(f"deepseek session expired: HTTP {r.status_code}")
             if r.status_code >= 400:
-                raise PathAError(f"deepseek HTTP {r.status_code}: {await r.aread()[:200]}")
+                body_txt = await r.aread()
+                _dbg("deepseek error body:", body_txt[:500])
+                raise PathAError(f"deepseek HTTP {r.status_code}: {body_txt[:200]}")
             async for line in r.aiter_lines():
+                raw_lines += 1
+                if DEBUG and raw_lines <= 5:
+                    _dbg(f"line {raw_lines}:", repr(line[:200]))
                 if not line or not line.startswith("data:"):
                     continue
                 payload = line[5:].strip()
@@ -72,6 +92,7 @@ async def _stream_deepseek(state: dict, prompt: str) -> AsyncIterator[str]:
                     obj = json.loads(payload)
                 except Exception:
                     continue
+                parsed_objs += 1
                 # Shape 1: full fragments array in response
                 v = obj.get("v")
                 if isinstance(v, dict) and isinstance(v.get("response"), dict):
@@ -106,7 +127,9 @@ async def _stream_deepseek(state: dict, prompt: str) -> AsyncIterator[str]:
                         yield vv
                 # Shape 3: bare string token
                 if isinstance(obj.get("v"), str) and "p" not in obj and "o" not in obj:
+                    emitted += 1
                     yield obj["v"]
+    _dbg(f"deepseek done: raw_lines={raw_lines} parsed_objs={parsed_objs} emitted={emitted}")
 
 
 def _coerce_text(content) -> str:
