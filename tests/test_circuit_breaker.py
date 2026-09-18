@@ -5,7 +5,7 @@ os.environ.setdefault("MASTER_KEY", __import__("base64").b64encode(os.urandom(32
 os.environ.setdefault("JWT_SECRET", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
-from backend.app.runtime.circuit_breaker import (
+from app.runtime.circuit_breaker import (
     Circuit, CircuitState, CircuitRegistry
 )
 

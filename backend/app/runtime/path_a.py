@@ -265,17 +265,13 @@ async def _stream_claude(state: dict, prompt: str) -> AsyncIterator[str]:
 
 async def _stream_gemini(state: dict, prompt: str) -> AsyncIterator[str]:
     """Gemini web: StreamGenerate returns cumulative wrb.fr snapshots."""
-    cookies = _cookies(state)
-    headers = _headers_from_state(state, {
-        "Accept": "*/*",
-        "Referer": "https://gemini.google.com/",
-        "Origin": "https://gemini.google.com",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    })
     # Gemini requires a session-bound f.req payload; without live extraction
     # of the auth token this cannot be reconstructed from cookies alone.
     raise PathAError(
-        "gemini path A requires live page token extraction — use path B")
+        "gemini path A requires live page token extraction - use path B")
+    # unreachable — keeps this function an async generator
+    if False:
+        yield ""
 
 
 # ── Mistral ──────────────────────────────────────────────────────────

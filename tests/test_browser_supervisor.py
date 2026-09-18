@@ -5,7 +5,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pathlib
 import pytest
-from backend.app.runtime import browser_supervisor as bs
+from app.runtime import browser_supervisor as bs
 
 
 def test_provider_urls_present():

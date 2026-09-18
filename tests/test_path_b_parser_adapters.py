@@ -4,7 +4,7 @@ os.environ.setdefault("JWT_SECRET", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
-from backend.app.runtime import path_b as pb
+from app.runtime import path_b as pb
 
 
 def test_provider_registry_has_all_four():

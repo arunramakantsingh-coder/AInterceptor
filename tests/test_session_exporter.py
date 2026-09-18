@@ -9,7 +9,7 @@ os.environ.setdefault("JWT_SECRET", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
-from backend.app.runtime import session_exporter as se
+from app.runtime import session_exporter as se
 
 
 class FakePage:
