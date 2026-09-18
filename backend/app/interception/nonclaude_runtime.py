@@ -240,10 +240,21 @@ class NonClaudeWebRuntime(ProviderRuntime):
                 raise WebProviderSessionError("CDP browser has no context")
             self._context = contexts[0]
             self._owns_browser = self._owns_context = False
+            # Find the tab whose URL matches this provider's home host.
+            # If none exists, open a new tab to the provider home.
             host = urlparse(self.spec.home_url).netloc
-            pages = [p for p in self._context.pages
-                     if host == urlparse(p.url or "").netloc]
-            self._page = pages[-1] if pages else await self._context.new_page()
+            matching = [p for p in self._context.pages
+                        if host in (p.url or "")]
+            if matching:
+                self._page = matching[-1]
+            else:
+                self._page = await self._context.new_page()
+                try:
+                    await self._page.goto(self.spec.home_url,
+                                          wait_until="domcontentloaded",
+                                          timeout=30_000)
+                except Exception:
+                    pass
         elif self.session_path and pathlib.Path(self.session_path).exists():
             self._browser = await self._pw.chromium.launch(headless=self.headless)
             self._context = await self._browser.new_context(storage_state=self.session_path)

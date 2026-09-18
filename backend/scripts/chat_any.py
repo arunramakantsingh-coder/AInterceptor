@@ -1,5 +1,5 @@
-"""Chat CLI — talks to aidaemon at http://127.0.0.1:7700."""
-import asyncio, json, os, sys, pathlib, urllib.request, urllib.error
+"""AInterceptor chat — direct attach to shared Chrome."""
+import asyncio, importlib, os, sys, uuid, pathlib, subprocess, time, socket
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -7,138 +7,172 @@ try:
 except Exception:
     pass
 
-DAEMON = "http://127.0.0.1:7700"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "backend"
+STATE = ROOT / ".ainterceptor"
+STATE.mkdir(exist_ok=True)
+SHARED_PROFILE = STATE / "chrome-profile-shared"
+SHARED_PORT = 9222
 
-def http_get(path, timeout=2.0):
-    with urllib.request.urlopen(DAEMON + path, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+URLS = {
+    "chatgpt":  "https://chatgpt.com/",
+    "claude":   "https://claude.ai/",
+    "gemini":   "https://gemini.google.com/",
+    "deepseek": "https://chat.deepseek.com/",
+}
 
-def http_post(path, timeout=30.0):
-    req = urllib.request.Request(DAEMON + path, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+sys.path.insert(0, str(BACKEND))
+from app.interception.contracts import ProviderExecutionRequest
 
-def daemon_alive():
-    try:
-        http_get("/", timeout=1.0)
-        return True
-    except Exception:
-        return False
+def port_open(port):
+    s = socket.socket(); s.settimeout(0.4)
+    try: s.connect(("127.0.0.1", port)); return True
+    except OSError: return False
+    finally: s.close()
 
-SUBCOMMANDS = {"login", "show", "hide", "status"}
+def find_chrome():
+    for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"):
+        if pathlib.Path(c).exists(): return c
+    return None
 
+def launch_shared_chrome(off_screen=True):
+    chrome = find_chrome()
+    if not chrome:
+        print("[FAIL] chrome.exe not found"); return False
+    SHARED_PROFILE.mkdir(parents=True, exist_ok=True)
+    pos = "-32000,-32000" if off_screen else "100,100"
+    args = [chrome,
+            f"--remote-debugging-port={SHARED_PORT}",
+            f"--user-data-dir={SHARED_PROFILE}",
+            "--no-first-run", "--no-default-browser-check",
+            f"--window-position={pos}",
+            "--window-size=1400,900"]
+    args.extend(URLS.values())
+    subprocess.Popen(args)
+    for _ in range(30):
+        time.sleep(0.5)
+        if port_open(SHARED_PORT): return True
+    return False
 
-def dispatch(args):
-    """Return (action, provider) or (None, None)."""
-    if not args:
-        return None, None
-    a0 = args[0].lower()
-    # verb-first: daemon login deepseek
-    if a0 in SUBCOMMANDS:
-        if a0 == "status":
-            return "status", None
-        if len(args) < 2:
-            print(f"usage: {a0} <provider>")
-            return "help", None
-        return a0, args[1].lower()
-    # provider-first: deepseek [login|show|hide]
-    provider = a0
-    if len(args) > 1 and args[1].lower() in SUBCOMMANDS:
-        return args[1].lower(), provider
-    return "chat", provider
-
-
-def do_status():
-    if not daemon_alive():
-        print("aidaemon  ●  not running")
-        return 1
-    with urllib.request.urlopen(DAEMON + "/", timeout=2) as r:
-        import json as _j
-        data = _j.loads(r.read())
-    print("aidaemon  ●  running")
-    print()
-    print(f"  {'PROVIDER':<10} {'PORT':<6} {'BROWSER':<10} {'ATTACHED':<10}")
-    print("  " + "-" * 40)
-    for name, cfg in data["providers"].items():
-        b = "alive" if cfg["chrome_alive"] else "off"
-        a = "yes" if cfg["attached"] else "no"
-        print(f"  {name:<10} {cfg['port']:<6} {b:<10} {a:<10}")
-    return 0
-
+def load_runtime(provider):
+    module = importlib.import_module(f"app.interception.{provider}")
+    target = provider.replace("-", "").lower()
+    for name, obj in vars(module).items():
+        if isinstance(obj, type) and obj.__module__ == module.__name__:
+            if name.lower() == f"{target}runtime":
+                return obj
+    for name, obj in vars(module).items():
+        if isinstance(obj, type) and obj.__module__ == module.__name__ and name.endswith("Runtime"):
+            return obj
+    raise RuntimeError(f"no Runtime class for {provider}")
 
 async def do_chat(provider):
-    if not daemon_alive():
-        print("[FAIL] aidaemon is not running.")
-        print("       Start it with:  aidaemon start")
-        print("       Then retry:     " + provider)
-        return 2
-    print(f"Connected to {provider} (daemon). /exit or Ctrl+C to leave.\n")
-    while True:
-        try:
-            line = input(f"{provider}> ")
-        except (EOFError, KeyboardInterrupt):
-            print(); break
-        if not line.strip(): continue
-        if line.strip() in {"/exit","/back","exit","quit"}: break
-
-        body = json.dumps({"prompt": line}).encode()
-        req = urllib.request.Request(
-            f"{DAEMON}/chat/{provider}",
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        print()
-        try:
-            with urllib.request.urlopen(req, timeout=240) as resp:
-                buf = b""
-                for chunk in resp:
-                    buf += chunk
-                    while b"\n\n" in buf:
-                        ev, buf = buf.split(b"\n\n", 1)
-                        for ln in ev.split(b"\n"):
-                            if not ln.startswith(b"data: "): continue
-                            payload = ln[6:].decode("utf-8","replace")
-                            if payload == "[DONE]": break
-                            try:
-                                j = json.loads(payload)
-                                if "delta" in j:
-                                    print(j["delta"], end="", flush=True)
-                                elif "error" in j:
-                                    print(f"\n[ERROR] {j['error']}")
-                            except Exception:
-                                pass
-        except Exception as e:
-            print(f"[FAIL] {e}")
-        print()
+    if not port_open(SHARED_PORT):
+        print(f"[..] shared Chrome not running — launching off-screen on {SHARED_PORT}")
+        if not launch_shared_chrome(off_screen=True):
+            print("[FAIL] could not launch shared Chrome"); return 2
+    cls = load_runtime(provider)
+    rt = cls()
+    await rt.start()
+    print(f"Connected to {provider}. /exit or Ctrl+C to leave.\n")
+    try:
+        while True:
+            try:
+                line = input(f"{provider}> ")
+            except (EOFError, KeyboardInterrupt):
+                print(); break
+            if not line.strip(): continue
+            if line.strip() in {"/exit","/back","exit","quit"}: break
+            req = ProviderExecutionRequest(
+                provider=provider,
+                request_id=str(uuid.uuid4()),
+                messages=[{"role":"user","content":line}],
+            )
+            print()
+            async for ev in rt.execute(req):
+                if ev.delta:
+                    print(ev.delta, end="", flush=True)
+            print()
+    finally:
+        await rt.close()
     return 0
 
+def do_login(provider):
+    """Bring the shared Chrome on-screen so the user can log into `provider`."""
+    if not port_open(SHARED_PORT):
+        print(f"[..] launching shared Chrome with all providers as tabs")
+        if not launch_shared_chrome(off_screen=False):
+            print("[FAIL] launch failed"); return 2
+    # Move the window on-screen
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def cb(hwnd, lp):
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n:
+                buf = ctypes.create_unicode_buffer(n+1)
+                user32.GetWindowTextW(hwnd, buf, n+1)
+                if "Chrome" in buf.value or "chatgpt" in buf.value.lower() or \
+                   "claude" in buf.value.lower() or "gemini" in buf.value.lower() or \
+                   "deepseek" in buf.value.lower():
+                    user32.MoveWindow(hwnd, 80, 80, 1400, 900, True)
+            return True
+        user32.EnumWindows(WNDENUMPROC(cb), 0)
+    except Exception as e:
+        print(f"[WARN] could not move window: {e}")
+    print()
+    print(f"Log in to {provider} in the Chrome window.")
+    print(f"Then run:  daemon hide {provider}   (or just close this and run {provider})")
+    return 0
+
+def do_hide(provider=None):
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def cb(hwnd, lp):
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n:
+                buf = ctypes.create_unicode_buffer(n+1)
+                user32.GetWindowTextW(hwnd, buf, n+1)
+                if "Chrome" in buf.value:
+                    user32.MoveWindow(hwnd, -32000, -32000, 1400, 900, True)
+            return True
+        user32.EnumWindows(WNDENUMPROC(cb), 0)
+    except Exception as e:
+        print(f"[WARN] {e}")
+    print("Chrome pushed off-screen.")
+    return 0
+
+def do_status():
+    alive = port_open(SHARED_PORT)
+    print("AInterceptor shared browser")
+    print(f"  port    : {SHARED_PORT}")
+    print(f"  profile : {SHARED_PROFILE}")
+    print(f"  status  : {'alive' if alive else 'off'}")
+    return 0
 
 def main():
-    action, provider = dispatch(sys.argv[1:])
-    if action is None or action == "help":
-        print("usage: <provider> [login|show|hide]")
-        print("       login|show|hide|status <provider>")
+    if len(sys.argv) < 2:
+        print("usage: <provider> [login|hide|status]")
         return 1
-    if action == "status":
-        return do_status()
-
-    if action in {"login","show","hide"}:
-        if not daemon_alive():
-            print("[FAIL] aidaemon is not running.")
-            print(f"       Start it with:  aidaemon start")
-            print(f"       Then retry:     {action} {provider}")
-            return 2
-        try:
-            print(http_post(f"/{action}/{provider}", timeout=60))
-        except Exception as e:
-            print(f"[FAIL] {e}")
-        return 0
-
-    if action == "chat":
-        return asyncio.run(do_chat(provider))
-    return 1
-
+    a0 = sys.argv[0+1].lower()
+    if a0 == "status": return do_status()
+    if a0 == "hide":   return do_hide()
+    if a0 == "login":
+        if len(sys.argv) < 3: print("usage: login <provider>"); return 1
+        return do_login(sys.argv[2].lower())
+    provider = a0
+    if len(sys.argv) > 2:
+        sub = sys.argv[2].lower()
+        if sub == "login": return do_login(provider)
+        if sub == "hide":  return do_hide(provider)
+        if sub == "status":return do_status()
+    return asyncio.run(do_chat(provider))
 
 if __name__ == "__main__":
     sys.exit(main())
