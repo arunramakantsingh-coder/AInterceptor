@@ -263,89 +263,113 @@ class NonClaudeWebRuntime(ProviderRuntime):
                     pass
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
-    async def execute(self, request: ProviderExecutionRequest) -> AsyncIterator[StreamEvent]:
+    async def execute(self, request: ProviderExecutionRequest):
+        """Submit prompt, wait for assistant bubble to stabilise, return it.
+
+        Transport-layer decoding is intentionally NOT used here. The DOM is
+        the authoritative source for the reply text. Provider-specific
+        transport decoders remain available for future streaming work but
+        are not on the critical path.
+        """
         if request.provider != self.provider:
             raise ValueError(f"runtime provider mismatch: {request.provider}")
         await self.start()
-        prompt = next((m.get("content", "") for m in reversed(request.messages) if m.get("role") == "user"), "")
+
+        prompt = next(
+            (m.get("content", "") for m in reversed(request.messages)
+             if m.get("role") == "user"), ""
+        )
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("execution requires a non-empty user message")
+
         async with self._lock:
-            sequence = 0
-            emitted = ""
-            body = bytearray()
-            async with NonClaudeNetworkCapture(self._page, self.spec) as capture:
-                yield StreamEvent(self.provider, request.request_id, EventType.REQUEST_INTERCEPTED, sequence, metadata={"transport": "chromium-cdp-network", "correlation": "provider-post-and-stream"})
-                sequence += 1
-                try:
-                    await self._page.bring_to_front()
-                    textbox = await self._prompt_textbox()
-                    await textbox.fill(prompt)
-                    await textbox.press("Enter")
-                except Exception as exc:
-                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": f"prompt_submission_failed: {exc}"})
-                    return
-                try:
-                    # Buffer-only: accumulate every byte, wait for terminal
-                    # event, then decode ONCE with the authoritative decoder.
-                    # No streaming reconstruction — that path was the source
-                    # of every character-loss bug.
-                    terminal = False
-                    async for kind, payload in capture.events():
-                        if kind == "response_started":
-                            status, content_type = payload
-                            if status in {401, 403}:
-                                yield StreamEvent(self.provider, request.request_id, EventType.SESSION_EXPIRED, sequence, metadata={"status": status})
-                                sequence += 1
-                                yield StreamEvent(self.provider, request.request_id, EventType.SESSION_RECOVERY_REQUIRED, sequence, metadata={"reason": "provider_authentication_failed"})
-                                return
-                            if status >= 400:
-                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"status": status})
-                                return
-                            yield StreamEvent(self.provider, request.request_id, EventType.STREAM_STARTED, sequence, metadata={"transport": "chromium-cdp-network", "content_type": content_type})
-                            sequence += 1
-                            continue
-                        if kind == "data":
-                            body.extend(payload)
-                            continue
-                        if kind == "failed":
-                            raise RuntimeError(str(payload))
-                        if kind == "finished":
-                            terminal = True
-                            break
+            seq = 0
+            yield StreamEvent(self.provider, request.request_id,
+                              EventType.REQUEST_INTERCEPTED, seq,
+                              metadata={"transport": "dom"})
+            seq += 1
 
-                    if not terminal:
-                        yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": "stream ended without terminal signal"})
-                        return
+            # Snapshot current number of assistant bubbles
+            before = await self._assistant_count()
 
-                    raw = body.decode("utf-8", errors="replace")
+            # Submit
+            try:
+                await self._page.bring_to_front()
+                box = await self._prompt_textbox()
+                await box.fill(prompt)
+                await box.press("Enter")
+            except Exception as exc:
+                yield StreamEvent(self.provider, request.request_id,
+                                  EventType.STREAM_FAILED, seq,
+                                  metadata={"reason": f"submit_failed: {exc}"})
+                return
 
-                    # Authoritative final decode (DeepSeek-specific)
-                    final_text = ""
-                    try:
-                        from app.interception.deepseek import decode_deepseek_final
-                        final_text = decode_deepseek_final(raw)
-                    except Exception:
-                        final_text = ""
+            yield StreamEvent(self.provider, request.request_id,
+                              EventType.STREAM_STARTED, seq,
+                              metadata={"transport": "dom"})
+            seq += 1
 
-                    # Fall back to DOM if the decoder produced nothing
-                    if not final_text:
-                        try:
-                            final_text = (await self._read_last_assistant_text()).strip()
-                        except Exception:
-                            final_text = ""
+            # Wait for a NEW assistant bubble
+            text = ""
+            stable_reads = 0
+            for _ in range(120):  # up to 60s
+                await asyncio.sleep(0.5)
+                count = await self._assistant_count()
+                if count <= before:
+                    continue
+                current = await self._read_last_assistant_text()
+                if current and current == text and len(current) > 0:
+                    stable_reads += 1
+                    if stable_reads >= 2:
+                        break
+                else:
+                    stable_reads = 0
+                    text = current
 
-                    if final_text:
-                        yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=final_text)
-                        sequence += 1
+            if not text:
+                yield StreamEvent(self.provider, request.request_id,
+                                  EventType.STREAM_FAILED, seq,
+                                  metadata={"reason": "no assistant reply observed"})
+                return
 
-                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_COMPLETED, sequence, finish_reason="stop")
-                    return
+            yield StreamEvent(self.provider, request.request_id,
+                              EventType.STREAM_DELTA, seq, delta=text)
+            seq += 1
+            yield StreamEvent(self.provider, request.request_id,
+                              EventType.STREAM_COMPLETED, seq,
+                              finish_reason="stop")
+            return
 
-                except TimeoutError as exc:
-                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": str(exc)})
-                except Exception as exc:
-                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": str(exc)})
+    async def _assistant_count(self) -> int:
+        sels = ['.ds-markdown', '[data-message-author-role="assistant"]',
+                '.model-response-text', 'message-content']
+        for s in sels:
+            try:
+                n = await self._page.locator(s).count()
+                if n > 0:
+                    return n
+            except Exception:
+                continue
+        return 0
+
+    async def _read_last_assistant_text(self) -> str:
+        sels = ['.ds-markdown', '.ds-markdown--block',
+                '[data-message-author-role="assistant"]',
+                '.model-response-text', 'message-content']
+        best = ""
+        for s in sels:
+            try:
+                loc = self._page.locator(s)
+                n = await loc.count()
+                if n == 0:
+                    continue
+                txt = (await loc.nth(n - 1).inner_text()).strip()
+                if len(txt) > len(best):
+                    best = txt
+            except Exception:
+                continue
+        return best
+
 
     async def close(self) -> None:
         self._started = False
