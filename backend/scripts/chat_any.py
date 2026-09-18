@@ -1,10 +1,5 @@
-"""AInterceptor chat launcher.
-
-Usage:
-    <provider>              open chat (attaches to running browser)
-    <provider> login        open the provider's login window
-"""
-import asyncio, importlib, os, sys, uuid, pathlib, inspect, subprocess, socket, time
+"""Chat CLI — prefers aidaemon, falls back to local runtime."""
+import asyncio, json, os, sys, uuid, pathlib, urllib.request, urllib.error
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -12,167 +7,126 @@ try:
 except Exception:
     pass
 
-RAW = pathlib.Path("..") / ".evidence" / "raw"
-RAW.mkdir(parents=True, exist_ok=True)
-os.environ["AINTERCEPTOR_RAW_CAPTURE_DIR"] = str(RAW)
+DAEMON = "http://127.0.0.1:7700"
 
-from app.interception.contracts import ProviderExecutionRequest
-from app.interception import registry as provider_registry
-
-PORTS = {"claude": 9222, "deepseek": 9223, "chatgpt": 9224, "gemini": 9225}
-URLS  = {
-    "claude":   "https://claude.ai/",
-    "deepseek": "https://chat.deepseek.com/",
-    "chatgpt":  "https://chatgpt.com/",
-    "gemini":   "https://gemini.google.com/",
-}
-PROFILES = {
-    "claude":   "chrome-profile-claude",
-    "deepseek": "chrome-profile-deepseek",
-    "chatgpt":  "chrome-profile-chatgpt",
-    "gemini":   "chrome-profile-gemini",
-}
-
-
-def _port_open(port: int) -> bool:
-    s = socket.socket(); s.settimeout(0.4)
-    try: s.connect(("127.0.0.1", port)); return True
-    except OSError: return False
-    finally: s.close()
-
-
-def _find_chrome() -> str | None:
-    for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"):
-        if pathlib.Path(c).exists(): return c
-    return None
-
-
-def open_login_window(provider: str) -> int:
-    chrome = _find_chrome()
-    if not chrome:
-        print("[FAIL] chrome.exe not found"); return 2
-    port = PORTS[provider]
-    profile = pathlib.Path(r"C:\Projects\AInterceptor-M1.5\.ainterceptor") / PROFILES[provider]
-    profile.mkdir(parents=True, exist_ok=True)
-
-    if _port_open(port):
-        print(f"[OK] {provider} browser already running on {port}")
-        print("     Bring it on-screen to log in, or run the chat now.")
-        return 0
-
-    print(f"[..] Opening {provider} login window on {port}")
-    args = [
-        chrome,
-        f"--remote-debugging-port={port}",
-        f"--user-data-dir={profile}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--window-size=1280,900",
-        URLS[provider],
-    ]
-    subprocess.Popen(args)
-    for _ in range(20):
-        time.sleep(0.5)
-        if _port_open(port):
-            print(f"[OK] {provider} browser ready. Log in, then run: {provider}")
-            return 0
-    print("[WARN] Chrome did not come up in 10s — check for a popup or error")
-    return 1
-
-
-def _load_runtime(provider: str):
-    module = importlib.import_module(f"app.interception.{provider}")
-    target = provider.replace("-", "").lower()
-    candidates = []
-    for name, obj in vars(module).items():
-        if not isinstance(obj, type): continue
-        if obj.__module__ != module.__name__: continue
-        lname = name.lower()
-        if lname == f"{target}runtime": return obj
-        if lname.endswith("runtime"): candidates.append(obj)
-    if candidates: return candidates[0]
-    raise RuntimeError(f"no Runtime class in app.interception.{provider}")
-
-
-def _instantiate(cls, provider):
-    sig = inspect.signature(cls.__init__)
-    kwargs = {}
-    for p in list(sig.parameters.values())[1:]:
-        if p.name == "provider": kwargs["provider"] = provider
-    try: return cls(**kwargs)
-    except TypeError: return cls()
-
-
-async def _chat(provider: str) -> int:
-    port = PORTS.get(provider, 0)
-    if port and not _port_open(port):
-        print(f"[FAIL] {provider} browser is not running on port {port}.")
-        print(f"       Run this first:")
-        print(f"           {provider} login")
-        return 2
-
+def daemon_alive():
     try:
-        RuntimeClass = _load_runtime(provider)
-    except Exception as e:
-        print(f"[FAIL] {e}"); return 3
+        with urllib.request.urlopen(f"{DAEMON}/", timeout=0.8) as r:
+            return r.status == 200
+    except Exception:
+        return False
 
-    try:
-        rt = _instantiate(RuntimeClass, provider)
-    except Exception as e:
-        print(f"[FAIL] cannot instantiate {RuntimeClass.__name__}: {e}"); return 3
+def daemon_call(method, path):
+    req = urllib.request.Request(f"{DAEMON}{path}", method=method)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8", "replace")
 
-    try:
-        await rt.start()
-    except Exception as e:
-        msg = str(e)
-        if "login" in msg.lower() or "not authenticated" in msg.lower() or "session" in msg.lower():
-            print(f"[FAIL] {provider} is not logged in.")
-            print(f"       Run: {provider} login")
-            return 4
-        print(f"[FAIL] start: {msg}")
-        return 5
-
-    print(f"Connected to {provider}. /exit or Ctrl+C to leave.\n")
+async def chat_via_daemon(provider):
+    print(f"Connected to {provider} (daemon). /exit or Ctrl+C to leave.\n")
     prefix = f"{provider}> "
-    try:
-        while True:
-            try:
-                line = input(prefix)
-            except (EOFError, KeyboardInterrupt):
-                print(); break
-            if not line.strip(): continue
-            if line.strip() in {"/exit", "/back", "exit", "quit"}: break
-            req = ProviderExecutionRequest(
-                provider=provider,
-                request_id=str(uuid.uuid4()),
-                messages=[{"role": "user", "content": line}],
-            )
-            print()
-            got_reply = False
-            async for ev in rt.execute(req):
-                if ev.delta:
-                    print(ev.delta, end="", flush=True)
-                    got_reply = True
-            print()
-            if not got_reply:
-                print(f"[WARN] no reply received. If you are logged out, run: {provider} login")
-    finally:
-        await rt.close()
+    while True:
+        try:
+            line = input(prefix)
+        except (EOFError, KeyboardInterrupt):
+            print(); break
+        if not line.strip(): continue
+        if line.strip() in {"/exit","/back","exit","quit"}: break
+        body = json.dumps({"prompt": line}).encode()
+        req = urllib.request.Request(
+            f"{DAEMON}/chat/{provider}",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        print()
+        try:
+            with urllib.request.urlopen(req, timeout=240) as resp:
+                buf = b""
+                for chunk in resp:
+                    buf += chunk
+                    while b"\n\n" in buf:
+                        ev, buf = buf.split(b"\n\n", 1)
+                        for ln in ev.split(b"\n"):
+                            if not ln.startswith(b"data: "): continue
+                            payload = ln[6:].decode("utf-8","replace")
+                            if payload == "[DONE]": break
+                            try:
+                                j = json.loads(payload)
+                                if "delta" in j:
+                                    print(j["delta"], end="", flush=True)
+                                elif "error" in j:
+                                    print(f"\n[ERROR] {j['error']}")
+                            except Exception:
+                                pass
+        except Exception as e:
+            print(f"[FAIL] {e}")
+        print()
     return 0
 
+# ── local fallback (identical to previous behavior) ──
+async def chat_local(provider):
+    import importlib, inspect
+    RAW = pathlib.Path("..") / ".evidence" / "raw"
+    RAW.mkdir(parents=True, exist_ok=True)
+    os.environ["AINTERCEPTOR_RAW_CAPTURE_DIR"] = str(RAW)
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    from app.interception.contracts import ProviderExecutionRequest
+    module = importlib.import_module(f"app.interception.{provider}")
+    target = provider.replace("-","").lower()
+    cls = None
+    for name, obj in vars(module).items():
+        if isinstance(obj, type) and obj.__module__ == module.__name__:
+            if name.lower() == f"{target}runtime": cls = obj; break
+    if cls is None:
+        for name, obj in vars(module).items():
+            if isinstance(obj, type) and obj.__module__ == module.__name__ and name.endswith("Runtime"):
+                cls = obj; break
+    if cls is None: print("[FAIL] no runtime"); return 3
+    rt = cls()
+    await rt.start()
+    print(f"Connected to {provider} (local). /exit or Ctrl+C to leave.\n")
+    while True:
+        try:
+            line = input(f"{provider}> ")
+        except (EOFError, KeyboardInterrupt):
+            print(); break
+        if not line.strip(): continue
+        if line.strip() in {"/exit","/back","exit","quit"}: break
+        req = ProviderExecutionRequest(provider=provider,
+            request_id=str(uuid.uuid4()),
+            messages=[{"role":"user","content":line}])
+        print()
+        async for ev in rt.execute(req):
+            if ev.delta: print(ev.delta, end="", flush=True)
+        print()
+    await rt.close()
+    return 0
 
-async def main() -> int:
-    if len(sys.argv) < 2:
-        print("usage: chat_any <provider> [login]")
+async def main():
+    args = sys.argv[1:]
+    if not args:
+        print("usage: chat_any <provider> [login|show|hide|status]")
         return 1
-    provider = sys.argv[1].lower()
-    sub = sys.argv[2].lower() if len(sys.argv) > 2 else ""
-
-    if sub == "login":
-        return open_login_window(provider)
-    return await _chat(provider)
-
+    provider = args[0].lower()
+    sub = args[1].lower() if len(args) > 1 else ""
+    if sub in {"login","show","hide"}:
+        if not daemon_alive():
+            print("[FAIL] daemon not running. Start it with: aidaemon start")
+            return 2
+        try:
+            print(daemon_call("POST", f"/{sub}/{provider}"))
+        except Exception as e:
+            print(f"[FAIL] {e}")
+        return 0
+    if sub == "status":
+        if not daemon_alive():
+            print("daemon: not running"); return 0
+        print(daemon_call("GET", "/")); return 0
+    if daemon_alive():
+        return await chat_via_daemon(provider)
+    print("[WARN] daemon not running — falling back to local (browser will appear)")
+    print("       To use the daemon: aidaemon start")
+    return await chat_local(provider)
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
