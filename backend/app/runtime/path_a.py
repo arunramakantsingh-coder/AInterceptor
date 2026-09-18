@@ -25,32 +25,59 @@ def _cookies(state: dict) -> dict:
     return {c["name"]: c["value"] for c in state.get("cookies", [])}
 
 
-def _token_from_state(state: dict, candidates: tuple[str, ...] = ()) -> str | None:
-    """Extract a JWT-ish token from storage_state localStorage.
+def _looks_like_jwt(v) -> bool:
+    if not isinstance(v, str) or len(v) < 40:
+        return False
+    parts = v.split(".")
+    return len(parts) == 3 and parts[0].startswith("eyJ")
 
-    Playwright's storage_state format:
-      {"cookies": [...], "origins": [{"origin": "...", "localStorage": [{"name","value"}]}]}
-    """
+
+def _scan_jwt(obj, depth: int = 0):
+    """Recursively walk nested dicts/lists looking for a JWT-shaped string."""
+    if depth > 8:
+        return None
+    if isinstance(obj, str):
+        return obj if _looks_like_jwt(obj) else None
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            r = _scan_jwt(v, depth + 1)
+            if r:
+                return r
+    if isinstance(obj, list):
+        for v in obj:
+            r = _scan_jwt(v, depth + 1)
+            if r:
+                return r
+    return None
+
+
+def _token_from_state(state: dict, candidates: tuple[str, ...] = ()) -> str | None:
+    """Extract a JWT-ish token from storage_state (localStorage + IndexedDB)."""
     if not state:
         return None
-    def looks_like_jwt(v: str) -> bool:
-        if not isinstance(v, str) or len(v) < 40:
-            return False
-        parts = v.split(".")
-        return len(parts) == 3 and parts[0].startswith("eyJ")
-    # Prefer explicit candidates
+
+    # 1. Named localStorage candidates
     for origin in state.get("origins", []) or []:
         for entry in (origin.get("localStorage") or []):
             name = (entry.get("name") or "").lower()
             value = entry.get("value") or ""
-            if name in candidates and looks_like_jwt(value):
+            if name in candidates and _looks_like_jwt(value):
                 return value
-    # Fallback: any JWT-ish value in localStorage
+
+    # 2. Any JWT in localStorage
     for origin in state.get("origins", []) or []:
         for entry in (origin.get("localStorage") or []):
             value = entry.get("value") or ""
-            if looks_like_jwt(value):
+            if _looks_like_jwt(value):
                 return value
+
+    # 3. Scan the captured IndexedDB blob for any JWT
+    idb = state.get("_ainterceptor_idb")
+    if idb:
+        found = _scan_jwt(idb)
+        if found:
+            return found
+
     return None
 
 def _headers_from_state(state: dict, extra: dict | None = None) -> dict:
