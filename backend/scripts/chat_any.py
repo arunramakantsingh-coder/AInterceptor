@@ -1,5 +1,5 @@
-"""Chat CLI — prefers aidaemon, falls back to local runtime."""
-import asyncio, json, os, sys, uuid, pathlib, urllib.request, urllib.error
+"""Chat CLI — talks to aidaemon at http://127.0.0.1:7700."""
+import asyncio, json, os, sys, pathlib, urllib.request, urllib.error
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -9,28 +9,78 @@ except Exception:
 
 DAEMON = "http://127.0.0.1:7700"
 
+def http_get(path, timeout=2.0):
+    with urllib.request.urlopen(DAEMON + path, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+def http_post(path, timeout=30.0):
+    req = urllib.request.Request(DAEMON + path, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
 def daemon_alive():
     try:
-        with urllib.request.urlopen(f"{DAEMON}/", timeout=0.8) as r:
-            return r.status == 200
+        http_get("/", timeout=1.0)
+        return True
     except Exception:
         return False
 
-def daemon_call(method, path):
-    req = urllib.request.Request(f"{DAEMON}{path}", method=method)
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode("utf-8", "replace")
+SUBCOMMANDS = {"login", "show", "hide", "status"}
 
-async def chat_via_daemon(provider):
+
+def dispatch(args):
+    """Return (action, provider) or (None, None)."""
+    if not args:
+        return None, None
+    a0 = args[0].lower()
+    # verb-first: daemon login deepseek
+    if a0 in SUBCOMMANDS:
+        if a0 == "status":
+            return "status", None
+        if len(args) < 2:
+            print(f"usage: {a0} <provider>")
+            return "help", None
+        return a0, args[1].lower()
+    # provider-first: deepseek [login|show|hide]
+    provider = a0
+    if len(args) > 1 and args[1].lower() in SUBCOMMANDS:
+        return args[1].lower(), provider
+    return "chat", provider
+
+
+def do_status():
+    if not daemon_alive():
+        print("aidaemon  ●  not running")
+        return 1
+    with urllib.request.urlopen(DAEMON + "/", timeout=2) as r:
+        import json as _j
+        data = _j.loads(r.read())
+    print("aidaemon  ●  running")
+    print()
+    print(f"  {'PROVIDER':<10} {'PORT':<6} {'BROWSER':<10} {'ATTACHED':<10}")
+    print("  " + "-" * 40)
+    for name, cfg in data["providers"].items():
+        b = "alive" if cfg["chrome_alive"] else "off"
+        a = "yes" if cfg["attached"] else "no"
+        print(f"  {name:<10} {cfg['port']:<6} {b:<10} {a:<10}")
+    return 0
+
+
+async def do_chat(provider):
+    if not daemon_alive():
+        print("[FAIL] aidaemon is not running.")
+        print("       Start it with:  aidaemon start")
+        print("       Then retry:     " + provider)
+        return 2
     print(f"Connected to {provider} (daemon). /exit or Ctrl+C to leave.\n")
-    prefix = f"{provider}> "
     while True:
         try:
-            line = input(prefix)
+            line = input(f"{provider}> ")
         except (EOFError, KeyboardInterrupt):
             print(); break
         if not line.strip(): continue
         if line.strip() in {"/exit","/back","exit","quit"}: break
+
         body = json.dumps({"prompt": line}).encode()
         req = urllib.request.Request(
             f"{DAEMON}/chat/{provider}",
@@ -63,70 +113,32 @@ async def chat_via_daemon(provider):
         print()
     return 0
 
-# ── local fallback (identical to previous behavior) ──
-async def chat_local(provider):
-    import importlib, inspect
-    RAW = pathlib.Path("..") / ".evidence" / "raw"
-    RAW.mkdir(parents=True, exist_ok=True)
-    os.environ["AINTERCEPTOR_RAW_CAPTURE_DIR"] = str(RAW)
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-    from app.interception.contracts import ProviderExecutionRequest
-    module = importlib.import_module(f"app.interception.{provider}")
-    target = provider.replace("-","").lower()
-    cls = None
-    for name, obj in vars(module).items():
-        if isinstance(obj, type) and obj.__module__ == module.__name__:
-            if name.lower() == f"{target}runtime": cls = obj; break
-    if cls is None:
-        for name, obj in vars(module).items():
-            if isinstance(obj, type) and obj.__module__ == module.__name__ and name.endswith("Runtime"):
-                cls = obj; break
-    if cls is None: print("[FAIL] no runtime"); return 3
-    rt = cls()
-    await rt.start()
-    print(f"Connected to {provider} (local). /exit or Ctrl+C to leave.\n")
-    while True:
-        try:
-            line = input(f"{provider}> ")
-        except (EOFError, KeyboardInterrupt):
-            print(); break
-        if not line.strip(): continue
-        if line.strip() in {"/exit","/back","exit","quit"}: break
-        req = ProviderExecutionRequest(provider=provider,
-            request_id=str(uuid.uuid4()),
-            messages=[{"role":"user","content":line}])
-        print()
-        async for ev in rt.execute(req):
-            if ev.delta: print(ev.delta, end="", flush=True)
-        print()
-    await rt.close()
-    return 0
 
-async def main():
-    args = sys.argv[1:]
-    if not args:
-        print("usage: chat_any <provider> [login|show|hide|status]")
+def main():
+    action, provider = dispatch(sys.argv[1:])
+    if action is None or action == "help":
+        print("usage: <provider> [login|show|hide]")
+        print("       login|show|hide|status <provider>")
         return 1
-    provider = args[0].lower()
-    sub = args[1].lower() if len(args) > 1 else ""
-    if sub in {"login","show","hide"}:
+    if action == "status":
+        return do_status()
+
+    if action in {"login","show","hide"}:
         if not daemon_alive():
-            print("[FAIL] daemon not running. Start it with: aidaemon start")
+            print("[FAIL] aidaemon is not running.")
+            print(f"       Start it with:  aidaemon start")
+            print(f"       Then retry:     {action} {provider}")
             return 2
         try:
-            print(daemon_call("POST", f"/{sub}/{provider}"))
+            print(http_post(f"/{action}/{provider}", timeout=60))
         except Exception as e:
             print(f"[FAIL] {e}")
         return 0
-    if sub == "status":
-        if not daemon_alive():
-            print("daemon: not running"); return 0
-        print(daemon_call("GET", "/")); return 0
-    if daemon_alive():
-        return await chat_via_daemon(provider)
-    print("[WARN] daemon not running — falling back to local (browser will appear)")
-    print("       To use the daemon: aidaemon start")
-    return await chat_local(provider)
+
+    if action == "chat":
+        return asyncio.run(do_chat(provider))
+    return 1
+
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(main())
