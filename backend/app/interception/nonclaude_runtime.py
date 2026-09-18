@@ -327,22 +327,33 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "dom"})
             seq += 1
 
-            # Wait for a NEW assistant bubble
+            # Wait for a NEW assistant bubble, then for its text to stop
+            # changing for STABLE_FOR seconds (not just N reads).
+            import time as _time
+            DEADLINE = 120.0
+            STABLE_FOR = 2.0
+            t0 = _time.monotonic()
+            last_text = ""
+            last_change = t0
             text = ""
-            stable_reads = 0
-            for _ in range(120):  # up to 60s
-                await asyncio.sleep(0.5)
+            saw_new_bubble = False
+            while _time.monotonic() - t0 < DEADLINE:
+                await asyncio.sleep(0.35)
                 count = await self._assistant_count()
                 if count <= before:
                     continue
+                saw_new_bubble = True
                 current = await self._read_last_assistant_text()
-                if current and current == text and len(current) > 0:
-                    stable_reads += 1
-                    if stable_reads >= 2:
-                        break
-                else:
-                    stable_reads = 0
+                if not current:
+                    continue
+                if current != last_text:
+                    last_text = current
+                    last_change = _time.monotonic()
+                elif _time.monotonic() - last_change >= STABLE_FOR:
                     text = current
+                    break
+            if not text and last_text:
+                text = last_text  # best effort if deadline hit mid-change
 
             if not text:
                 yield StreamEvent(self.provider, request.request_id,
@@ -359,9 +370,12 @@ class NonClaudeWebRuntime(ProviderRuntime):
             return
 
     async def _assistant_count(self) -> int:
-        sels = ['.ds-markdown', '[data-message-author-role="assistant"]',
-                '.model-response-text', 'message-content']
-        for s in sels:
+        """Count assistant bubbles. Uses the widest single selector that
+        matches DeepSeek's current UI; falls back to alternates."""
+        for s in (".ds-markdown",
+                  "[data-message-author-role='assistant']",
+                  ".model-response-text",
+                  "message-content"):
             try:
                 n = await self._page.locator(s).count()
                 if n > 0:
@@ -371,23 +385,31 @@ class NonClaudeWebRuntime(ProviderRuntime):
         return 0
 
     async def _read_last_assistant_text(self) -> str:
-        sels = ['.ds-markdown', '.ds-markdown--block',
-                '[data-message-author-role="assistant"]',
-                '.model-response-text', 'message-content']
-        best = ""
-        for s in sels:
+        """Return the text of the LAST assistant bubble.
+
+        Uses the newest matching element, not the longest. In multi-turn
+        chat the previous reply may be longer than the current one; picking
+        the longest would return stale text.
+        """
+        selectors = (
+            ".ds-markdown",
+            ".ds-markdown--block",
+            "[data-message-author-role='assistant']",
+            ".model-response-text",
+            "message-content",
+        )
+        for s in selectors:
             try:
                 loc = self._page.locator(s)
                 n = await loc.count()
                 if n == 0:
                     continue
                 txt = (await loc.nth(n - 1).inner_text()).strip()
-                if len(txt) > len(best):
-                    best = txt
+                if txt:
+                    return txt
             except Exception:
                 continue
-        return best
-
+        return ""
 
     async def close(self) -> None:
         self._started = False
