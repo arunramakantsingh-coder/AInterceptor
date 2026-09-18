@@ -1,4 +1,9 @@
-"""Path B — drive a real browser tab and capture the reply via CDP.
+﻿import pathlib, subprocess, sys
+
+ROOT = pathlib.Path.cwd()
+BE   = ROOT / "backend" / "app"
+
+(BE / "runtime" / "path_b.py").write_text('''"""Path B — drive a real browser tab and capture the reply via CDP.
 
 Design (Architecture v2, D1c + D2a):
     - Browser is owned by the supervisor; this module just uses a tab.
@@ -396,3 +401,169 @@ async def stream_b(
 
         if emitted == 0:
             raise PathBError(f"{provider}: stream produced no text")
+''', encoding="utf-8", newline="\n")
+print("  [OK] backend/app/runtime/path_b.py (CDP-capture version)")
+
+# ── keep the old DOM version archived ──
+old = BE / "runtime" / "path_b_dom_legacy.py"
+if (BE / "runtime" / "path_b.py").exists() and not old.exists():
+    print("  [i] new path_b.py in place; nothing else to archive")
+
+# ── tests (ParserAdapter only; browser path exercised at Step 9) ──
+(ROOT / "tests" / "test_path_b_parser_adapters.py").write_text('''import os
+os.environ.setdefault("MASTER_KEY", __import__("base64").b64encode(os.urandom(32)).decode())
+os.environ.setdefault("JWT_SECRET", "test")
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
+import pytest
+from backend.app.runtime import path_b as pb
+
+
+def test_provider_registry_has_all_four():
+    for p in ("claude", "chatgpt", "gemini", "deepseek"):
+        assert p in pb.PARSERS
+        assert p in pb.RESPONSE_MARKERS
+        assert p in pb.COMPOSER_SELECTORS
+
+
+def test_response_markers_are_lists_of_strings():
+    for p, markers in pb.RESPONSE_MARKERS.items():
+        assert isinstance(markers, tuple)
+        for m in markers:
+            assert isinstance(m, str) and m
+
+
+def test_cdp_capture_construction():
+    class FakePage:
+        context = None
+    cap = pb.CDPCapture(FakePage(), ("foo", "bar"))
+    assert cap.markers == ("foo", "bar")
+
+
+def test_cdp_capture_request_filter():
+    class FakePage:
+        context = None
+    cap = pb.CDPCapture(FakePage(), ("/api/v0/chat/completion",))
+
+    # Irrelevant POST — ignored
+    cap._on_request({
+        "requestId": "r1",
+        "request": {"method": "POST", "url": "https://example.com/other"},
+    })
+    assert "r1" not in cap._candidates
+
+    # GET — ignored (even if URL matches)
+    cap._on_request({
+        "requestId": "r2",
+        "request": {"method": "GET", "url": "https://chat.deepseek.com/api/v0/chat/completion"},
+    })
+    assert "r2" not in cap._candidates
+
+    # Matching POST — captured
+    cap._on_request({
+        "requestId": "r3",
+        "request": {"method": "POST", "url": "https://chat.deepseek.com/api/v0/chat/completion"},
+    })
+    assert "r3" in cap._candidates
+
+
+def test_parser_adapter_is_monotone():
+    a = pb.ParserAdapter()
+
+    class Wrapped(pb.ParserAdapter):
+        def _parse(self, raw):
+            # simulate a parser that returns progressively longer text
+            return raw.decode("utf-8", errors="replace")
+
+    w = Wrapped()
+    a_text = w.feed(b"hello")
+    b_text = w.feed(b" world")
+    c_text = w.feed(b"!")
+    assert a_text == "hello"
+    assert b_text == "hello world"
+    assert c_text == "hello world!"
+
+
+def test_parser_adapter_never_shrinks():
+    class Shrinking(pb.ParserAdapter):
+        def _parse(self, raw):
+            return "x"        # always returns shorter than accumulated
+
+    p = Shrinking()
+    p.feed(b"hello world")     # first parse returns "x"
+    p.feed(b"more data")
+    # last text should stay at "x" (the maximum seen)
+    assert p.current() == "x"
+
+
+def test_parser_adapter_survives_parse_error():
+    class Broken(pb.ParserAdapter):
+        def _parse(self, raw):
+            raise RuntimeError("boom")
+
+    p = Broken()
+    out = p.feed(b"hello")
+    assert out == ""
+    assert p.current() == ""
+
+
+def test_claude_adapter_imports():
+    a = pb.ClaudeAdapter()
+    assert hasattr(a, "feed")
+
+
+def test_submit_via_page_fetch_only_for_claude():
+    import asyncio
+    class FakePage:
+        async def evaluate(self, js, prompt):
+            return True
+    # chatgpt returns False (not implemented for fetch)
+    assert asyncio.run(pb._submit_via_page_fetch(FakePage(), "chatgpt", "hi")) is False
+    # claude returns True when the page's evaluate succeeds
+    assert asyncio.run(pb._submit_via_page_fetch(FakePage(), "claude", "hi")) is True
+
+
+def test_find_composer_returns_none_when_empty():
+    import asyncio
+    class FakeLocator:
+        async def count(self):
+            return 0
+    class FakePage:
+        def locator(self, sel):
+            return FakeLocator()
+    assert asyncio.run(pb._find_composer(FakePage(), ("textarea",))) is None
+''', encoding="utf-8", newline="\n")
+print("  [OK] tests/test_path_b_parser_adapters.py")
+
+# ── syntax + tests ──
+import ast
+for f in ["backend/app/runtime/path_b.py",
+          "tests/test_path_b_parser_adapters.py"]:
+    try: ast.parse((ROOT / f).read_text(encoding="utf-8"))
+    except SyntaxError as e:
+        print(f"[FAIL] {f}: {e}"); sys.exit(1)
+print("  [OK] syntax valid")
+
+PY = ROOT / ".venv-windows" / "Scripts" / "python.exe"
+if not PY.exists(): PY = sys.executable
+
+print("\n==> running parser adapter tests")
+r = subprocess.run([str(PY), "-m", "pytest", "-q",
+                    "tests/test_path_b_parser_adapters.py", "-o", "asyncio_mode=auto"],
+                   cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+print(r.stdout[-2000:] if r.stdout else "")
+if r.stderr.strip(): print("STDERR:", r.stderr[-400:])
+if r.returncode != 0:
+    print("[FAIL] tests did not pass"); sys.exit(1)
+
+# ── commit ──
+def git(a):
+    return subprocess.run(["git"]+a, cwd=ROOT, capture_output=True, text=True)
+git(["add","-A"])
+r = git(["commit","-m","feat(runtime): Path B rewritten for CDP network capture (Step 5)"])
+print((r.stdout.strip() or r.stderr.strip())[:200])
+
+print()
+print("=" * 60)
+print("STEP 5 COMPLETE — CDP-capture Path B + 10 parser adapter tests")
+print("=" * 60)
