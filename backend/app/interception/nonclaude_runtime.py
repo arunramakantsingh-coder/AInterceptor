@@ -328,8 +328,10 @@ class NonClaudeWebRuntime(ProviderRuntime):
                             except Exception:
                                 dom_text = ""
                             parsed = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
-                            # Choose whichever is longer/more complete; prefer DOM
-                            final = dom_text if len(dom_text) >= len(parsed) and dom_text else parsed
+                            # Prefer whichever text is longer — the parser can
+                            # legitimately miss fragments; the DOM can miss
+                            # streaming context. Longer wins.
+                            final = dom_text if len(dom_text) > len(parsed) else parsed
 
                             # Emit only the suffix beyond what we already sent.
                             # If the final diverges from emitted (mid-stream
@@ -337,16 +339,6 @@ class NonClaudeWebRuntime(ProviderRuntime):
                             # emit the remainder as one delta — never drop chars.
                             if final and final.startswith(emitted):
                                 delta = final[len(emitted):]
-                            elif final and emitted and final != emitted:
-                                # longest common prefix
-                                cp = 0
-                                for a, b in zip(final, emitted):
-                                    if a != b: break
-                                    cp += 1
-                                if cp >= len(emitted) - 2:
-                                    delta = final[cp:]
-                                else:
-                                    delta = "\n" + final
                             else:
                                 delta = ""
                             if delta:

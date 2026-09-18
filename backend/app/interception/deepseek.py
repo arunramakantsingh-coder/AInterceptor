@@ -18,6 +18,7 @@ class DeepSeekStreamParser:
     """Stateful parser for DeepSeek Web's SSE patch protocol."""
 
     def __init__(self) -> None:
+        self._last_result: str = ""
         self._path_buffers: dict[str, str] = {}
         self._pending = ""
         self._cumulative_body_seen = ""
@@ -253,29 +254,28 @@ class DeepSeekStreamParser:
         return self.current
 
     def __call__(self, cumulative_body: str) -> str:
-        """Feed a growing cumulative body; never lose already-parsed state.
-
-        If the new body starts with what we've seen: parse only the new suffix.
-        If the body diverges (rare, provider rewrite): replay the ENTIRE body
-        against a fresh parser, then adopt that as authoritative — the caller
-        can diff old vs new at the string level.
+        """Feed a growing cumulative body. Output is MONOTONE:
+        the returned string never shrinks across calls.
         """
         if not isinstance(cumulative_body, str):
-            return self.current
+            return self._last_result or self.current
+
         if cumulative_body.startswith(self._cumulative_body_seen):
             suffix = cumulative_body[len(self._cumulative_body_seen):]
             self._cumulative_body_seen = cumulative_body
-            return self.feed(suffix)
+            candidate = self.feed(suffix)
+        else:
+            # Diverged: full replay, but never lose previously-seen content.
+            prior = self.current
+            self.__init__()
+            self._last_result = prior
+            candidate = self.feed(cumulative_body)
+            self._cumulative_body_seen = cumulative_body
 
-        # Diverged: full replay, keep old fragments as a fallback if replay yields less
-        prior = self.current
-        self.__init__()
-        result = self.feed(cumulative_body)
-        # Never return less content than we already had
-        if len(result) < len(prior):
-            return prior
-        self._cumulative_body_seen = cumulative_body
-        return result
+        # Monotone: keep the longest text ever produced.
+        if candidate and len(candidate) >= len(self._last_result):
+            self._last_result = candidate
+        return self._last_result
 
     def finish(self) -> str:
         if self._pending and self._pending.strip():
