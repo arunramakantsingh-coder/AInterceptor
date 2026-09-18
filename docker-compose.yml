@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-airouter}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airouter}"]
       interval: 5s
