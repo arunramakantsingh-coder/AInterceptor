@@ -38,7 +38,6 @@ CDP_PORT = 9222   # ClaudeRuntime attaches here
 def _chrome_args(profile_dir: pathlib.Path, off_screen: bool = True) -> list[str]:
     pos = "-32000,-32000" if off_screen else "100,100"
     return [
-        f"--user-data-dir={profile_dir}",
         f"--remote-debugging-port={CDP_PORT}",
         "--no-first-run",
         "--no-default-browser-check",
