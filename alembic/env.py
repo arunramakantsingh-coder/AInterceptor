@@ -14,7 +14,9 @@ if url:
     config.set_main_option("sqlalchemy.url", url)
 
 import sys
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+_here = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, _here)
+sys.path.insert(0, os.path.join(_here, "backend"))
 
 from backend.app.db.session import Base  # noqa: E402
 from backend.app.db import models  # noqa: F401,E402
