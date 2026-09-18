@@ -11,6 +11,7 @@ from typing import Any
 _supervisor: Any = None
 _exporter: Any = None
 _circuits: Any = None
+_prober: Any = None
 
 
 def set_supervisor(s) -> None:
@@ -38,3 +39,12 @@ def set_circuits(c) -> None:
 
 def get_circuits():
     return _circuits
+
+
+def set_prober(p) -> None:
+    global _prober
+    _prober = p
+
+
+def get_prober():
+    return _prober

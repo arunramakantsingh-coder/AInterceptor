@@ -1,67 +1,48 @@
-"""Chrome window watchdog.
+"""Off-screen watchdog.
 
-While the API runs, this thread periodically moves every Chrome window
-off-screen so the user never sees a browser pop up during chat.
-
-Windows-only. No-op on other platforms.
+Every 3s, if any Chrome window is visible, push it back off-screen.
+Runs as a daemon thread started by the FastAPI startup hook.
 """
 from __future__ import annotations
-import os, sys, threading, time
-
-
-CHROME_TITLES = ("claude", "chatgpt", "gemini", "deepseek", "chrome")
-
-
-def _off_screen_windows():
-    if not sys.platform.startswith("win"):
-        return
-    import ctypes
-    from ctypes import wintypes
-    u = ctypes.windll.user32
-
-    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-
-    def cb(hwnd, lp):
-        try:
-            n = u.GetWindowTextLengthW(hwnd)
-            if not n:
-                return True
-            buf = ctypes.create_unicode_buffer(n + 1)
-            u.GetWindowTextW(hwnd, buf, n + 1)
-            title = buf.value.lower()
-            if not any(k in title for k in CHROME_TITLES):
-                return True
-            # Only hide if window is currently visible
-            if not u.IsWindowVisible(hwnd):
-                return True
-            u.MoveWindow(hwnd, -32000, -32000, 1400, 900, True)
-        except Exception:
-            pass
-        return True
-
-    u.EnumWindows(WNDENUMPROC(cb), 0)
-
-
-def _loop(interval: float = 3.0):
-    while True:
-        try:
-            _off_screen_windows()
-        except Exception:
-            pass
-        time.sleep(interval)
+import os
+import sys
+import threading
+import time
 
 
 _started = False
+_stop = threading.Event()
 
 
-def start():
-    """Start the watchdog thread (idempotent)."""
+def _tick():
+    from app.runtime.browser_supervisor import push_chrome_off_screen
+    try:
+        n = push_chrome_off_screen()
+        return n
+    except Exception:
+        return 0
+
+
+def _loop(interval: float = 3.0):
+    while not _stop.is_set():
+        _tick()
+        _stop.wait(interval)
+
+
+def start(interval: float = 3.0) -> bool:
+    """Start the watchdog thread. Idempotent. No-op on non-Windows."""
     global _started
     if _started:
-        return
+        return False
     if not sys.platform.startswith("win"):
-        return
+        return False
     _started = True
-    t = threading.Thread(target=_loop, daemon=True, name="chrome-watchdog")
+    t = threading.Thread(target=_loop, args=(interval,),
+                         daemon=True, name="offscreen-watchdog")
     t.start()
-    print("[watchdog] Chrome window watchdog active (3s interval)", flush=True)
+    print(f"[watchdog] off-screen enforcement active (every {interval}s)", flush=True)
+    return True
+
+
+def stop() -> None:
+    _stop.set()
