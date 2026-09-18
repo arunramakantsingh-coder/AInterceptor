@@ -349,6 +349,11 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "dom"})
             seq += 1
 
+            import sys as _sys
+            def _tr(msg):
+                print(f"[trace] {msg}", file=_sys.stderr, flush=True)
+            _tr(f"before bubble count={before}")
+
             # Wait for a NEW assistant bubble; simultaneously buffer the
             # transport stream so we can decode the final answer from bytes.
             import time as _time
@@ -362,10 +367,12 @@ class NonClaudeWebRuntime(ProviderRuntime):
             while _time.monotonic() - t0 < DEADLINE:
                 await asyncio.sleep(0.4)
                 count = await self._assistant_count()
+                _tr(f"poll: count={count} before={before}")
                 if count <= before and not saw_bubble:
                     continue
                 saw_bubble = True
                 current = await self._read_last_assistant_text()
+                _tr(f"read: {len(current)} chars")
                 if current:
                     if current != last_text:
                         last_text = current
