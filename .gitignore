@@ -41,3 +41,5 @@ backend/test_input.txt
 *.egg-info/
 agent/airouter_agent.egg-info/
 body.json
+.env.windows
+.venv-windows/

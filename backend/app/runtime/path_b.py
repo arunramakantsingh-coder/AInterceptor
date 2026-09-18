@@ -25,7 +25,13 @@ def _dbg(*a):
 
 
 # Where to reach the host from inside a container. Override with env.
-HOST_CDP_BASE = os.environ.get("AINTERCEPTOR_HOST_CDP_BASE", "host.docker.internal")
+def _cdp_hosts():
+    env = os.environ.get("AINTERCEPTOR_HOST_CDP_BASE")
+    if env:
+        return [env]
+    return ["127.0.0.1", "host.docker.internal"]
+
+HOST_CDP_BASE = _cdp_hosts()[0]  # legacy compat
 
 
 PROVIDERS = {
