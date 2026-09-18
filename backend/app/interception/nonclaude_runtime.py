@@ -27,6 +27,7 @@ class NonClaudeNetworkCapture:
     """CDP response capture using the same Network streaming path as Claude."""
 
     def __init__(self, page: Any, spec: WebProviderSpec) -> None:
+        self._cdp_logged = False
         self.page = page
         self.spec = spec
         self._cdp: Any | None = None
@@ -188,7 +189,9 @@ class NonClaudeWebRuntime(ProviderRuntime):
             self.cdp_url = env_val
         else:
             self.cdp_url = provider_registry.cdp_url(self.provider)
-        print(f"[interception] {self.provider}: CDP -> {self.cdp_url}")
+        if not getattr(self, "_cdp_logged", False):
+            print(f"[interception] {self.provider}: CDP -> {self.cdp_url}")
+            self._cdp_logged = True
 
         if self.cdp_url:
             self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
