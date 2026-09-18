@@ -304,9 +304,11 @@ class NonClaudeWebRuntime(ProviderRuntime):
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
     async def execute(self, request: ProviderExecutionRequest):
-        """Submit prompt, wait until the DOM shows a NEW assistant reply,
-        return it. Relies on text-change detection, NOT on bubble counting
-        (providers reuse DOM slots, so counts are unreliable).
+        """Submit prompt; stream DOM text growth as STREAM_DELTA events.
+
+        Polls the last assistant bubble every ~250ms. Whenever the text
+        strictly extends what we already emitted, we emit the new suffix.
+        Finalizes when the text stops changing for STABLE_FOR seconds.
         """
         if request.provider != self.provider:
             raise ValueError(f"runtime provider mismatch: {request.provider}")
@@ -324,13 +326,11 @@ class NonClaudeWebRuntime(ProviderRuntime):
             seq = 0
             yield StreamEvent(self.provider, request.request_id,
                               EventType.REQUEST_INTERCEPTED, seq,
-                              metadata={"transport": "dom"})
+                              metadata={"transport": "dom-stream"})
             seq += 1
 
-            # Snapshot BEFORE sending
             before_text = await self._read_last_assistant_text()
 
-            # Submit
             try:
                 await self._page.bring_to_front()
                 box = await self._prompt_textbox()
@@ -344,46 +344,79 @@ class NonClaudeWebRuntime(ProviderRuntime):
 
             yield StreamEvent(self.provider, request.request_id,
                               EventType.STREAM_STARTED, seq,
-                              metadata={"transport": "dom"})
+                              metadata={"transport": "dom-stream"})
             seq += 1
 
-            # Poll for a NEW reply. A reply is "new" if the last-assistant
-            # text differs from before_text AND is stable for STABLE_FOR.
-            DEADLINE = 90.0
-            STABLE_FOR = 2.5
+            DEADLINE = 120.0
+            STABLE_FOR = 2.0
+            POLL = 0.25
             t0 = _time.monotonic()
             last_change = t0
-            last_seen = ""
-            text = ""
+            emitted = ""              # what we've already sent
+            seen_full = ""            # latest full text from DOM
+            started = False           # have we seen the new bubble yet?
+
             while _time.monotonic() - t0 < DEADLINE:
-                await asyncio.sleep(0.4)
+                await asyncio.sleep(POLL)
                 current = await self._read_last_assistant_text()
                 if not current:
                     continue
-                # Reject the pre-send snapshot
-                if current == before_text:
-                    continue
-                if current != last_seen:
-                    last_seen = current
+                if not started:
+                    # skip until we see a change from the pre-send snapshot
+                    if current == before_text:
+                        continue
+                    started = True
+
+                # If DOM produced a longer text extending what we emitted,
+                # stream the delta.
+                if current.startswith(emitted) and len(current) > len(emitted):
+                    delta = current[len(emitted):]
+                    emitted = current
+                    seen_full = current
                     last_change = _time.monotonic()
+                    yield StreamEvent(self.provider, request.request_id,
+                                      EventType.STREAM_DELTA, seq, delta=delta)
+                    seq += 1
                     continue
-                # Stable?
-                if _time.monotonic() - last_change >= STABLE_FOR:
-                    text = current
+
+                # Occasionally the provider rewrites the tail (markdown
+                # re-render). Handle by treating the common prefix as stable
+                # and only emitting a corrected suffix if it grew.
+                if current != seen_full:
+                    seen_full = current
+                    last_change = _time.monotonic()
+                    # If current is longer but not a strict prefix-extension,
+                    # emit the tail beyond the longest common prefix.
+                    if len(current) > len(emitted):
+                        cp = 0
+                        for a, b in zip(current, emitted):
+                            if a != b: break
+                            cp += 1
+                        if cp >= max(0, len(emitted) - 4):
+                            delta = current[cp:]
+                            emitted = current
+                            yield StreamEvent(self.provider, request.request_id,
+                                              EventType.STREAM_DELTA, seq, delta=delta)
+                            seq += 1
+                            continue
+
+                # Finalize when stable
+                if started and (_time.monotonic() - last_change) >= STABLE_FOR:
                     break
 
-            if not text:
-                text = last_seen or ""
+            # Final emit: any tail that hasn't been sent yet
+            if seen_full and seen_full.startswith(emitted) and len(seen_full) > len(emitted):
+                delta = seen_full[len(emitted):]
+                yield StreamEvent(self.provider, request.request_id,
+                                  EventType.STREAM_DELTA, seq, delta=delta)
+                seq += 1
 
-            if not text:
+            if not emitted and not seen_full:
                 yield StreamEvent(self.provider, request.request_id,
                                   EventType.STREAM_FAILED, seq,
                                   metadata={"reason": "no assistant reply observed"})
                 return
 
-            yield StreamEvent(self.provider, request.request_id,
-                              EventType.STREAM_DELTA, seq, delta=text)
-            seq += 1
             yield StreamEvent(self.provider, request.request_id,
                               EventType.STREAM_COMPLETED, seq,
                               finish_reason="stop")
