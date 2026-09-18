@@ -202,14 +202,27 @@ class NonClaudeWebRuntime(ProviderRuntime):
         env_key = f"AINTERCEPTOR_{self.provider.upper()}_CDP_URL"
         env_val = os.environ.get(env_key)
 
-        # Headless preference: if a saved storage_state exists and the user
-        # has not forced a CDP URL, run our own hidden Chromium.
-        headless_pref = os.environ.get("AINTERCEPTOR_HEADLESS", "1") not in {"0","false","no"}
-        sp = pathlib.Path(self.session_path) if self.session_path else None
-        has_state = bool(sp and sp.exists() and sp.stat().st_size > 50)
+        # Prefer CDP: the visible Chrome holds the real login; headless
+        # Chromium trips Google/Cloudflare bot detection. Only fall back to
+        # headless if the user explicitly sets AINTERCEPTOR_HEADLESS=1 AND
+        # no CDP is reachable.
+        import socket as _sock
+        def _cdp_alive(url: str | None) -> bool:
+            if not url: return False
+            try:
+                host = url.split("://", 1)[-1].split(":")[0]
+                port = int(url.rsplit(":", 1)[-1].split("/")[0])
+            except Exception:
+                return False
+            s = _sock.socket(); s.settimeout(0.3)
+            try: s.connect((host, port)); return True
+            except OSError: return False
+            finally: s.close()
 
-        if headless_pref and has_state and env_val is None:
-            self.cdp_url = None  # use launch path below
+        target_cdp = env_val if env_val else provider_registry.cdp_url(self.provider)
+        force_headless = os.environ.get("AINTERCEPTOR_HEADLESS", "") in {"1","true","yes"}
+        if force_headless and not _cdp_alive(target_cdp):
+            self.cdp_url = None
         elif env_val == "":
             self.cdp_url = None
         elif env_val:
