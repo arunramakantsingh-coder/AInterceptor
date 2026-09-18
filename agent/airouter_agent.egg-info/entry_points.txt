@@ -1,2 +1,0 @@
-[console_scripts]
-airouter-agent = airouter_agent.cli:main
