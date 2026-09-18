@@ -45,20 +45,34 @@ async def run_login(provider: str, server: str, token: str) -> int:
         print("  python -m playwright install chromium")
         return 1
 
+    # Use the user's real Chrome (not Playwright's bundled Chromium) so that
+    # Google OAuth trusts the browser. Also keep a persistent profile so
+    # Google remembers the device after the first successful login.
+    profile_dir = pathlib.Path.home() / ".airouter" / "chrome-profile" / provider
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=False)
-        ctx = await browser.new_context()
-        page = await ctx.new_page()
+        ctx = await pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            channel="chrome",                 # real Chrome, not Chromium
+            headless=False,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-first-run",
+                "--no-default-browser-check",
+            ],
+        )
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         await page.goto(LOGIN_URLS[provider])
         try:
             await _wait_until_logged_in(page, provider)
         except TimeoutError as e:
             print(f"error: {e}")
-            await browser.close()
+            await ctx.close()
             return 1
 
         state = await ctx.storage_state()
-        await browser.close()
+        await ctx.close()
 
     tmp = pathlib.Path(tempfile.mkstemp(suffix=".json")[1])
     tmp.write_text(json.dumps(state), encoding="utf-8")
