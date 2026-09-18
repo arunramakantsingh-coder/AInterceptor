@@ -7,7 +7,7 @@ from app.db.session import get_db
 
 router = APIRouter(tags=["health"])
 
-PROVIDERS = ["claude", "chatgpt", "gemini", "deepseek"]
+from app.providers_list import ALL_PROVIDERS as PROVIDERS
 
 
 @router.get("/healthz")

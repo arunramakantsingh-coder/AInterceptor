@@ -47,7 +47,8 @@ async def chat(body: ChatIn,
                db: Session = Depends(get_db)):
     user, key = auth
     provider = body.model.lower()
-    if provider not in {"claude", "chatgpt", "gemini", "deepseek"}:
+    from app.providers_list import ALL_PROVIDERS
+    if provider not in ALL_PROVIDERS:
         raise HTTPException(400, f"unknown model: {body.model}")
 
     # Use last user message as prompt (Phase 1 simplification)

@@ -13,7 +13,8 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
-VALID_PROVIDERS = {"claude", "chatgpt", "gemini", "deepseek"}
+from app.providers_list import ALL_PROVIDERS
+VALID_PROVIDERS = set(ALL_PROVIDERS)
 
 
 class SessionOut(BaseModel):
