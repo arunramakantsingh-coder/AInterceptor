@@ -33,7 +33,6 @@ $venv = Join-Path $root ".venv-windows"
 if (-not (Test-Path "$venv\Scripts\python.exe")) {
     Write-Host "  [..] creating .venv-windows (first run, ~2 min)" -ForegroundColor Yellow
     python -m venv $venv
-    & "$venv\Scripts\pip.exe" install -q --upgrade pip
     & "$venv\Scripts\pip.exe" install -q -r backend\requirements.txt
     Write-Host "  [OK] venv ready" -ForegroundColor Green
 } else {

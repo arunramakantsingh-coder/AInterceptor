@@ -254,7 +254,6 @@ async def _via_host_cdp(provider: str, cfg: dict, prompt: str) -> str:
             page = await ctx.new_page()
             await page.goto(cfg["url"], wait_until="domcontentloaded", timeout=30000)
 
-        await page.bring_to_front()
         await asyncio.sleep(1.0)
         url_now = (page.url or "").lower()
         if any(m.lower() in url_now for m in cfg["login_markers"]):

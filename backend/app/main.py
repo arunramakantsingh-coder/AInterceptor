@@ -6,6 +6,11 @@ from app.api import auth_routes, keys_routes, health_routes, sessions_routes, ch
 
 app = FastAPI(title="AInterceptor", version="0.1.0")
 
+@app.on_event("startup")
+def _start_watchdog():
+    from app.runtime import watchdog
+    watchdog.start()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:4000"],
