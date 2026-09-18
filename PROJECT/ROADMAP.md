@@ -122,3 +122,15 @@ Deliverables:
 | Remote Verify | PENDING |
 | Documentation | UPDATED |
 | Milestone | IN PROGRESS |
+
+## Phase 1 — API Product + Agent — COMPLETE (2026-09-18)
+
+- Docker Compose stack (api + postgres) running
+- Auth: signup, login, JWT
+- API keys: generate, list, revoke
+- Sessions: encrypted upload (HKDF + AES-GCM), list, delete
+- OpenAI-compatible POST /v1/chat/completions with SSE stream + [DONE]
+- Agent: airouter-agent login <provider> using real Chrome, uploads storage_state
+- Verified end-to-end: signup → API key → agent upload → curl chat
+
+Next: Phase 2 — DeepSeek/Claude/Gemini real streaming (Path A/B).
