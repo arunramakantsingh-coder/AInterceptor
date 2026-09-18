@@ -234,7 +234,10 @@ class NonClaudeWebRuntime(ProviderRuntime):
             self._record_port_attachment()
 
         if self.cdp_url:
-            self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)
+            self._browser = await asyncio.wait_for(
+                self._pw.chromium.connect_over_cdp(self.cdp_url),
+                timeout=15,
+            )
             contexts = self._browser.contexts
             if not contexts:
                 raise WebProviderSessionError("CDP browser has no context")
