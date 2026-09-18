@@ -1,0 +1,134 @@
+event: update_session
+data: {"updated_at":1789710568.5826929}
+
+data: {"v":{"response":{"message_id":2,"parent_id":1,"model":"","role":"ASSISTANT","thinking_enabled":true,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":0,"feedback":null,"inserted_at":1789710568.571601,"search_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"We","elapsed_secs":null,"references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}
+
+data: {"v":" answer"}
+
+data: {"v":" to"}
+
+data: {"v":" user"}
+
+data: {"v":"."}
+
+data: {"v":" User"}
+
+data: {"v":" says"}
+
+data: {"v":" \""}
+
+data: {"v":"hello"}
+
+data: {"v":" test"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":"\"."}
+
+data: {"v":" Lik"}
+
+data: {"v":"ely"}
+
+data: {"v":" just"}
+
+data: {"v":" greeting"}
+
+data: {"v":"/test"}
+
+data: {"v":"."}
+
+data: {"v":" Need"}
+
+data: {"v":" respond"}
+
+data: {"v":" concise"}
+
+data: {"v":"."}
+
+data: {"v":" Could"}
+
+data: {"v":" say"}
+
+data: {"v":" \""}
+
+data: {"v":"Hello"}
+
+data: {"v":"!"}
+
+data: {"v":" Test"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":" received"}
+
+data: {"v":"."}
+
+data: {"v":" How"}
+
+data: {"v":" can"}
+
+data: {"v":" I"}
+
+data: {"v":" help"}
+
+data: {"v":"?\""}
+
+data: {"v":" Ensure"}
+
+data: {"v":" no"}
+
+data: {"v":" issue"}
+
+data: {"v":"."}
+
+data: {"v":" Final"}
+
+data: {"v":"."}
+
+data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":0.542427}
+
+data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"Hello","references":[],"stage_id":1}]}
+
+data: {"p":"response/fragments/-1/content","v":"!"}
+
+data: {"v":" Test"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":" received"}
+
+data: {"v":"."}
+
+data: {"v":" How"}
+
+data: {"v":" can"}
+
+data: {"v":" I"}
+
+data: {"v":" help"}
+
+data: {"v":" you"}
+
+data: {"v":"?"}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":74},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789710568.9801738}
+
+event: title
+data: {"content":"Hello test 42"}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

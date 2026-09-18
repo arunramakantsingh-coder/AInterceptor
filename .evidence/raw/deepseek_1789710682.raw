@@ -1,0 +1,152 @@
+event: ready
+data: {"request_message_id":3,"response_message_id":4,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789710683.0328128}
+
+data: {"v":{"response":{"message_id":4,"parent_id":3,"model":"","role":"ASSISTANT","thinking_enabled":true,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":74,"feedback":null,"inserted_at":1789710683.023469,"search_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"We","elapsed_secs":null,"references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}
+
+data: {"v":" answer"}
+
+data: {"v":"."}
+
+data: {"v":" User"}
+
+data: {"v":" says"}
+
+data: {"v":" \""}
+
+data: {"v":"zz"}
+
+data: {"v":"-m"}
+
+data: {"v":"arker"}
+
+data: {"v":"-"}
+
+data: {"v":"7"}
+
+data: {"v":"\"."}
+
+data: {"v":" Lik"}
+
+data: {"v":"ely"}
+
+data: {"v":" a"}
+
+data: {"v":" marker"}
+
+data: {"v":" test"}
+
+data: {"v":"."}
+
+data: {"v":" Need"}
+
+data: {"v":" respond"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" need"}
+
+data: {"v":" determine"}
+
+data: {"v":" if"}
+
+data: {"v":" any"}
+
+data: {"v":" special"}
+
+data: {"v":"?"}
+
+data: {"v":" Just"}
+
+data: {"v":" acknowledge"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" can"}
+
+data: {"v":" say"}
+
+data: {"v":" \""}
+
+data: {"v":"zz"}
+
+data: {"v":"-m"}
+
+data: {"v":"arker"}
+
+data: {"v":"-"}
+
+data: {"v":"7"}
+
+data: {"v":" acknowledged"}
+
+data: {"v":".\""}
+
+data: {"v":" Maybe"}
+
+data: {"v":" ask"}
+
+data: {"v":" what"}
+
+data: {"v":" they"}
+
+data: {"v":" need"}
+
+data: {"v":"."}
+
+data: {"v":" Ensure"}
+
+data: {"v":" no"}
+
+data: {"v":" issue"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" should"}
+
+data: {"v":" not"}
+
+data: {"v":" over"}
+
+data: {"v":"com"}
+
+data: {"v":"plicate"}
+
+data: {"v":"."}
+
+data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":1.12844547}
+
+data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"zz","references":[],"stage_id":1}]}
+
+data: {"p":"response/fragments/-1/content","v":"-m"}
+
+data: {"v":"arker"}
+
+data: {"v":"-"}
+
+data: {"v":"7"}
+
+data: {"v":" acknowledged"}
+
+data: {"v":"."}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":105},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789710683.5610209}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

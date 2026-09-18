@@ -131,15 +131,14 @@ class DeepSeekStreamParser:
             if index is None:
                 return
             fragment = self._ensure_fragment(index)
-            incoming = "".join(self._text_values(value))
             if op in {"SET", "REPLACE"}:
-                fragment["content"] = incoming
-                self._path_buffers[path] = incoming
+                fragment["content"] = "".join(self._text_values(value))
             elif op in {"APPEND", ""}:
-                prior = self._path_buffers.get(path, "")
-                # Literal append: preserve every character
-                fragment["content"] = prior + incoming
-                self._path_buffers[path] = fragment["content"]
+                # Literal append to the fragment's OWN current content.
+                # Never consult a path-keyed buffer: the -1 index resolves
+                # to a different fragment as new ones arrive, and mixing
+                # across fragments loses the leading snapshot content.
+                self._append_content(fragment, value)
             return
 
         match = re.match(r"^(?:response/)?fragments/(-?\d+)$", path)
