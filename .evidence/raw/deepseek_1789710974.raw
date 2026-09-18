@@ -1,0 +1,150 @@
+event: ready
+data: {"request_message_id":7,"response_message_id":8,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789710974.89195}
+
+data: {"v":{"response":{"message_id":8,"parent_id":7,"model":"","role":"ASSISTANT","thinking_enabled":true,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":142,"feedback":null,"inserted_at":1789710974.87798,"search_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"We","elapsed_secs":null,"references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}
+
+data: {"v":" answer"}
+
+data: {"v":"."}
+
+data: {"v":" User"}
+
+data: {"v":" repeats"}
+
+data: {"v":" \""}
+
+data: {"v":"hello"}
+
+data: {"v":" there"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":"\"."}
+
+data: {"v":" We"}
+
+data: {"v":" should"}
+
+data: {"v":" respond"}
+
+data: {"v":"."}
+
+data: {"v":" Need"}
+
+data: {"v":" maybe"}
+
+data: {"v":" no"}
+
+data: {"v":" special"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" can"}
+
+data: {"v":" be"}
+
+data: {"v":" concise"}
+
+data: {"v":"."}
+
+data: {"v":" Could"}
+
+data: {"v":" say"}
+
+data: {"v":" \""}
+
+data: {"v":"Hello"}
+
+data: {"v":" again"}
+
+data: {"v":"!"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":" is"}
+
+data: {"v":" still"}
+
+data: {"v":" here"}
+
+data: {"v":"."}
+
+data: {"v":" What"}
+
+data: {"v":" would"}
+
+data: {"v":" you"}
+
+data: {"v":" like"}
+
+data: {"v":" to"}
+
+data: {"v":" do"}
+
+data: {"v":"?\""}
+
+data: {"v":" Ensure"}
+
+data: {"v":" not"}
+
+data: {"v":" over"}
+
+data: {"v":"do"}
+
+data: {"v":"."}
+
+data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":0.616255003}
+
+data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"Hello","references":[],"stage_id":1}]}
+
+data: {"p":"response/fragments/-1/content","v":" again"}
+
+data: {"v":"!"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":" is"}
+
+data: {"v":" still"}
+
+data: {"v":" here"}
+
+data: {"v":"."}
+
+data: {"v":" What"}
+
+data: {"v":" would"}
+
+data: {"v":" you"}
+
+data: {"v":" like"}
+
+data: {"v":" to"}
+
+data: {"v":" do"}
+
+data: {"v":"?"}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":181},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789710975.211539}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

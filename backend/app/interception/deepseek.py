@@ -86,7 +86,7 @@ class DeepSeekStreamParser:
                 parts.extend(self._text_values(fragment.get("content")))
         if parts:
             return self._join_response_parts(parts)
-        return self._choice_text
+        return ""
 
     def _resolve_index(self, raw: str) -> int | None:
         try:

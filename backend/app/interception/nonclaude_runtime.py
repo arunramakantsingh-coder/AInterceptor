@@ -315,9 +315,35 @@ class NonClaudeWebRuntime(ProviderRuntime):
                         if kind == "failed":
                             raise RuntimeError(str(payload))
                         if kind == "finished":
-                            final = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
+                            # Prefer the browser's rendered assistant bubble as
+                            # ground truth. The CDP reconstruction is best-effort
+                            # for live deltas; the DOM is authoritative for the
+                            # final text.
+                            dom_text = ""
+                            try:
+                                dom_text = await self._read_last_assistant_text()
+                            except Exception:
+                                dom_text = ""
+                            parsed = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
+                            # Choose whichever is longer/more complete; prefer DOM
+                            final = dom_text if len(dom_text) >= len(parsed) and dom_text else parsed
+
+                            # Emit only the suffix beyond what we already sent.
+                            # If the final diverges from emitted (mid-stream
+                            # corrections), find the longest common prefix and
+                            # emit the remainder as one delta — never drop chars.
                             if final and final.startswith(emitted):
                                 delta = final[len(emitted):]
+                            elif final and emitted and final != emitted:
+                                # longest common prefix
+                                cp = 0
+                                for a, b in zip(final, emitted):
+                                    if a != b: break
+                                    cp += 1
+                                if cp >= len(emitted) - 2:
+                                    delta = final[cp:]
+                                else:
+                                    delta = "\n" + final
                             else:
                                 delta = ""
                             if delta:
