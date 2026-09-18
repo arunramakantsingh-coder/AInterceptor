@@ -1,0 +1,30 @@
+1153dcd fix(browser): add --remote-allow-origins=* for Playwright CDP handshake
+d127eeb fix(runtime): wrap connect_over_cdp in 15s timeout (no more hangs)
+598b371 fix(runtime): soft login detection â€” chat works anonymously; hint to login only when wall appears
+0afcd6e feat(cli): login/hide/status wrappers
+c149dd8 chore(browser): fix shared Chrome launcher (chrome path resolution)
+7824af5 fix(cli): daemon_alive timeout 1s -> 4s
+cf6b0d8 fix(cli): clean daemon-only chat_any; correct subcommand dispatch
+a2218de fix(daemon): verb-first subcommands + log to file + visible launcher
+8880982 feat(cli): readable aidaemon status + proper help output
+12fe2d7 feat(daemon): aidaemon â€” persistent session manager owns all browsers invisibly
+6c0dab0 feat(cli): <provider> login subcommand + friendly not-running/not-logged-in errors
+755ac2e chore(cli): rename gemini->aigemini; ensure all wrappers exist
+393621e chore(cli): rename gemini->aigemini (avoid Google CLI collision); add ai wrapper
+a67b454 feat(deepseek): live DOM streaming â€” deltas emitted as text grows
+64c330d fix(deepseek): drop bubble-count reliance; use text snapshot + stability
+1dadf03 chore(deepseek): add trace logging in execute() wait loop
+ec4e334 fix(cli): rewrite chat_any with robust runtime discovery
+a9b7fca fix(cli): robust runtime class discovery in chat_any
+f26c259 feat(cli): chat_any launcher + per-provider .cmd shortcuts (deepseek, claude, chatgpt, gemini)
+1558864 fix(deepseek): exclude thinking containers from DOM read; longer stability window
+538a51f fix(runtime): prefer CDP; add off-screen Chrome launcher for hidden UI
+4f51b68 feat(runtime): headless mode via harvested storage_state; no visible browser
+0cc1750 fix(deepseek): read LAST assistant bubble; time-based stability wait
+e47ca83 fix(cli): silence per-turn CDP print; log port attachments to .ainterceptor/ports.log
+da8021b chore: close Phase 2 â€” DeepSeek PoC working
+f7448bc chore: add toggle_deepthink helper
+a79b226 fix(deepseek): DOM-only reply; abandon transport decoder on critical path
+61412cf fix(deepseek): buffer-and-decode-once; abandon streaming reconstruction
+31eb0c4 fix(deepseek): monotone parser + strict-prefix final emit; DOM = .ds-markdown only
+2cfce79 fix(deepseek): silence repeated CDP print; strip thinking from DOM read

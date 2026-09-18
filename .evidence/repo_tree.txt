@@ -1,0 +1,303 @@
+AInterceptor-M1.5/
+├── .ai/
+│   ├── procedures/
+│   │   └── M0_GOVERNANCE_BOOTSTRAP.md
+│   ├── rules/
+│   │   ├── AI_AGENT_OPERATING_RULES.md
+│   │   └── WEB_INTERCEPTION_ARCHITECTURE.md
+│   ├── CONTEXT.md
+│   ├── CURRENT_TASK.md
+│   ├── FUTURE_WORK.md
+│   ├── HANDOFF.md
+│   ├── KNOWN_ISSUES.md
+│   ├── PROJECT_KICKOFF_STANDARD.md
+│   └── SESSION.md
+├── .evidence/
+│   ├── dump/
+│   │   ├── .ai__rules__WEB_INTERCEPTION_ARCHITECTURE.md
+│   │   ├── backend__app__interception__contracts.py
+│   │   ├── backend__app__interception__deepseek.py
+│   │   ├── backend__app__interception__nonclaude_runtime.py
+│   │   ├── backend__app__interception__runtime.py
+│   │   ├── PROJECT__TRANSPORT_EVENT_CONTRACT_V1.md
+│   │   └── tests__test_nonclaude_parsers.py
+│   ├── raw/
+│   │   ├── deepseek_1789710568.raw
+│   │   ├── deepseek_1789710682.raw
+│   │   ├── deepseek_1789710848.raw
+│   │   ├── deepseek_1789710974.raw
+│   │   ├── deepseek_1789711583.raw
+│   │   ├── deepseek_1789712041.raw
+│   │   ├── deepseek_1789712043.raw
+│   │   ├── deepseek_1789712149.raw
+│   │   ├── deepseek_1789712151.raw
+│   │   └── deepseek_1789712429.raw
+│   └── repo_tree.txt
+├── ainterceptor.egg-info/
+│   ├── dependency_links.txt
+│   ├── entry_points.txt
+│   ├── PKG-INFO
+│   ├── requires.txt
+│   ├── SOURCES.txt
+│   └── top_level.txt
+├── backend/
+│   ├── .evidence/
+│   │   └── raw/
+│   │       ├── deepseek_1789681631.raw
+│   │       ├── deepseek_1789681670.raw
+│   │       ├── deepseek_1789681703.raw
+│   │       ├── deepseek_1789681740.raw
+│   │       └── deepseek_1789681813.raw
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   └── main.py
+│   │   ├── gateway/
+│   │   │   ├── __init__.py
+│   │   │   └── README.md
+│   │   ├── interception/
+│   │   │   ├── __init__.py
+│   │   │   ├── chatgpt.py
+│   │   │   ├── chrome_auth.py
+│   │   │   ├── claude.py
+│   │   │   ├── claude_transport.py
+│   │   │   ├── contracts.py
+│   │   │   ├── deepseek.py
+│   │   │   ├── gemini.py
+│   │   │   ├── nonclaude_runtime.py
+│   │   │   ├── nonclaude_runtime.py.bak
+│   │   │   ├── registry.py
+│   │   │   ├── runtime.py
+│   │   │   └── web_runtime.py
+│   │   ├── orchestrator/
+│   │   │   ├── __init__.py
+│   │   │   └── README.md
+│   │   ├── providers/
+│   │   │   ├── claude/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── adapter.py
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   └── fake.py
+│   │   └── __init__.py
+│   ├── scripts/
+│   │   ├── aidaemon.py
+│   │   ├── chat_any.py
+│   │   ├── chat_deepseek.py
+│   │   ├── daemon_status.py
+│   │   ├── harvest_claude.py
+│   │   ├── harvest_storage.py
+│   │   ├── repro_deepseek_capture.py
+│   │   ├── shared_chrome.py
+│   │   └── toggle_deepthink.py
+│   ├── sessions/
+│   ├── tests/
+│   │   ├── fixtures/
+│   │   │   └── deepseek_golden_synthetic.raw
+│   │   ├── __init__.py
+│   │   ├── test_claude_transport.py
+│   │   ├── test_cors.py
+│   │   ├── test_deepseek_golden.py
+│   │   └── test_fake_provider.py
+│   ├── m1_4_create_claude_session.py
+│   ├── m1_4_oauth_diagnostic.py
+│   ├── pytest.ini
+│   ├── README.md
+│   ├── requirements.txt
+│   └── test_input.txt
+├── bin/
+│   ├── ai.cmd
+│   ├── aid.cmd
+│   ├── aidaemon.cmd
+│   ├── aigemini.cmd
+│   ├── airouter.cmd
+│   ├── chatgpt.cmd
+│   ├── claude.cmd
+│   ├── daemon.cmd
+│   ├── deepseek.cmd
+│   ├── hide.cmd
+│   ├── login.cmd
+│   ├── restart.cmd
+│   └── status.cmd
+├── cli/
+│   ├── __init__.py
+│   ├── chat.py
+│   ├── config_store.py
+│   ├── main.py
+│   ├── nos.py
+│   ├── registry.py
+│   ├── renderer.py
+│   └── shell.py
+├── dashboard/
+│   ├── app/
+│   │   ├── bugs/
+│   │   │   └── page.tsx
+│   │   ├── commit/
+│   │   │   └── [sha]/
+│   │   │       └── page.tsx
+│   │   ├── compare/
+│   │   │   └── page.tsx
+│   │   ├── intercept/
+│   │   │   └── page.tsx
+│   │   ├── providers/
+│   │   │   └── page.tsx
+│   │   ├── roadmap/
+│   │   │   └── page.tsx
+│   │   ├── rollback/
+│   │   │   ├── [sha]/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── RevertButton.tsx
+│   │   │   └── page.tsx
+│   │   ├── status/
+│   │   │   └── page.tsx
+│   │   ├── versions/
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── lib/
+│   │   ├── actions.ts
+│   │   ├── github.ts
+│   │   ├── health.ts
+│   │   ├── repo.ts
+│   │   └── ui.tsx
+│   ├── .env.local.example
+│   ├── .gitignore
+│   ├── next.config.mjs
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── README.md
+│   └── tsconfig.json
+├── docs/
+│   ├── rfcs/
+│   │   └── 0000-template.md
+│   └── DECISION_LOG.md
+├── PROJECT/
+│   ├── ARCHITECTURE.md
+│   ├── BUGS.md
+│   ├── CHANGELOG.md
+│   ├── DECISIONS.md
+│   ├── DEVELOPER_CONTROL_PLANE.md
+│   ├── GOVERNANCE.md
+│   ├── REQUIREMENTS.md
+│   ├── ROADMAP.md
+│   └── TRANSPORT_EVENT_CONTRACT_V1.md
+├── scripts/
+│   ├── bootstrap/
+│   │   ├── add_async_ctx_mgr.py
+│   │   ├── add_path_perm.py
+│   │   ├── add_trace.py
+│   │   ├── audit_and_repro.py
+│   │   ├── baseline_snapshot.py
+│   │   ├── bootstrap.py
+│   │   ├── buffer_decode_once.py
+│   │   ├── build_bundle.py
+│   │   ├── build_daemon.py
+│   │   ├── bump_timeout.py
+│   │   ├── chrome_flags_fix.py
+│   │   ├── clean_chat_any.py
+│   │   ├── cli_fixes.py
+│   │   ├── cli_shortcuts.py
+│   │   ├── close_phase2.py
+│   │   ├── close_phase_2.py
+│   │   ├── daemon_v2.py
+│   │   ├── diag_parse.py
+│   │   ├── diag_stream.py
+│   │   ├── dom_ground_truth.py
+│   │   ├── dom_only.py
+│   │   ├── export_tree.py
+│   │   ├── find_bootai.py
+│   │   ├── find_capture.py
+│   │   ├── find_ios_cli.py
+│   │   ├── find_shadow_module.py
+│   │   ├── first_commit.py
+│   │   ├── fix_all_chat.py
+│   │   ├── fix_append_idempotent.py
+│   │   ├── fix_async_and_tests.py
+│   │   ├── fix_cdp_leak.py
+│   │   ├── fix_cdp_log_and_record.py
+│   │   ├── fix_cli_wrappers.py
+│   │   ├── fix_connect_timeout.py
+│   │   ├── fix_deepseek_and_registry.py
+│   │   ├── fix_delta_prefix_only.py
+│   │   ├── fix_dom_read_stable.py
+│   │   ├── fix_future_import.py
+│   │   ├── fix_golden_and_venv.py
+│   │   ├── fix_indent.py
+│   │   ├── fix_join_and_pytest.py
+│   │   ├── fix_parser_and_test.py
+│   │   ├── fix_pathlib_import.py
+│   │   ├── fix_runtime_lookup.py
+│   │   ├── fix_test_path_and_run.py
+│   │   ├── fix_text_stability.py
+│   │   ├── fix_thinking_dom.py
+│   │   ├── fix_thinking_leak.py
+│   │   ├── fix_whitespace_preservation.py
+│   │   ├── git_init.py
+│   │   ├── headless_mode.py
+│   │   ├── instrument_deepseek_capture.py
+│   │   ├── launch_shared.py
+│   │   ├── live_stream.py
+│   │   ├── login_subcommand.py
+│   │   ├── m1_2_1_cleanup.py
+│   │   ├── make_aigemini.py
+│   │   ├── make_login_wrapper.py
+│   │   ├── merge_snapshots.py
+│   │   ├── monotone_fix.py
+│   │   ├── offscreen.py
+│   │   ├── patch_datetime.py
+│   │   ├── patch_m0_1.py
+│   │   ├── phase_1_1.py
+│   │   ├── phase_1_2.py
+│   │   ├── pretty_status.py
+│   │   ├── probe_dom.py
+│   │   ├── README.md
+│   │   ├── really_add_aenter.py
+│   │   ├── restore_clean.py
+│   │   ├── rewrite_chat_any.py
+│   │   ├── robust_chrome.py
+│   │   ├── shared_browser.py
+│   │   ├── snapshot_parser.py
+│   │   ├── soft_login.py
+│   │   ├── start_chatgpt.py
+│   │   ├── surgical_fix_class.py
+│   │   ├── toggle_deepthink.py
+│   │   └── utf8_and_chat.py
+│   ├── milestone_commit.ps1
+│   ├── poc_claude_web_roundtrip.py
+│   ├── start_browsers_offscreen.ps1
+│   ├── start_deepseek_offscreen.ps1
+│   └── validate_phase.py
+├── TEST/
+│   ├── cli/
+│   │   ├── __init__.py
+│   │   ├── test_cli_control_plane.py
+│   │   ├── test_cli_import.py
+│   │   ├── test_cli_m0.py
+│   │   └── test_cli_m1_5.py
+│   ├── STRATEGY.md
+│   └── test_claude_sse_live_schema.py
+├── tests/
+│   ├── test_deepseek_think_response.py
+│   └── test_nonclaude_parsers.py
+├── .gitignore
+├── _bundle.zip
+├── AGENTS.md
+├── BLUEPRINT.md
+├── bootstrap.py
+├── discover_layout.py
+├── first_commit.py
+├── git_init.py
+├── KICKOFF_PROMPT.txt
+├── m1_4_cdp_session_check.py
+├── m1_4_claude_sse_structure_probe.py
+├── m1_4_live_cdp_probe.py
+├── m1_4_live_sse_parser_probe.py
+├── m1_4_live_sse_parser_probe_v2.py
+├── patch_datetime.py
+├── PROJECT_GOVERNANCE.md
+├── PROJECT_GOVERNANCE_STANDARD_v1.1.md
+├── pyproject.toml
+├── pytest.ini
+├── README.md
+├── run_claude_web_poc.ps1
+└── test_input.txt

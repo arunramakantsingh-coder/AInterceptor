@@ -1,0 +1,9 @@
+  feature/m1-provider-runtime-boundary-20260916
+* fix/nonclaude-three-providers-20260917
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/feature/auth-boundary-external-chrome-20260917
+  remotes/origin/feature/m1-provider-runtime-boundary-20260916
+  remotes/origin/feature/m1-provider-runtime-boundary-20260916-config-work
+  remotes/origin/fix/nonclaude-three-providers-20260917
+  remotes/origin/main
+  remotes/origin/recovery/local-work-20260916-230714
