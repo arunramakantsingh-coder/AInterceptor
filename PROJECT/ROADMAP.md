@@ -58,3 +58,13 @@ The repository baseline has been reconciled around the web-layer interception bo
 - CLI package boundary and Claude chat wiring added; provider order remains ChatGPT, Claude, Gemini, Grok.
 - CLI test package and synthetic Claude SSE/runtime configuration tests added.
 - Full local/live validation remains to be performed after pulling this branch.
+
+## Phase 2 — Interceptor (DeepSeek PoC) — COMPLETE
+
+- Date: 2026-09-18
+- Provider: DeepSeek Web (CDP 9223)
+- Byte-exact match with browser: verified
+- Parser: RESPONSE-only, per-fragment content, idempotent append
+- Runtime: DOM ground-truth on finalize, registry-enforced CDP
+- Tests: 19/19 passing
+- Commit: 4b3e2cf
