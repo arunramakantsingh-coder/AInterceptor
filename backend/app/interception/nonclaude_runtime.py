@@ -349,33 +349,32 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "dom"})
             seq += 1
 
-            # Wait for a NEW assistant bubble, then for its text to stop
-            # changing for STABLE_FOR seconds (not just N reads).
+            # Wait for a NEW assistant bubble; simultaneously buffer the
+            # transport stream so we can decode the final answer from bytes.
             import time as _time
-            DEADLINE = 120.0
-            STABLE_FOR = 2.0
+            DEADLINE = 90.0
+            STABLE_FOR = 2.5
             t0 = _time.monotonic()
             last_text = ""
             last_change = t0
             text = ""
-            saw_new_bubble = False
+            saw_bubble = False
             while _time.monotonic() - t0 < DEADLINE:
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(0.4)
                 count = await self._assistant_count()
-                if count <= before:
+                if count <= before and not saw_bubble:
                     continue
-                saw_new_bubble = True
+                saw_bubble = True
                 current = await self._read_last_assistant_text()
-                if not current:
-                    continue
-                if current != last_text:
-                    last_text = current
-                    last_change = _time.monotonic()
-                elif _time.monotonic() - last_change >= STABLE_FOR:
-                    text = current
-                    break
+                if current:
+                    if current != last_text:
+                        last_text = current
+                        last_change = _time.monotonic()
+                    elif _time.monotonic() - last_change >= STABLE_FOR:
+                        text = current
+                        break
             if not text and last_text:
-                text = last_text  # best effort if deadline hit mid-change
+                text = last_text
 
             if not text:
                 yield StreamEvent(self.provider, request.request_id,
@@ -407,31 +406,57 @@ class NonClaudeWebRuntime(ProviderRuntime):
         return 0
 
     async def _read_last_assistant_text(self) -> str:
-        """Return the text of the LAST assistant bubble.
+        """Read the newest assistant reply, EXCLUDING thinking containers.
 
-        Uses the newest matching element, not the longest. In multi-turn
-        chat the previous reply may be longer than the current one; picking
-        the longest would return stale text.
+        DeepSeek renders THINK and RESPONSE as separate markdown containers
+        under different parents. We walk up each candidate and reject any
+        that lives inside a think/reason/analysis subtree, then pick the
+        LAST surviving one (the newest reply bubble).
         """
-        selectors = (
-            ".ds-markdown",
-            ".ds-markdown--block",
-            "[data-message-author-role='assistant']",
-            ".model-response-text",
-            "message-content",
-        )
-        for s in selectors:
-            try:
-                loc = self._page.locator(s)
-                n = await loc.count()
-                if n == 0:
-                    continue
-                txt = (await loc.nth(n - 1).inner_text()).strip()
-                if txt:
-                    return txt
-            except Exception:
-                continue
-        return ""
+        js = r"""
+            () => {
+                const selectors = [
+                    '.ds-markdown',
+                    '.ds-markdown--block',
+                    '[class*="ds-markdown"]',
+                    '[data-message-author-role="assistant"]',
+                    '.model-response-text',
+                    'message-content',
+                ];
+                const thinkingRe = /think|reason|analysis|cot|chain-of-thought/i;
+
+                for (const sel of selectors) {
+                    const nodes = document.querySelectorAll(sel);
+                    if (!nodes.length) continue;
+                    const good = [];
+                    for (const n of nodes) {
+                        if (!n.offsetParent && getComputedStyle(n).display === 'none') continue;
+                        let p = n.parentElement;
+                        let isThink = false;
+                        while (p && p !== document.body) {
+                            const cls = (typeof p.className === 'string'
+                                         ? p.className
+                                         : (p.className && p.className.baseVal) || '');
+                            if (thinkingRe.test(cls)) { isThink = true; break; }
+                            p = p.parentElement;
+                        }
+                        if (!isThink) good.push(n);
+                    }
+                    const pool = good.length ? good : nodes;
+                    // newest bubble = last in DOM
+                    const last = pool[pool.length - 1];
+                    const txt = (last.innerText || '').trim();
+                    if (txt) return txt;
+                }
+                return '';
+            }
+        """
+        try:
+            txt = await self._page.evaluate(js)
+            return (txt or "").strip()
+        except Exception:
+            return ""
+
 
     async def close(self) -> None:
         self._started = False
