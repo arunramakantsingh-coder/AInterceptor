@@ -201,7 +201,16 @@ class NonClaudeWebRuntime(ProviderRuntime):
         # another provider's browser.
         env_key = f"AINTERCEPTOR_{self.provider.upper()}_CDP_URL"
         env_val = os.environ.get(env_key)
-        if env_val == "":
+
+        # Headless preference: if a saved storage_state exists and the user
+        # has not forced a CDP URL, run our own hidden Chromium.
+        headless_pref = os.environ.get("AINTERCEPTOR_HEADLESS", "1") not in {"0","false","no"}
+        sp = pathlib.Path(self.session_path) if self.session_path else None
+        has_state = bool(sp and sp.exists() and sp.stat().st_size > 50)
+
+        if headless_pref and has_state and env_val is None:
+            self.cdp_url = None  # use launch path below
+        elif env_val == "":
             self.cdp_url = None
         elif env_val:
             self.cdp_url = env_val
