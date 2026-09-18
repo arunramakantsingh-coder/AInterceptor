@@ -25,3 +25,15 @@ discover_layout.py
 scripts/bootstrap/find_capture.py
 scripts/bootstrap/snapshot_parser.py
 .ainterceptor/ports.log
+logs/
+data/
+backend/.evidence/
+_bundle.zip
+backend/app/interception/nonclaude_runtime.py.bak
+backend/test_input.txt
+.evidence/raw/
+.evidence/branch*.txt
+.evidence/recent_commits.txt
+.evidence/repo_tree.txt
+.evidence/tags.txt
+.evidence/tracked_files.txt
