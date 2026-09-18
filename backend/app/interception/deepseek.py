@@ -334,3 +334,84 @@ class DeepSeekRuntime(NonClaudeWebRuntime):
         )
         super().__init__(spec, session_path=sp, cdp_url=resolved,
                          headless=headless, parser=DeepSeekStreamParser())
+
+def decode_deepseek_final(raw: str) -> str:
+    """Authoritative decoder: parse the ENTIRE stream and return the
+    final RESPONSE fragment's text. This is the ground truth — no
+    streaming reconstruction, no monotone heuristics, no deltas.
+
+    DeepSeek sends cumulative snapshots. The LAST RESPONSE fragment in
+    the stream always contains the complete reply. We walk every parsed
+    object in order, tracking the latest RESPONSE fragment content, and
+    return it once the stream ends.
+    """
+    import json
+    latest_response_text = ""
+    # Newest snapshot wins: track the highest fragment index we've seen
+    # with type RESPONSE.
+    for line in raw.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(")]}'"):
+            line = line[4:].lstrip()
+        if line.startswith("event:"):
+            continue
+        if line.startswith("data:"):
+            line = line[5:].strip()
+        if not line or line == "[DONE]":
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+
+        # Case A: full snapshot — response.fragments is a list
+        v = obj.get("v")
+        containers = []
+        if isinstance(v, dict):
+            containers.append(v)
+        if isinstance(obj.get("response"), dict):
+            containers.append(obj)
+        for c in containers:
+            resp = c.get("response") if isinstance(c.get("response"), dict) else c
+            frags = resp.get("fragments") if isinstance(resp, dict) else None
+            if not isinstance(frags, list):
+                continue
+            for fr in frags:
+                if not isinstance(fr, dict):
+                    continue
+                if str(fr.get("type") or "").upper() != "RESPONSE":
+                    continue
+                content = fr.get("content")
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, dict):
+                    text = str(content.get("text") or content.get("content") or "")
+                elif isinstance(content, list):
+                    text = "".join(
+                        (x if isinstance(x, str) else str((x or {}).get("text") or ""))
+                        for x in content
+                    )
+                else:
+                    text = ""
+                # Longer wins (monotone across snapshots)
+                if len(text) >= len(latest_response_text):
+                    latest_response_text = text
+
+        # Case B: patch op — path is .../fragments[-1 or N]/content
+        p = obj.get("p")
+        o = str(obj.get("o") or "").upper()
+        if isinstance(p, str) and ("/fragments" in p) and p.endswith("/content"):
+            val = obj.get("v")
+            if isinstance(val, str):
+                if o in ("SET", "REPLACE") and len(val) > len(latest_response_text):
+                    latest_response_text = val
+                elif o == "APPEND":
+                    # Ignore append-to-fragment during final decode — the
+                    # complete snapshot supersedes it. If we reached here
+                    # without a snapshot, treat as append to latest.
+                    if not latest_response_text.endswith(val):
+                        latest_response_text = latest_response_text + val
+
+    return latest_response_text

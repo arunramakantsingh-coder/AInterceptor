@@ -286,6 +286,11 @@ class NonClaudeWebRuntime(ProviderRuntime):
                     yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": f"prompt_submission_failed: {exc}"})
                     return
                 try:
+                    # Buffer-only: accumulate every byte, wait for terminal
+                    # event, then decode ONCE with the authoritative decoder.
+                    # No streaming reconstruction — that path was the source
+                    # of every character-loss bug.
+                    terminal = False
                     async for kind, payload in capture.events():
                         if kind == "response_started":
                             status, content_type = payload
@@ -302,50 +307,41 @@ class NonClaudeWebRuntime(ProviderRuntime):
                             continue
                         if kind == "data":
                             body.extend(payload)
-                            current = self.parser(body.decode("utf-8", errors="replace"))
-                            # Emit ONLY when the parser output strictly extends the emitted prefix.
-                            # Never re-emit an earlier body: that's the class of bug that
-                            # collapses "hi how are you" into "hi are you".
-                            if current and current.startswith(emitted):
-                                delta = current[len(emitted):]
-                            else:
-                                delta = ""
-                            if delta:
-                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=delta)
-                                sequence += 1
-                                emitted = current
                             continue
                         if kind == "failed":
                             raise RuntimeError(str(payload))
                         if kind == "finished":
-                            # Prefer the browser's rendered assistant bubble as
-                            # ground truth. The CDP reconstruction is best-effort
-                            # for live deltas; the DOM is authoritative for the
-                            # final text.
-                            dom_text = ""
-                            try:
-                                dom_text = await self._read_last_assistant_text()
-                            except Exception:
-                                dom_text = ""
-                            parsed = self.parser(body.decode("utf-8", errors="replace")).rstrip("\n")
-                            # Prefer whichever text is longer — the parser can
-                            # legitimately miss fragments; the DOM can miss
-                            # streaming context. Longer wins.
-                            final = dom_text if len(dom_text) > len(parsed) else parsed
+                            terminal = True
+                            break
 
-                            # Emit only the suffix beyond what we already sent.
-                            # If the final diverges from emitted (mid-stream
-                            # corrections), find the longest common prefix and
-                            # emit the remainder as one delta — never drop chars.
-                            if final and final.startswith(emitted):
-                                delta = final[len(emitted):]
-                            else:
-                                delta = ""
-                            if delta:
-                                yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=delta)
-                                sequence += 1
-                            yield StreamEvent(self.provider, request.request_id, EventType.STREAM_COMPLETED, sequence, finish_reason="stop")
-                            return
+                    if not terminal:
+                        yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": "stream ended without terminal signal"})
+                        return
+
+                    raw = body.decode("utf-8", errors="replace")
+
+                    # Authoritative final decode (DeepSeek-specific)
+                    final_text = ""
+                    try:
+                        from app.interception.deepseek import decode_deepseek_final
+                        final_text = decode_deepseek_final(raw)
+                    except Exception:
+                        final_text = ""
+
+                    # Fall back to DOM if the decoder produced nothing
+                    if not final_text:
+                        try:
+                            final_text = (await self._read_last_assistant_text()).strip()
+                        except Exception:
+                            final_text = ""
+
+                    if final_text:
+                        yield StreamEvent(self.provider, request.request_id, EventType.STREAM_DELTA, sequence, delta=final_text)
+                        sequence += 1
+
+                    yield StreamEvent(self.provider, request.request_id, EventType.STREAM_COMPLETED, sequence, finish_reason="stop")
+                    return
+
                 except TimeoutError as exc:
                     yield StreamEvent(self.provider, request.request_id, EventType.STREAM_FAILED, sequence, metadata={"reason": str(exc)})
                 except Exception as exc:
