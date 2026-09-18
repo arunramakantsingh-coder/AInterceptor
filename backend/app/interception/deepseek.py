@@ -104,9 +104,14 @@ class DeepSeekStreamParser:
 
     def _append_content(self, fragment: dict[str, Any], value: Any) -> None:
         incoming = "".join(self._text_values(value))
-        if incoming:
-            existing = "".join(self._text_values(fragment.get("content")))
-            fragment["content"] = self._merge_append(existing, incoming)
+        if not incoming:
+            return
+        existing = "".join(self._text_values(fragment.get("content")))
+        # Idempotency: if the incoming text already appears at the end of the
+        # fragment (replayed cumulative frame), do not duplicate it.
+        if existing.endswith(incoming) and len(existing) >= len(incoming):
+            return
+        fragment["content"] = self._merge_append(existing, incoming)
 
     def _apply_patch(self, path: str, operation: str, value: Any) -> None:
         path = path.lstrip("/")
