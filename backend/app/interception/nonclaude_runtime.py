@@ -304,12 +304,9 @@ class NonClaudeWebRuntime(ProviderRuntime):
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
     async def execute(self, request: ProviderExecutionRequest):
-        """Submit prompt, wait for assistant bubble to stabilise, return it.
-
-        Transport-layer decoding is intentionally NOT used here. The DOM is
-        the authoritative source for the reply text. Provider-specific
-        transport decoders remain available for future streaming work but
-        are not on the critical path.
+        """Submit prompt, wait until the DOM shows a NEW assistant reply,
+        return it. Relies on text-change detection, NOT on bubble counting
+        (providers reuse DOM slots, so counts are unreliable).
         """
         if request.provider != self.provider:
             raise ValueError(f"runtime provider mismatch: {request.provider}")
@@ -323,14 +320,15 @@ class NonClaudeWebRuntime(ProviderRuntime):
             raise ValueError("execution requires a non-empty user message")
 
         async with self._lock:
+            import time as _time
             seq = 0
             yield StreamEvent(self.provider, request.request_id,
                               EventType.REQUEST_INTERCEPTED, seq,
                               metadata={"transport": "dom"})
             seq += 1
 
-            # Snapshot current number of assistant bubbles
-            before = await self._assistant_count()
+            # Snapshot BEFORE sending
+            before_text = await self._read_last_assistant_text()
 
             # Submit
             try:
@@ -349,39 +347,33 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "dom"})
             seq += 1
 
-            import sys as _sys
-            def _tr(msg):
-                print(f"[trace] {msg}", file=_sys.stderr, flush=True)
-            _tr(f"before bubble count={before}")
-
-            # Wait for a NEW assistant bubble; simultaneously buffer the
-            # transport stream so we can decode the final answer from bytes.
-            import time as _time
+            # Poll for a NEW reply. A reply is "new" if the last-assistant
+            # text differs from before_text AND is stable for STABLE_FOR.
             DEADLINE = 90.0
             STABLE_FOR = 2.5
             t0 = _time.monotonic()
-            last_text = ""
             last_change = t0
+            last_seen = ""
             text = ""
-            saw_bubble = False
             while _time.monotonic() - t0 < DEADLINE:
                 await asyncio.sleep(0.4)
-                count = await self._assistant_count()
-                _tr(f"poll: count={count} before={before}")
-                if count <= before and not saw_bubble:
-                    continue
-                saw_bubble = True
                 current = await self._read_last_assistant_text()
-                _tr(f"read: {len(current)} chars")
-                if current:
-                    if current != last_text:
-                        last_text = current
-                        last_change = _time.monotonic()
-                    elif _time.monotonic() - last_change >= STABLE_FOR:
-                        text = current
-                        break
-            if not text and last_text:
-                text = last_text
+                if not current:
+                    continue
+                # Reject the pre-send snapshot
+                if current == before_text:
+                    continue
+                if current != last_seen:
+                    last_seen = current
+                    last_change = _time.monotonic()
+                    continue
+                # Stable?
+                if _time.monotonic() - last_change >= STABLE_FOR:
+                    text = current
+                    break
+
+            if not text:
+                text = last_seen or ""
 
             if not text:
                 yield StreamEvent(self.provider, request.request_id,
@@ -396,6 +388,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               EventType.STREAM_COMPLETED, seq,
                               finish_reason="stop")
             return
+
 
     async def _assistant_count(self) -> int:
         """Count assistant bubbles. Uses the widest single selector that
