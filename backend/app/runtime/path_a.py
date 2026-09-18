@@ -25,6 +25,34 @@ def _cookies(state: dict) -> dict:
     return {c["name"]: c["value"] for c in state.get("cookies", [])}
 
 
+def _token_from_state(state: dict, candidates: tuple[str, ...] = ()) -> str | None:
+    """Extract a JWT-ish token from storage_state localStorage.
+
+    Playwright's storage_state format:
+      {"cookies": [...], "origins": [{"origin": "...", "localStorage": [{"name","value"}]}]}
+    """
+    if not state:
+        return None
+    def looks_like_jwt(v: str) -> bool:
+        if not isinstance(v, str) or len(v) < 40:
+            return False
+        parts = v.split(".")
+        return len(parts) == 3 and parts[0].startswith("eyJ")
+    # Prefer explicit candidates
+    for origin in state.get("origins", []) or []:
+        for entry in (origin.get("localStorage") or []):
+            name = (entry.get("name") or "").lower()
+            value = entry.get("value") or ""
+            if name in candidates and looks_like_jwt(value):
+                return value
+    # Fallback: any JWT-ish value in localStorage
+    for origin in state.get("origins", []) or []:
+        for entry in (origin.get("localStorage") or []):
+            value = entry.get("value") or ""
+            if looks_like_jwt(value):
+                return value
+    return None
+
 def _headers_from_state(state: dict, extra: dict | None = None) -> dict:
     h = {
         "User-Agent": (
@@ -60,6 +88,12 @@ async def _stream_deepseek(state: dict, prompt: str) -> AsyncIterator[str]:
         "search_enabled": False,
     }
     fragments: dict[int, str] = {}
+    token = _token_from_state(state, candidates=("usertoken", "user_token", "__user_token__", "token"))
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        _dbg("deepseek Bearer token found (len=%d)" % len(token))
+    else:
+        _dbg("deepseek Bearer token NOT FOUND in storage_state — will try cookies only")
     _dbg("deepseek POST -> chat.deepseek.com/api/v0/chat/completion")
     _dbg("deepseek cookies:", list(cookies.keys()))
     _dbg("deepseek body:", body)
