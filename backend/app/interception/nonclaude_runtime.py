@@ -172,6 +172,24 @@ class NonClaudeWebRuntime(ProviderRuntime):
         self._started = False
         self._lock = asyncio.Lock()
 
+    def _record_port_attachment(self) -> None:
+        """Append a line to .ainterceptor/ports.log the first time this
+        runtime attaches to a provider CDP endpoint. Format:
+            2026-09-18T12:34:56Z  deepseek  http://127.0.0.1:9223
+        """
+        try:
+            import datetime as _dt
+            log_dir = pathlib.Path(".ainterceptor")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            line = (
+                _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                + f"  {self.provider:<10} {self.cdp_url}\n"
+            )
+            with open(log_dir / "ports.log", "a", encoding="utf-8") as fh:
+                fh.write(line)
+        except Exception:
+            pass
+
     async def _ensure_page(self, interactive: bool = False) -> None:
         if async_playwright is None:
             raise WebProviderSessionError("playwright is not installed")
@@ -190,8 +208,8 @@ class NonClaudeWebRuntime(ProviderRuntime):
         else:
             self.cdp_url = provider_registry.cdp_url(self.provider)
         if not getattr(self, "_cdp_logged", False):
-            print(f"[interception] {self.provider}: CDP -> {self.cdp_url}")
             self._cdp_logged = True
+            self._record_port_attachment()
 
         if self.cdp_url:
             self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_url)

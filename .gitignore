@@ -24,3 +24,4 @@ ainterceptor.egg-info/
 discover_layout.py
 scripts/bootstrap/find_capture.py
 scripts/bootstrap/snapshot_parser.py
+.ainterceptor/ports.log
