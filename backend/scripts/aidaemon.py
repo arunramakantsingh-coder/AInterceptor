@@ -4,7 +4,8 @@ Owns all four provider browsers, keeps them off-screen, exposes them
 via HTTP on 127.0.0.1:7700. CLI clients connect to this daemon.
 """
 from __future__ import annotations
-import asyncio, ctypes, importlib, json, os, pathlib, socket, subprocess, sys, time
+import asyncio, ctypes, importlib, json, os, pathlib, socket, subprocess, sys, time, traceback
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse

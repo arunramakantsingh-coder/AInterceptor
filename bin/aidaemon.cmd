@@ -7,14 +7,13 @@ if "%1"=="stop" goto stop
 if "%1"=="status" goto status
 if "%1"=="restart" goto restart
 if "%1"=="help" goto help
-if "%1"=="-h" goto help
-if "%1"=="--help" goto help
+if "%1"=="log" goto log
 echo Unknown command: %1
 goto help
 
 :start
 echo Starting aidaemon...
-start "" /b "C:\Projects\Atlas\.venv\Scripts\pythonw.exe" -m scripts.aidaemon
+start "aidaemon" /min "C:\Projects\Atlas\.venv\Scripts\python.exe" -u -m scripts.aidaemon
 timeout /t 3 /nobreak >nul
 goto status
 
@@ -25,6 +24,10 @@ goto :eof
 
 :status
 "C:\Projects\Atlas\.venv\Scripts\python.exe" -u scripts\\daemon_status.py
+goto :eof
+
+:log
+type "C:\Projects\AInterceptor-M1.5\.ainterceptor\daemon.log"
 goto :eof
 
 :restart
@@ -42,7 +45,7 @@ echo   aidaemon start       Start the background daemon
 echo   aidaemon stop        Stop the daemon and all browsers
 echo   aidaemon status      Show provider status
 echo   aidaemon restart     Restart the daemon
-echo   aidaemon help        Show this message
+echo   aidaemon log         Show daemon log
 echo.
 echo CHAT:
 echo   deepseek             Open DeepSeek chat
