@@ -497,26 +497,55 @@ class CDPCapture:
 
 # provider-specific composer selectors and internal submit scripts
 COMPOSER_SELECTORS: dict[str, tuple[str, ...]] = {
-    "claude":   ('div[contenteditable="true"]', "textarea"),
-    "chatgpt":  ("#prompt-textarea", 'div[contenteditable="true"]', "textarea"),
-    "gemini":   ("rich-textarea div[contenteditable='true']", 'div[contenteditable="true"]', "textarea"),
-    "deepseek": ('textarea[placeholder*="Message"]', "textarea",
-                 '[contenteditable="true"]', '[role="textbox"]'),
+    # Order matters — most visible/specific first.
+    "chatgpt":  (
+        'div[contenteditable="true"].ProseMirror',
+        'div[contenteditable="true"][id="prompt-textarea"]',
+        'div[contenteditable="true"]',
+        "#prompt-textarea",
+        "textarea",
+    ),
+    "claude":   (
+        'div[contenteditable="true"].ProseMirror',
+        'div[contenteditable="true"]',
+        "textarea",
+    ),
+    "gemini":   (
+        "rich-textarea div[contenteditable='true']",
+        'div[contenteditable="true"]',
+        "textarea",
+    ),
+    "deepseek": (
+        'textarea[placeholder*="Message"]',
+        "textarea",
+        '[contenteditable="true"]',
+        '[role="textbox"]',
+    ),
 }
 
 
 async def _find_composer(page: Any, selectors: tuple[str, ...]) -> Any:
+    """Return the first visible+editable composer, preferring earlier selectors."""
     for sel in selectors:
         try:
             loc = page.locator(sel)
             n = await loc.count()
-            for i in range(n - 1, -1, -1):
+            for i in range(n):
                 cand = loc.nth(i)
                 try:
-                    if await cand.is_visible() and await cand.is_editable():
-                        return cand
+                    visible = await cand.is_visible()
+                    if not visible:
+                        continue
+                    editable = await cand.is_editable()
+                    if not editable:
+                        # contenteditable may not report as editable on
+                        # some builds — check attribute directly
+                        ce = await cand.get_attribute("contenteditable")
+                        if (ce or "").lower() not in ("true", "plaintext-only", ""):
+                            continue
+                    return cand
                 except Exception:
-                    pass
+                    continue
         except Exception:
             continue
     return None
