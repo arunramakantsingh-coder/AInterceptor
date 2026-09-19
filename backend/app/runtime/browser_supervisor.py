@@ -15,60 +15,19 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-
-def _find_chrome() -> str | None:
-    for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"):
-        if pathlib.Path(c).exists():
-            return c
-    return None
-
-
-def _port_open(port: int) -> bool:
-    import socket as _sock
-    s = _sock.socket(); s.settimeout(0.4)
-    try:
-        s.connect(("127.0.0.1", port)); return True
-    except OSError:
-        return False
-    finally:
-        s.close()
-
-
-def _kill_port(port: int) -> None:
-    if not sys.platform.startswith("win"):
-        return
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"Get-NetTCPConnection -LocalPort {port} -State Listen -EA SilentlyContinue | "
-             "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"],
-            capture_output=True, timeout=10,
-        )
-    except Exception:
-        pass
+from app.runtime._chrome_helpers import (
+    find_chrome as _find_chrome,
+    port_open as _port_open,
+    cdp_alive as _cdp_alive,
+    kill_port as _kill_port,
+    kill_our_chromes as _kill_our_chromes,
+)
 
 
 
-# ── provider tab URLs ─────────────────────────────────────────────────
-
-PROVIDER_URLS: dict[str, str] = {
-    "chatgpt":    "https://chatgpt.com/",
-    "claude":     "https://claude.ai/",
-    "gemini":     "https://gemini.google.com/",
-    "deepseek":   "https://chat.deepseek.com/",
-    "mistral":    "https://chat.mistral.ai/",
-    "qwen":       "https://chat.qwen.ai/",
-    "huggingchat":"https://huggingface.co/chat/",
-    "perplexity": "https://www.perplexity.ai/",
-    "grok":       "https://grok.com/",
-    "poe":        "https://poe.com/",
-}
 
 
-# ── browser launch arguments ──────────────────────────────────────────
 
-CDP_PORT = 9222   # ClaudeRuntime attaches here
 
 
 def _chrome_args(profile_dir: pathlib.Path, off_screen: bool = True) -> list[str]:
@@ -242,7 +201,14 @@ class BrowserSupervisor:
             self._chrome_proc = None
             ready = True
         else:
-            # Kill any zombie listener (port open but not answering CDP)
+            # Kill any Chrome holding our profile — otherwise a new launch
+            # silently delegates to the running one and never binds CDP.
+            killed = _kill_our_chromes()
+            if killed:
+                self.log(f"killed {killed} stale Chrome(s) using our profile")
+                await asyncio.sleep(2.5)
+
+            # Also clear any zombie listener on 9222
             if _port_open(CDP_PORT):
                 self.log(f"port {CDP_PORT} held by non-CDP process — killing")
                 _kill_port(CDP_PORT)
@@ -255,12 +221,16 @@ class BrowserSupervisor:
             args = _chrome_args(self.profile_dir, off_screen=self.off_screen)
             cmd = [chrome] + args
             self.log(f"launching Chrome: {chrome}")
+            log_dir = pathlib.Path(".ainterceptor")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            chrome_log = open(log_dir / "chrome_launch.log", "ab")
             self._chrome_proc = subprocess.Popen(
                 cmd,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=chrome_log, stderr=chrome_log,
                 creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
                 | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             )
+            self.log(f"Chrome PID: {self._chrome_proc.pid}")
 
             ready = False
             for _ in range(60):
