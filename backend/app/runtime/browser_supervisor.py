@@ -149,14 +149,6 @@ class BrowserSupervisor:
         url = PROVIDER_URLS[provider]
         self.log(f"open tab: {provider} -> {url}")
         page = await self.state.context.new_page()
-        # install the network-tap wrapper BEFORE navigation so it runs
-        # before any site JS captures a reference to fetch/XHR/EventSource
-        try:
-            from app.runtime.path_b import _WRAPPER_JS
-            await page.add_init_script(_WRAPPER_JS)
-            self.log(f"init script installed for {provider}")
-        except Exception as e:
-            self.log(f"init script failed for {provider}: {e}")
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=45_000)
         except Exception as e:
