@@ -168,7 +168,8 @@ class BrowserSupervisor:
             # Kill the subprocess Chrome we launched
             try:
                 proc = getattr(self, "_chrome_proc", None)
-                if proc is not None:
+                if proc is not None and proc.poll() is None:
+                    # Only kill the Chrome if WE launched it
                     proc.terminate()
             except Exception:
                 pass
@@ -225,35 +226,50 @@ class BrowserSupervisor:
             raise RuntimeError(f"patchright not installed: {e}")
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
-        chrome = _find_chrome()
-        if not chrome:
-            raise RuntimeError("chrome.exe not found")
 
-        # Kill anything already on the CDP port
-        _kill_port(CDP_PORT)
-        await asyncio.sleep(1.0)
+        def _cdp_alive(port: int) -> bool:
+            import urllib.request as _u
+            try:
+                with _u.urlopen(f"http://127.0.0.1:{port}/json/version",
+                                timeout=1.0) as r:
+                    return "Browser" in r.read().decode("utf-8", "replace")
+            except Exception:
+                return False
 
-        args = _chrome_args(self.profile_dir, off_screen=self.off_screen)
-        cmd = [chrome] + args
-        # NOTE: we do NOT pass the provider URLs here — the supervisor will
-        # open tabs itself. Passing URLs causes duplicate tabs.
-        self.log(f"launching Chrome: {chrome}")
-        self._chrome_proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
-            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-        )
-
-        # Wait for CDP endpoint
-        ready = False
-        for _ in range(60):
-            await asyncio.sleep(0.5)
+        if _cdp_alive(CDP_PORT):
+            # Reuse the existing Chrome — do not launch a second one.
+            self.log(f"reusing existing Chrome on port {CDP_PORT}")
+            self._chrome_proc = None
+            ready = True
+        else:
+            # Kill any zombie listener (port open but not answering CDP)
             if _port_open(CDP_PORT):
-                ready = True
-                break
-        if not ready:
-            raise RuntimeError(f"Chrome CDP did not bind on port {CDP_PORT}")
+                self.log(f"port {CDP_PORT} held by non-CDP process — killing")
+                _kill_port(CDP_PORT)
+                await asyncio.sleep(2.0)
+
+            chrome = _find_chrome()
+            if not chrome:
+                raise RuntimeError("chrome.exe not found")
+
+            args = _chrome_args(self.profile_dir, off_screen=self.off_screen)
+            cmd = [chrome] + args
+            self.log(f"launching Chrome: {chrome}")
+            self._chrome_proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+            )
+
+            ready = False
+            for _ in range(60):
+                await asyncio.sleep(0.5)
+                if _cdp_alive(CDP_PORT):
+                    ready = True
+                    break
+            if not ready:
+                raise RuntimeError(f"Chrome CDP did not bind on port {CDP_PORT}")
 
         # Now attach via CDP — we do not own the browser
         self.state.pw = await async_playwright().start()
