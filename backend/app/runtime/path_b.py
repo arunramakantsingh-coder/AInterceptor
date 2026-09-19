@@ -24,67 +24,137 @@ def _dbg(*a):
         print('[path_b]', *a, file=sys.stderr, flush=True)
 
 
-# Injected into the page. Wraps window.fetch to tap SSE bodies.
-# Writes deltas to window.__ainterceptor_stream, which Python polls.
-_FETCH_WRAPPER_JS = r"""
+
+# Injected via add_init_script() BEFORE navigation so it lands before any
+# site JS captures a reference to the original fetch/XHR/EventSource.
+_WRAPPER_JS = r"""
 (function() {
   if (window.__ainterceptor_patched) return;
   window.__ainterceptor_patched = true;
-  window.__ainterceptor_stream = { chunks: [], done: false, error: null, started: false };
 
+  const init_state = () => ({
+    chunks: [], done: false, error: null, started: false, endpoint: null
+  });
+  window.__ainterceptor_stream = init_state();
+
+  const isCompletion = (url) => {
+    if (!url) return false;
+    const u = String(url);
+    if (/backend-api\/f\/conversation/.test(u) && !/prepare/.test(u)) return true;
+    if (/api\/v0\/chat\/completion/.test(u)) return true;
+    if (/\/completion/.test(u) && !/prepare/.test(u)) return true;
+    if (/StreamGenerate/.test(u)) return true;
+    return false;
+  };
+
+  const reset = (url) => {
+    window.__ainterceptor_stream = init_state();
+    window.__ainterceptor_stream.started = true;
+    window.__ainterceptor_stream.endpoint = url;
+  };
+  const push = (s) => {
+    if (s && s.length) window.__ainterceptor_stream.chunks.push(s);
+  };
+  const done = (err) => {
+    if (err) window.__ainterceptor_stream.error = String(err);
+    window.__ainterceptor_stream.done = true;
+  };
+
+  // ── fetch wrapper ──
   const origFetch = window.fetch;
   window.fetch = async function(...args) {
     let url = '';
     try {
       url = typeof args[0] === 'string' ? args[0]
            : (args[0] && args[0].url) || '';
-    } catch (e) { url = ''; }
+    } catch (e) {}
+    if (!isCompletion(url)) return origFetch.apply(this, args);
 
-    const isCompletion = /backend-api\/f\/conversation/.test(url) && !/prepare/.test(url)
-                       || /api\/v0\/chat\/completion/.test(url)
-                       || /\/completion$/.test(url);
-    if (!isCompletion) return origFetch.apply(this, args);
-
-    window.__ainterceptor_stream = { chunks: [], done: false, error: null, started: true };
+    reset(url);
     let resp;
     try {
       resp = await origFetch.apply(this, args);
-    } catch (e) {
-      window.__ainterceptor_stream.error = String(e);
-      window.__ainterceptor_stream.done = true;
-      throw e;
-    }
-    if (!resp.body || !resp.body.tee) {
-      window.__ainterceptor_stream.done = true;
-      return resp;
-    }
+    } catch (e) { done(e); throw e; }
+
+    if (!resp.body || !resp.body.tee) { done(); return resp; }
     const [a, b] = resp.body.tee();
     (async () => {
       const reader = b.getReader();
       const dec = new TextDecoder();
       try {
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value && value.length) {
-            window.__ainterceptor_stream.chunks.push(dec.decode(value, {stream: true}));
-          }
+          const { done: d, value } = await reader.read();
+          if (d) break;
+          if (value) push(dec.decode(value, {stream: true}));
         }
-      } catch (e) {
-        window.__ainterceptor_stream.error = String(e);
-      } finally {
-        window.__ainterceptor_stream.done = true;
-      }
+      } catch (e) { done(e); return; }
+      done();
     })();
     return new Response(a, {
-      status: resp.status,
-      statusText: resp.statusText,
-      headers: resp.headers
+      status: resp.status, statusText: resp.statusText, headers: resp.headers
     });
   };
+
+  // ── XHR wrapper ──
+  const OrigXHR = window.XMLHttpRequest;
+  window.XMLHttpRequest = function() {
+    const xhr = new OrigXHR();
+    let url = '';
+    const origOpen = xhr.open;
+    xhr.open = function(method, u, ...rest) {
+      url = u;
+      if (isCompletion(u)) reset(u);
+      return origOpen.call(this, method, u, ...rest);
+    };
+    let lastIndex = 0;
+    xhr.addEventListener('progress', () => {
+      if (!window.__ainterceptor_stream.started) return;
+      try {
+        const txt = xhr.responseText || '';
+        if (txt.length > lastIndex) {
+          push(txt.slice(lastIndex));
+          lastIndex = txt.length;
+        }
+      } catch (e) {}
+    });
+    xhr.addEventListener('load', () => {
+      if (!window.__ainterceptor_stream.started) return;
+      try {
+        const txt = xhr.responseText || '';
+        if (txt.length > lastIndex) {
+          push(txt.slice(lastIndex));
+          lastIndex = txt.length;
+        }
+      } catch (e) {}
+      done();
+    });
+    xhr.addEventListener('error', () => {
+      if (window.__ainterceptor_stream.started) done('xhr error');
+    });
+    return xhr;
+  };
+
+  // ── EventSource wrapper ──
+  const OrigES = window.EventSource;
+  if (OrigES) {
+    window.EventSource = function(url, opts) {
+      const es = new OrigES(url, opts);
+      if (isCompletion(url)) reset(url);
+      const origAdd = es.addEventListener;
+      es.addEventListener = function(type, listener, ...rest) {
+        const wrapped = function(ev) {
+          if (window.__ainterceptor_stream.started && ev && ev.data) {
+            push('data: ' + ev.data + '\n\n');
+          }
+          return listener.apply(this, arguments);
+        };
+        return origAdd.call(this, type, wrapped, ...rest);
+      };
+      return es;
+    };
+  }
 })();
 """
-
 
 class PathBError(Exception):
     pass
@@ -540,12 +610,17 @@ async def _stream_b_locked(provider: str, page: Any, prompt: str,
     except Exception:
         pass
 
-    # 1. Install the fetch wrapper (idempotent — checks a flag)
+    # 1. Ensure the wrapper is present (it should already be, via add_init_script)
     try:
-        await page.evaluate(_FETCH_WRAPPER_JS)
-        _dbg(f"{provider}: fetch wrapper installed")
+        patched = await page.evaluate("() => !!window.__ainterceptor_patched")
+        _dbg(f"{provider}: wrapper already installed: {patched}")
+        if not patched:
+            _dbg(f"{provider}: forcing wrapper install + reload")
+            await page.add_init_script(_WRAPPER_JS)
+            await page.reload(wait_until="domcontentloaded", timeout=30_000)
+            await asyncio.sleep(2)
     except Exception as e:
-        raise PathBError(f"{provider}: could not install fetch wrapper: {e}")
+        _dbg(f"{provider}: wrapper check failed: {e}")
 
     # 2. Reset any previous stream buffer
     try:
