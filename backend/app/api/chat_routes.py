@@ -46,10 +46,12 @@ async def chat(body: ChatIn,
                auth: tuple[User, ApiKey] = Depends(key_user),
                db: Session = Depends(get_db)):
     user, key = auth
-    provider = body.model.lower()
-    from app.providers_list import ALL_PROVIDERS
-    if provider not in ALL_PROVIDERS:
-        raise HTTPException(400, f"unknown model: {body.model}")
+    # Route via control plane (handles "auto", capabilities, or explicit providers)
+    from app.control_plane.router import select, NoProviderAvailable
+    try:
+        provider = select(body.model)
+    except NoProviderAvailable as e:
+        raise HTTPException(503, str(e))
 
     # Use last user message as prompt (Phase 1 simplification)
     prompt = next((m.content for m in reversed(body.messages)

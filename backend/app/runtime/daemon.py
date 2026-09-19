@@ -53,10 +53,16 @@ async def _bootstrap() -> dict:
     circuits = CircuitRegistry()
     sr.set_circuits(circuits)
 
-    # 2. supervisor
+    # 2. supervisor — only active providers get a tab
+    from app.control_plane.state import get_state
+    st = get_state()
+    active = st.list_active()
+    print(f"[daemon] active providers: {active}", flush=True)
+    print(f"[daemon] inactive (configured, not opened): {st.list_inactive()}", flush=True)
+
     supervisor = BrowserSupervisor(
         profile_dir=profile_dir,
-        providers=list(ALL_PROVIDERS),
+        providers=active,
         off_screen=True,
         headless=False,
     )

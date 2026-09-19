@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.providers_list import ALL_PROVIDERS
+from app.control_plane.state import get_state as _get_state
 
 router = APIRouter(tags=["health"])
 
@@ -33,10 +34,13 @@ def health(db: Session = Depends(get_db)):
     """Full health snapshot. Includes supervisor, exporter, prober, circuits."""
     from app.runtime import supervisor_registry
 
+    state = _get_state()
     out: dict = {
         "status": "ok",
         "version": "0.1.0",
         "db": "ok" if _db_ok(db) else "fail",
+        "providers_active": state.list_active(),
+        "providers_inactive": state.list_inactive(),
     }
 
     sup = supervisor_registry.get_supervisor()
