@@ -80,8 +80,15 @@ class HealthProber:
     # ── one full sweep ────────────────────────────────────────────────
 
     async def sweep(self) -> list[ProbeResult]:
+        # Defense-in-depth: intersect with active providers
+        try:
+            from app.control_plane.state import get_state
+            active = set(get_state().list_active())
+            providers = [p for p in self.providers if p in active]
+        except Exception:
+            providers = list(self.providers)
         results: list[ProbeResult] = []
-        for provider in self.providers:
+        for provider in providers:
             for path in ("A", "B"):
                 if path == "A" and provider not in self.path_a:
                     continue

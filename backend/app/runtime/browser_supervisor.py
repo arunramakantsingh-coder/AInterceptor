@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import os
 import pathlib
+import socket
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -63,6 +65,7 @@ class Tab:
 @dataclass
 class BrowserState:
     pw: Any = None
+    browser: Any = None
     context: Any = None
     tabs: dict[str, Tab] = field(default_factory=dict)
     started_at: float = 0.0
@@ -117,14 +120,22 @@ class BrowserSupervisor:
             except (asyncio.CancelledError, Exception):
                 pass
         async with self._lock:
+            # We do NOT own the context (attached via CDP). Just detach.
             try:
-                if self.state.context:
-                    await self.state.context.close()
+                if self.state.browser:
+                    await self.state.browser.close()
             except Exception:
                 pass
             try:
                 if self.state.pw:
                     await self.state.pw.stop()
+            except Exception:
+                pass
+            # Kill the subprocess Chrome we launched
+            try:
+                proc = getattr(self, "_chrome_proc", None)
+                if proc is not None:
+                    proc.terminate()
             except Exception:
                 pass
             self.state = BrowserState()
@@ -165,53 +176,74 @@ class BrowserSupervisor:
 
     # ── launch ────────────────────────────────────────────────────────
 
+
     async def _launch(self) -> None:
+        """Launch Chrome as a plain subprocess — Playwright does NOT own it.
+
+        This lets external CDP clients (like the runtime classes) attach
+        simultaneously. The previous launch_persistent_context() approach
+        made Playwright the owner of the CDP session, which caused every
+        other client to time out.
+        """
         try:
             from patchright.async_api import async_playwright
         except ImportError as e:
             raise RuntimeError(f"patchright not installed: {e}")
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
-        pw = await async_playwright().start()
+        chrome = _find_chrome()
+        if not chrome:
+            raise RuntimeError("chrome.exe not found")
+
+        # Kill anything already on the CDP port
+        _kill_port(CDP_PORT)
+        await asyncio.sleep(1.0)
+
         args = _chrome_args(self.profile_dir, off_screen=self.off_screen)
+        cmd = [chrome] + args
+        # NOTE: we do NOT pass the provider URLs here — the supervisor will
+        # open tabs itself. Passing URLs causes duplicate tabs.
+        self.log(f"launching Chrome: {chrome}")
+        self._chrome_proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+
+        # Wait for CDP endpoint
+        ready = False
+        for _ in range(60):
+            await asyncio.sleep(0.5)
+            if _port_open(CDP_PORT):
+                ready = True
+                break
+        if not ready:
+            raise RuntimeError(f"Chrome CDP did not bind on port {CDP_PORT}")
+
+        # Now attach via CDP — we do not own the browser
+        self.state.pw = await async_playwright().start()
         try:
-            ctx = await pw.chromium.launch_persistent_context(
-                user_data_dir=str(self.profile_dir),
-                headless=self.headless,
-                args=args,
+            self.state.browser = await asyncio.wait_for(
+                self.state.pw.chromium.connect_over_cdp(f"http://127.0.0.1:{CDP_PORT}"),
+                timeout=15,
+            )
+        except Exception as e:
+            raise RuntimeError(f"CDP attach failed: {e}")
+
+        contexts = self.state.browser.contexts
+        if not contexts:
+            self.state.context = await self.state.browser.new_context(
                 viewport={"width": 1400, "height": 900},
                 locale="en-US",
                 user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) "
                             "Chrome/130.0.0.0 Safari/537.36"),
             )
-        except Exception as e:
-            try:
-                await pw.stop()
-            except Exception:
-                pass
-            raise RuntimeError(f"chrome launch failed: {e}")
+        else:
+            self.state.context = contexts[0]
+        self.log(f"attached: {len(contexts) if contexts else 0} contexts")
 
-        self.state.pw = pw
-        self.state.context = ctx
-        self.log(f"chrome launched, profile={self.profile_dir}")
-
-    # ── health / watchdog ─────────────────────────────────────────────
-
-    def is_alive(self) -> bool:
-        try:
-            return bool(self.state.context and self.state.context.pages is not None)
-        except Exception:
-            return False
-
-    def snapshot(self) -> dict:
-        return {
-            "ready": self.state.ready,
-            "uptime_s": int(time.time() - self.state.started_at) if self.state.started_at else 0,
-            "restarts": self.state.restarts,
-            "tabs": list(self.state.tabs.keys()),
-            "alive": self.is_alive(),
-        }
 
     async def start_watchdog(self, interval_s: float = 10.0) -> None:
         if self._watchdog_task:

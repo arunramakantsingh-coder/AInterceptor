@@ -21,16 +21,29 @@ from typing import Any
 
 # login markers per provider — URL fragments indicating "not logged in"
 LOGIN_MARKERS: dict[str, tuple[str, ...]] = {
-    "claude":     ("/login", "/auth", "/signin", "claude.ai/login"),
-    "chatgpt":    ("/auth/login", "/auth/0", "/login"),
-    "gemini":     ("/accounts/", "signin", "accounts.google.com"),
-    "deepseek":   ("/login", "/auth", "/sign_in", "/signin"),
-    "mistral":    ("/login", "/auth"),
-    "qwen":       ("/login", "/auth"),
-    "huggingchat":("/login", "/auth"),
-    "perplexity": ("/login", "/auth"),
-    "grok":       ("/login", "/auth"),
-    "poe":        ("/login", "/auth"),
+    # Original 10
+    "claude":      ("/login", "/auth", "/signin", "claude.ai/login"),
+    "chatgpt":     ("/auth/login", "/auth/0", "/login"),
+    "gemini":      ("/accounts/", "signin", "accounts.google.com"),
+    "deepseek":    ("/login", "/auth", "/sign_in", "/signin"),
+    "mistral":     ("/login", "/auth", "/signin", "/sign-in"),
+    "qwen":        ("/login", "/auth", "/signin"),
+    "huggingchat": ("/login", "/auth", "signin"),
+    "perplexity":  ("/login", "/auth"),
+    "grok":        ("/login", "/auth", "/signin"),
+    "poe":         ("/login", "/auth", "/signin"),
+    # New 10 (Tier A)
+    "kimi":        ("/login", "/auth", "/signin"),
+    "yi":          ("/login", "/signin", "/auth"),
+    "lechat":      ("/login", "/auth", "/signin"),
+    "glm":         ("/login", "/auth", "/signin"),
+    "you":         ("/login", "/signin"),
+    "phind":       ("/login", "/signin"),
+    "doubao":      ("/login", "/signin", "/auth"),
+    # New 3 (Tier B)
+    "copilot":     ("/login", "/signin", "login.live.com"),
+    "meta":        ("/login", "/signin", "facebook.com/login", "instagram.com/accounts/login"),
+    "character":   ("/login", "/signin", "plus.character.ai"),
 }
 
 # how long to wait for login (seconds)

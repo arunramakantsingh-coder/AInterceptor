@@ -107,8 +107,12 @@ async def _bootstrap() -> dict:
         dispatcher_fn=_probe_dispatch,
         interval_s=probe_interval,
     )
-    prober.start()
-    sr.set_prober(prober)
+    if prober is not None:
+        prober.start()
+        sr.set_prober(prober)
+        print("[daemon] prober started", flush=True)
+    else:
+        print("[daemon] prober disabled (set AINTERCEPTOR_PROBER_ENABLED=1 to enable)", flush=True)
 
     print(f"[daemon] up. profile={profile_dir} exports={export_dir}", flush=True)
     return {
