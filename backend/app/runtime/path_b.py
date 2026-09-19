@@ -100,7 +100,7 @@ PARSERS: dict[str, Callable[[], ParserAdapter]] = {
 
 RESPONSE_MARKERS: dict[str, tuple[str, ...]] = {
     "claude":   ("/api/organizations/", "/completion", "claude.ai/api/"),
-    "chatgpt":  ("/backend-api/conversation", "chatgpt.com/backend-api"),
+    "chatgpt":  ("/backend-api/f/conversation", "/backend-api/conversation", "chatgpt.com/backend-api"),
     "gemini":   ("StreamGenerate", "assistant.lamda"),
     "deepseek": ("/api/v0/chat/completion", "chat.deepseek.com/api"),
 }
@@ -122,7 +122,15 @@ class CaptureResult:
 
 
 class CDPCapture:
-    """Attaches to a page's CDP and captures bytes for matching requests."""
+    """Attaches to a page's CDP and captures bytes for matching requests.
+
+    Preference: SSE responses (content-type: text/event-stream). Those are
+    the model's reply stream. Other matching responses (JSON metadata such
+    as /conversation/prepare, /sentinel/ping) are held as fallback and only
+    used if no SSE response arrives within a short window.
+    """
+
+    FALLBACK_AFTER_S = 4.0
 
     def __init__(self, page: Any, markers: tuple[str, ...], logger=None) -> None:
         self.page = page
@@ -131,8 +139,12 @@ class CDPCapture:
         self._cdp: Any = None
         self._candidates: set[str] = set()
         self._active: str | None = None
+        self._active_is_sse: bool = False
         self._result: CaptureResult | None = None
         self._queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+        self._pending_tasks: list[asyncio.Task] = []
+        self._fallback_task: asyncio.Task | None = None
+        self._fallback_candidates: list[str] = []
 
     # ── CDP event handlers ────────────────────────────────────────────
 
@@ -146,7 +158,7 @@ class CDPCapture:
         rid = str(ev.get("requestId") or "")
         if rid:
             self._candidates.add(rid)
-            self.log(f"candidate request {rid} {url[:80]}")
+            self.log(f"candidate request {rid} {url[:100]}")
 
     def _on_response(self, ev: dict) -> None:
         rid = str(ev.get("requestId") or "")
@@ -154,24 +166,55 @@ class CDPCapture:
             return
         resp = ev.get("response") or {}
         status = int(resp.get("status", 0))
+        url = str(resp.get("url") or "")
         headers = resp.get("headers") or {}
         ctype = str(headers.get("content-type") or headers.get("Content-Type") or "").lower()
-        # Accept only streaming/json — else skip
-        if not (ctype.startswith("text/event-stream")
-                or ctype.startswith("application/json")
-                or ctype.startswith("text/plain")
-                or status == 200):
+        is_sse = ctype.startswith("text/event-stream")
+
+        # Already locked on SSE — ignore everything else
+        if self._active_is_sse:
             return
+
+        # If this is SSE, activate immediately (preferred)
+        if is_sse:
+            self._activate(rid, url, status, ctype, is_sse=True)
+            return
+
+        # Otherwise hold as fallback and start a timer
         if self._active is None:
-            self._active = rid
-            self._result = CaptureResult(
-                request_id=rid,
-                url=str(resp.get("url") or ""),
-                status=status,
-                content_type=ctype,
-            )
-            self._queue.put_nowait(("started", self._result))
-            asyncio.create_task(self._pull_buffered(rid))
+            self._fallback_candidates.append(rid)
+            self.log(f"fallback candidate {rid} {ctype[:30]} {url[:80]}")
+            if self._fallback_task is None or self._fallback_task.done():
+                self._fallback_task = asyncio.create_task(
+                    self._fallback_after(self.FALLBACK_AFTER_S)
+                )
+
+    async def _fallback_after(self, delay: float) -> None:
+        """If no SSE response has arrived, activate the last JSON fallback."""
+        await asyncio.sleep(delay)
+        if self._active is not None:
+            return
+        if not self._fallback_candidates:
+            return
+        rid = self._fallback_candidates[-1]
+        self.log(f"fallback timer fired — activating {rid}")
+        # look up status/ctype from the stored result
+        self._activate(rid, "", 200, "application/json", is_sse=False)
+
+    def _activate(self, rid: str, url: str, status: int, ctype: str, is_sse: bool) -> None:
+        if self._active is not None and not is_sse:
+            return  # already have something; only SSE can override
+        self._active = rid
+        self._active_is_sse = is_sse
+        self._result = CaptureResult(
+            request_id=rid,
+            url=url,
+            status=status,
+            content_type=ctype,
+        )
+        self._queue.put_nowait(("started", self._result))
+        t = asyncio.create_task(self._pull_buffered(rid))
+        self._pending_tasks.append(t)
 
     async def _pull_buffered(self, rid: str) -> None:
         try:
@@ -181,7 +224,7 @@ class CDPCapture:
             if data:
                 self._queue.put_nowait(("data", base64.b64decode(data)))
         except Exception as e:
-            self.log(f"streamResourceContent failed: {e}")
+            self.log(f"streamResourceContent skipped: {e}")
 
     def _on_data(self, ev: dict) -> None:
         if str(ev.get("requestId") or "") != self._active:
@@ -212,12 +255,10 @@ class CDPCapture:
 
     async def __aenter__(self) -> "CDPCapture":
         self._cdp = await self.page.context.new_cdp_session(self.page)
-        # CRITICAL: disable buffering so SSE streams flow through to the page
-        await self._cdp.send("Network.enable", {
-            "maxTotalBufferSize": 0,
-            "maxResourceBufferSize": 0,
-            "maxPostDataSize": 0,
-        })
+        # NOTE: default buffering (no maxTotalBufferSize:0) — we rely on
+        # dataReceived events for streaming; streamResourceContent gives
+        # us the initial buffered chunk.
+        await self._cdp.send("Network.enable")
         try:
             await self._cdp.send("Network.setBypassServiceWorker", {"bypass": True})
         except Exception:
@@ -230,11 +271,33 @@ class CDPCapture:
         return self
 
     async def __aexit__(self, *a) -> None:
+        # Cancel any pending fallback / pull tasks so no async generator
+        # is left hanging when the surrounding context exits.
+        if self._fallback_task:
+            self._fallback_task.cancel()
+            try:
+                await self._fallback_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        for t in self._pending_tasks:
+            if not t.done():
+                t.cancel()
+        for t in self._pending_tasks:
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._pending_tasks.clear()
+
         if self._cdp:
-            try: await self._cdp.send("Network.disable")
-            except Exception: pass
-            try: await self._cdp.detach()
-            except Exception: pass
+            try:
+                await self._cdp.send("Network.disable")
+            except Exception:
+                pass
+            try:
+                await self._cdp.detach()
+            except Exception:
+                pass
             self._cdp = None
 
     async def wait_for_start(self, timeout: float = 30.0) -> CaptureResult:
