@@ -33,9 +33,10 @@ _WRAPPER_JS = r"""
   window.__ainterceptor_patched = true;
 
   const init_state = () => ({
-    chunks: [], done: false, error: null, started: false, endpoint: null
+    chunks: [], done: false, error: null, started: false, endpoint: null, seen: []
   });
   window.__ainterceptor_stream = init_state();
+  window.__ainterceptor_seen = [];
 
   const isCompletion = (url) => {
     if (!url) return false;
@@ -68,6 +69,7 @@ _WRAPPER_JS = r"""
       url = typeof args[0] === 'string' ? args[0]
            : (args[0] && args[0].url) || '';
     } catch (e) {}
+    try { window.__ainterceptor_seen.push({t: 'fetch', url: String(url)}); } catch(e){}
     if (!isCompletion(url)) return origFetch.apply(this, args);
 
     reset(url);
@@ -103,6 +105,7 @@ _WRAPPER_JS = r"""
     const origOpen = xhr.open;
     xhr.open = function(method, u, ...rest) {
       url = u;
+      try { window.__ainterceptor_seen.push({t: 'xhr', url: String(u)}); } catch(e){}
       if (isCompletion(u)) reset(u);
       return origOpen.call(this, method, u, ...rest);
     };
@@ -687,6 +690,15 @@ async def _stream_b_locked(provider: str, page: Any, prompt: str,
             started = True
             break
     if not started:
+        # Dump every URL the wrapper saw so we know what ChatGPT actually calls
+        try:
+            seen = await page.evaluate("() => (window.__ainterceptor_seen || []).slice(-40)")
+        except Exception as e:
+            seen = [{"error": f"evaluate failed: {e}"}]
+        _dbg(f"{provider}: NO REQUEST OBSERVED. Last URLs seen by wrapper:")
+        for entry in seen:
+            if isinstance(entry, dict):
+                _dbg(f"  [{entry.get('t')}] {entry.get('url')}")
         raise PathBError(f"{provider}: no request observed by fetch wrapper")
     _dbg(f"{provider}: wrapper saw request — draining")
 
