@@ -15,7 +15,13 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
+import os, sys
 from typing import Any, AsyncIterator, Callable
+
+DEBUG = os.environ.get('AINTERCEPTOR_PATH_B_DEBUG') == '1'
+def _dbg(*a):
+    if DEBUG:
+        print('[path_b]', *a, file=sys.stderr, flush=True)
 
 
 class PathBError(Exception):
@@ -430,32 +436,51 @@ async def stream_b(
         raise PathBError(f"{provider}: no response markers registered")
 
     parser = PARSERS[provider]()
+    _dbg(f"=== {provider}: start === prompt={prompt[:40]!r}")
+    _dbg(f"{provider}: url={page.url if hasattr(page,'url') else '?'}")
     async with CDPCapture(page, markers, logger=log) as cap:
-        # try fetch path first, then composer
-        log(f"{provider}: submitting via page.evaluate")
+        _dbg(f"{provider}: submitting via page.evaluate")
         submitted = await _submit_via_page_fetch(page, provider, prompt)
         if not submitted:
-            log(f"{provider}: falling back to composer click")
-            await _submit_via_composer(page, provider, prompt)
+            _dbg(f"{provider}: falling back to composer click")
+            try:
+                await _submit_via_composer(page, provider, prompt)
+                _dbg(f"{provider}: composer submit done")
+            except Exception as e:
+                _dbg(f"{provider}: composer submit FAILED: {e}")
+                raise
 
-        log(f"{provider}: waiting for response to start")
+        _dbg(f"{provider}: waiting for response to start")
         try:
-            await cap.wait_for_start(timeout=30)
+            result = await cap.wait_for_start(timeout=30)
+            _dbg(f"{provider}: response started: status={result.status} "
+                 f"ctype={result.content_type!r} url={result.url[:80]}")
         except asyncio.TimeoutError:
+            _dbg(f"{provider}: TIMEOUT waiting for response. "
+                 f"candidates_seen={sorted(cap._candidates)}")
             raise PathBError(f"{provider}: no matching request observed")
-        log(f"{provider}: capturing stream")
 
+        _dbg(f"{provider}: draining stream")
         emitted = 0
+        chunks = 0
+        total_bytes = 0
         async for chunk in cap.drain(timeout=180):
+            chunks += 1
+            total_bytes += len(chunk)
             text = parser.feed(chunk)
             if len(text) > emitted:
                 yield text[emitted:]
                 emitted = len(text)
 
-        # flush whatever remains after the stream closed
+        _dbg(f"{provider}: stream closed: chunks={chunks} bytes={total_bytes} "
+             f"chars_emitted={emitted} parser_final={len(parser.current())}")
+
         tail = parser.current()
         if len(tail) > emitted:
             yield tail[emitted:]
+            emitted = len(tail)
 
         if emitted == 0:
+            _dbg(f"{provider}: NO TEXT. parser.current()={parser.current()!r}")
             raise PathBError(f"{provider}: stream produced no text")
+        _dbg(f"{provider}: DONE emitted={emitted} chars")
