@@ -16,6 +16,40 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+def _find_chrome() -> str | None:
+    for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"):
+        if pathlib.Path(c).exists():
+            return c
+    return None
+
+
+def _port_open(port: int) -> bool:
+    import socket as _sock
+    s = _sock.socket(); s.settimeout(0.4)
+    try:
+        s.connect(("127.0.0.1", port)); return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def _kill_port(port: int) -> None:
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"Get-NetTCPConnection -LocalPort {port} -State Listen -EA SilentlyContinue | "
+             "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"],
+            capture_output=True, timeout=10,
+        )
+    except Exception:
+        pass
+
+
+
 # ── provider tab URLs ─────────────────────────────────────────────────
 
 PROVIDER_URLS: dict[str, str] = {
