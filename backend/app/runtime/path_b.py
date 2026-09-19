@@ -24,7 +24,79 @@ def _dbg(*a):
         print('[path_b]', *a, file=sys.stderr, flush=True)
 
 
+# Injected into the page. Wraps window.fetch to tap SSE bodies.
+# Writes deltas to window.__ainterceptor_stream, which Python polls.
+_FETCH_WRAPPER_JS = r"""
+(function() {
+  if (window.__ainterceptor_patched) return;
+  window.__ainterceptor_patched = true;
+  window.__ainterceptor_stream = { chunks: [], done: false, error: null, started: false };
+
+  const origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    let url = '';
+    try {
+      url = typeof args[0] === 'string' ? args[0]
+           : (args[0] && args[0].url) || '';
+    } catch (e) { url = ''; }
+
+    const isCompletion = /backend-api\/f\/conversation/.test(url) && !/prepare/.test(url)
+                       || /api\/v0\/chat\/completion/.test(url)
+                       || /\/completion$/.test(url);
+    if (!isCompletion) return origFetch.apply(this, args);
+
+    window.__ainterceptor_stream = { chunks: [], done: false, error: null, started: true };
+    let resp;
+    try {
+      resp = await origFetch.apply(this, args);
+    } catch (e) {
+      window.__ainterceptor_stream.error = String(e);
+      window.__ainterceptor_stream.done = true;
+      throw e;
+    }
+    if (!resp.body || !resp.body.tee) {
+      window.__ainterceptor_stream.done = true;
+      return resp;
+    }
+    const [a, b] = resp.body.tee();
+    (async () => {
+      const reader = b.getReader();
+      const dec = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value && value.length) {
+            window.__ainterceptor_stream.chunks.push(dec.decode(value, {stream: true}));
+          }
+        }
+      } catch (e) {
+        window.__ainterceptor_stream.error = String(e);
+      } finally {
+        window.__ainterceptor_stream.done = true;
+      }
+    })();
+    return new Response(a, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: resp.headers
+    });
+  };
+})();
+"""
+
+
 class PathBError(Exception):
+    pass
+
+
+_PROVIDER_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _lock_for(provider: str) -> asyncio.Lock:
+    if provider not in _PROVIDER_LOCKS:
+        _PROVIDER_LOCKS[provider] = asyncio.Lock()
+    return _PROVIDER_LOCKS[provider]
     pass
 
 
@@ -452,61 +524,124 @@ async def stream_b(
     if not markers:
         raise PathBError(f"{provider}: no response markers registered")
 
+    lock = _lock_for(provider)
+    async with lock:
+        async for delta in _stream_b_locked(provider, page, prompt, markers, log):
+            yield delta
+
+
+async def _stream_b_locked(provider: str, page: Any, prompt: str,
+                           markers: tuple[str, ...], log) -> AsyncIterator[str]:
+    """Submit prompt; stream reply via injected fetch wrapper."""
     parser = PARSERS[provider]()
     _dbg(f"=== {provider}: start === prompt={prompt[:40]!r}")
-    _dbg(f"{provider}: url={page.url if hasattr(page,'url') else '?'}")
-    async with CDPCapture(page, markers, logger=log) as cap:
-        _dbg(f"{provider}: submitting via page.evaluate")
-        submitted = await _submit_via_page_fetch(page, provider, prompt)
-        if not submitted:
-            _dbg(f"{provider}: falling back to composer click")
-            try:
-                await _submit_via_composer(page, provider, prompt)
-                _dbg(f"{provider}: composer submit done")
-            except Exception as e:
-                _dbg(f"{provider}: composer submit FAILED: {e}")
-                raise
+    try:
+        _dbg(f"{provider}: url={page.url}")
+    except Exception:
+        pass
 
-        _dbg(f"{provider}: waiting for response to start")
+    # 1. Install the fetch wrapper (idempotent — checks a flag)
+    try:
+        await page.evaluate(_FETCH_WRAPPER_JS)
+        _dbg(f"{provider}: fetch wrapper installed")
+    except Exception as e:
+        raise PathBError(f"{provider}: could not install fetch wrapper: {e}")
+
+    # 2. Reset any previous stream buffer
+    try:
+        await page.evaluate("() => { window.__ainterceptor_stream = "
+                            "{ chunks: [], done: false, error: null, started: false }; }")
+    except Exception:
+        pass
+
+    # 3. Submit
+    _dbg(f"{provider}: submitting via page.evaluate")
+    submitted = await _submit_via_page_fetch(page, provider, prompt)
+    if not submitted:
+        _dbg(f"{provider}: falling back to composer click")
         try:
-            result = await cap.wait_for_start(timeout=30)
-            _dbg(f"{provider}: response started: status={result.status} "
-                 f"ctype={result.content_type!r} url={result.url[:80]}")
-        except asyncio.TimeoutError:
-            _dbg(f"{provider}: TIMEOUT waiting for response. "
-                 f"candidates_seen={sorted(cap._candidates)}")
-            raise PathBError(f"{provider}: no matching request observed")
+            await _submit_via_composer(page, provider, prompt)
+            _dbg(f"{provider}: composer submit done")
+        except Exception as e:
+            _dbg(f"{provider}: composer submit FAILED: {e}")
+            raise
 
-        _dbg(f"{provider}: draining stream")
-        emitted = 0
-        chunks = 0
-        total_bytes = 0
-        async for chunk in cap.drain(timeout=180):
-            chunks += 1
-            total_bytes += len(chunk)
-            text = parser.feed(chunk)
-            if len(text) > emitted:
-                yield text[emitted:]
-                emitted = len(text)
+    # 4. Wait for the wrapper to see the request start
+    _dbg(f"{provider}: waiting for wrapper to see the request")
+    t0 = time.monotonic()
+    started = False
+    while time.monotonic() - t0 < 30:
+        await asyncio.sleep(0.3)
+        try:
+            state = await page.evaluate(
+                "() => ({ started: window.__ainterceptor_stream.started,"
+                " done: window.__ainterceptor_stream.done })"
+            )
+        except Exception:
+            continue
+        if state.get("started"):
+            started = True
+            break
+    if not started:
+        raise PathBError(f"{provider}: no request observed by fetch wrapper")
+    _dbg(f"{provider}: wrapper saw request — draining")
 
-        _dbg(f"{provider}: stream closed: chunks={chunks} bytes={total_bytes} "
-             f"chars_emitted={emitted} parser_final={len(parser.current())}")
+    # 5. Drain — poll chunks from the buffer
+    emitted = 0
+    last_chunk_count = 0
+    deadline = time.monotonic() + 180
+    empty_loops = 0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(0.2)
+        try:
+            payload = await page.evaluate(
+                "() => {"
+                "  const s = window.__ainterceptor_stream;"
+                "  const chunks = s.chunks.splice(0);"
+                "  return { chunks, done: s.done, error: s.error };"
+                "}"
+            )
+        except Exception as e:
+            _dbg(f"{provider}: evaluate error: {e}")
+            empty_loops += 1
+            if empty_loops > 100:
+                break
+            continue
 
-        tail = parser.current()
-        if len(tail) > emitted:
-            yield tail[emitted:]
-            emitted = len(tail)
+        chunks = payload.get("chunks") or []
+        if chunks:
+            empty_loops = 0
+            for c in chunks:
+                if isinstance(c, str):
+                    text = parser.feed(c.encode("utf-8", "replace"))
+                    if len(text) > emitted:
+                        yield text[emitted:]
+                        emitted = len(text)
+        else:
+            empty_loops += 1
 
-        if emitted == 0:
-            _dbg(f"{provider}: NO TEXT. parser.current()={parser.current()!r}")
-            dump_path = parser.dump_raw(provider)
-            if dump_path:
-                _dbg(f"{provider}: raw bytes dumped to {dump_path}")
-                # also show a preview
-                try:
-                    preview = bytes(parser._buf[:400]).decode("utf-8", errors="replace")
-                    _dbg(f"{provider}: raw preview:\n{preview!r}")
-                except Exception:
-                    pass
-            raise PathBError(f"{provider}: stream produced no text")
-        _dbg(f"{provider}: DONE emitted={emitted} chars")
+        if payload.get("done"):
+            _dbg(f"{provider}: wrapper done")
+            break
+        if payload.get("error"):
+            _dbg(f"{provider}: wrapper error: {payload['error']}")
+            break
+
+        if empty_loops > 300:   # 60s of nothing while not done
+            _dbg(f"{provider}: no chunks for 60s — giving up")
+            break
+
+    tail = parser.current()
+    if len(tail) > emitted:
+        yield tail[emitted:]
+        emitted = len(tail)
+
+    _dbg(f"{provider}: DONE emitted={emitted} chars, parser_final={len(parser.current())}")
+
+    if emitted == 0:
+        dump = parser.dump_raw(provider)
+        if dump:
+            _dbg(f"{provider}: raw bytes dumped to {dump}")
+        raise PathBError(f"{provider}: stream produced no text")
+
+
