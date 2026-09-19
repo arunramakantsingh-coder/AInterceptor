@@ -30,6 +30,33 @@ from app.runtime._chrome_helpers import (
 
 
 
+CDP_PORT = 9222
+
+
+PROVIDER_URLS: dict[str, str] = {
+    "chatgpt":     "https://chatgpt.com/",
+    "claude":      "https://claude.ai/",
+    "gemini":      "https://gemini.google.com/",
+    "deepseek":    "https://chat.deepseek.com/",
+    "mistral":     "https://chat.mistral.ai/",
+    "lechat":      "https://chat.mistral.ai/chat",
+    "qwen":        "https://chat.qwen.ai/",
+    "kimi":        "https://www.kimi.com/",
+    "yi":          "https://platform.lingyiwanwu.com/",
+    "glm":         "https://chat.z.ai/",
+    "doubao":      "https://www.dola.com/",
+    "huggingchat": "https://huggingface.co/chat/",
+    "perplexity":  "https://www.perplexity.ai/",
+    "you":         "https://you.com/",
+    "phind":       "https://www.phind.com/",
+    "grok":        "https://grok.com/",
+    "meta":        "https://www.meta.ai/",
+    "copilot":     "https://copilot.microsoft.com/",
+    "character":   "https://character.ai/",
+    "poe":         "https://poe.com/",
+}
+
+
 def _chrome_args(profile_dir: pathlib.Path, off_screen: bool = True) -> list[str]:
     pos = "-32000,-32000" if off_screen else "100,100"
     return [
@@ -186,15 +213,6 @@ class BrowserSupervisor:
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
 
-        def _cdp_alive(port: int) -> bool:
-            import urllib.request as _u
-            try:
-                with _u.urlopen(f"http://127.0.0.1:{port}/json/version",
-                                timeout=1.0) as r:
-                    return "Browser" in r.read().decode("utf-8", "replace")
-            except Exception:
-                return False
-
         if _cdp_alive(CDP_PORT):
             # Reuse the existing Chrome — do not launch a second one.
             self.log(f"reusing existing Chrome on port {CDP_PORT}")
@@ -290,7 +308,9 @@ class BrowserSupervisor:
 # ── off-screen enforcement (Windows) ──────────────────────────────────
 
 def push_chrome_off_screen() -> int:
-    """Move every visible Chrome window off-screen. Returns count moved."""
+    """Hide every Chrome window belonging to us. Belt-and-suspenders:
+    MoveWindow off-screen + ShowWindow(SW_HIDE). Returns count hidden.
+    """
     if not sys.platform.startswith("win"):
         return 0
     try:
@@ -298,10 +318,19 @@ def push_chrome_off_screen() -> int:
         from ctypes import wintypes
         u = ctypes.windll.user32
         CB = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-        moved = 0
+        SW_HIDE = 0
+
+        # Titles we consider "ours" — anything with our provider names
+        # or Chrome running with our debug port marker.
+        markers = (
+            "chatgpt", "claude", "gemini", "deepseek", "mistral", "qwen",
+            "kimi", "grok", "perplexity", "poe", "copilot", "meta",
+            "ainterceptor", "chrome",
+        )
+        hidden = 0
 
         def cb(hwnd, lp):
-            nonlocal moved
+            nonlocal hidden
             try:
                 n = u.GetWindowTextLengthW(hwnd)
                 if not n:
@@ -309,20 +338,19 @@ def push_chrome_off_screen() -> int:
                 buf = ctypes.create_unicode_buffer(n + 1)
                 u.GetWindowTextW(hwnd, buf, n + 1)
                 title = buf.value.lower()
-                if "chrome" not in title and not any(
-                    k in title for k in ("claude", "chatgpt", "gemini", "deepseek",
-                                         "mistral", "qwen", "perplexity", "grok", "poe")
-                ):
+                if not any(k in title for k in markers):
                     return True
-                if not u.IsWindowVisible(hwnd):
-                    return True
+                # Belt
                 u.MoveWindow(hwnd, -32000, -32000, 1400, 900, True)
-                moved += 1
+                # Suspenders
+                u.ShowWindow(hwnd, SW_HIDE)
+                hidden += 1
             except Exception:
                 pass
             return True
 
         u.EnumWindows(CB(cb), 0)
-        return moved
+        return hidden
     except Exception:
         return 0
+

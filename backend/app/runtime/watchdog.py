@@ -23,13 +23,13 @@ def _tick():
         return 0
 
 
-def _loop(interval: float = 3.0):
+def _loop(interval: float = 1.0):
     while not _stop.is_set():
         _tick()
         _stop.wait(interval)
 
 
-def start(interval: float = 3.0) -> bool:
+def start(interval: float = 1.0) -> bool:
     """Start the watchdog thread. Idempotent. No-op on non-Windows."""
     global _started
     if _started:
