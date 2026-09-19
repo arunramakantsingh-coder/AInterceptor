@@ -41,17 +41,34 @@ class ParserAdapter:
     def __init__(self) -> None:
         self._buf = bytearray()
         self._last = ""
+        self._dump_requested = False
 
     def feed(self, chunk: bytes) -> str:
         if chunk:
             self._buf.extend(chunk)
         try:
             text = self._parse(bytes(self._buf))
-        except Exception:
+        except Exception as e:
+            import sys as _s
+            if os.environ.get("AINTERCEPTOR_PATH_B_DEBUG") == "1":
+                print(f"[parser] _parse error: {e}", file=_s.stderr, flush=True)
             text = self._last
         if len(text) >= len(self._last):
             self._last = text
         return self._last
+
+    def dump_raw(self, provider: str) -> str:
+        """Write raw bytes to .evidence/raw for inspection."""
+        try:
+            import datetime as _dt
+            d = pathlib.Path(".evidence/raw")
+            d.mkdir(parents=True, exist_ok=True)
+            stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            f = d / f"{provider}_{stamp}.sse"
+            f.write_bytes(bytes(self._buf))
+            return str(f)
+        except Exception:
+            return ""
 
     def current(self) -> str:
         return self._last
@@ -482,5 +499,14 @@ async def stream_b(
 
         if emitted == 0:
             _dbg(f"{provider}: NO TEXT. parser.current()={parser.current()!r}")
+            dump_path = parser.dump_raw(provider)
+            if dump_path:
+                _dbg(f"{provider}: raw bytes dumped to {dump_path}")
+                # also show a preview
+                try:
+                    preview = bytes(parser._buf[:400]).decode("utf-8", errors="replace")
+                    _dbg(f"{provider}: raw preview:\n{preview!r}")
+                except Exception:
+                    pass
             raise PathBError(f"{provider}: stream produced no text")
         _dbg(f"{provider}: DONE emitted={emitted} chars")
