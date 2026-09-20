@@ -31,7 +31,7 @@ def dashboard_home(user: User = Depends(current_user_web),
     dev_count = db.query(Device).filter(
         Device.user_id == user.id, Device.revoked_at.is_(None)).count()
 
-    body = f'''
+    body = W.dashboard_nav("/dashboard") + f'''
 <div class="container">
   <h2>Welcome{", " + W.esc(user.name) if user.name else ""}</h2>
   <p class="muted" style="margin-top:6px">Signed in as {W.esc(user.email)}</p>
@@ -141,7 +141,7 @@ def _keys_page(user: User, db: Session,
 
     err_block = f'<div class="err" style="margin-top:12px;">{W.esc(error)}</div>' if error else ""
 
-    body = f'''
+    body = W.dashboard_nav("/dashboard/keys") + f'''
 <div class="container">
   <div class="row" style="justify-content:space-between;">
     <div>
@@ -244,7 +244,7 @@ def dashboard_sessions(user: User = Depends(current_user_web),
         )
     else:
         table = '<p class="muted">No sessions yet. Connect a provider to get started.</p>'
-    body = f'''
+    body = W.dashboard_nav("/dashboard/sessions") + f'''
 <div class="container">
   <div class="row" style="justify-content:space-between;">
     <div><h2>Provider sessions</h2>
@@ -280,7 +280,7 @@ def dashboard_devices(user: User = Depends(current_user_web),
         )
     else:
         table = '<p class="muted">No devices connected. Device flow arrives in Phase D.</p>'
-    body = f'''
+    body = W.dashboard_nav("/dashboard/devices") + f'''
 <div class="container">
   <div class="row" style="justify-content:space-between;">
     <div><h2>Devices</h2>

@@ -42,6 +42,10 @@ button:hover, .btn:hover { background: #2563eb; text-decoration: none; }
 .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
 .row { display: flex; gap: 12px; align-items: center; }
 .grid { display: grid; gap: 14px; }
+.dashboard-nav { display: flex; gap: 4px; padding: 0 20px; background: #0f0f0f; border-bottom: 1px solid #1f1f1f; }
+.dashboard-nav a { padding: 10px 14px; font-size: 13px; color: #999; border-bottom: 2px solid transparent; }
+.dashboard-nav a:hover { color: #fff; text-decoration: none; }
+.dashboard-nav a.active { color: #fff; border-bottom-color: #1d4ed8; }
 """
 
 
@@ -90,3 +94,19 @@ def esc(s: str | None) -> str:
         return ""
     return (str(s).replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace('"', "&quot;"))
+
+def dashboard_nav(current: str = "") -> str:
+    items = [
+        ("/dashboard", "Overview"),
+        ("/dashboard/keys", "API keys"),
+        ("/dashboard/sessions", "Sessions"),
+        ("/dashboard/devices", "Devices"),
+        ("/dashboard/connect", "Connect device"),
+        ("/login", "Admin login (VNC)"),
+    ]
+    parts = ['<div class="dashboard-nav">']
+    for href, label in items:
+        cls = "active" if href == current else ""
+        parts.append(f'<a href="{href}" class="{cls}">{label}</a>')
+    parts.append("</div>")
+    return "".join(parts)

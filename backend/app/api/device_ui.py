@@ -98,7 +98,7 @@ def _connect_page(user: User, db: Session) -> HTMLResponse:
             '</div>'
         )
 
-    body = (
+    body = W.dashboard_nav("/dashboard/connect") + (
         '<div class="container">'
         '<div class="row" style="justify-content:space-between;">'
         '<div><h2>Connect a device</h2>'
