@@ -1,6 +1,6 @@
 """FastAPI dependencies."""
 from __future__ import annotations
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import User, ApiKey
@@ -60,3 +60,34 @@ def current_user_or_key(authorization: str = Header(...),
         if user and user.is_active:
             return user
     raise HTTPException(401, "invalid token")
+
+SESSION_COOKIE = "aint_session"
+
+
+def current_user_web(request: Request, db: Session = Depends(get_db)) -> User:
+    """Cookie-based auth for HTML routes.
+
+    On failure: raises HTTPException(303) so the browser is redirected
+    to /auth/login?next=<original path>. JSON clients should use
+    current_user (Bearer header) or key_user (Bearer sk-aint-*) instead.
+    """
+    token = request.cookies.get(SESSION_COOKIE)
+    next_path = request.url.path
+    if not token:
+        raise HTTPException(
+            status_code=303,
+            headers={"Location": f"/auth/login?next={next_path}"},
+        )
+    uid = read_jwt(token)
+    if not uid:
+        raise HTTPException(
+            status_code=303,
+            headers={"Location": f"/auth/login?next={next_path}"},
+        )
+    user = db.get(User, uid)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=303,
+            headers={"Location": f"/auth/login?next={next_path}"},
+        )
+    return user

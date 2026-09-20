@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth_routes, keys_routes, health_routes, sessions_routes, chat_routes, login_routes, admin_routes
 from app.api import login_page
+from app.api import dashboard_routes
+from fastapi import Request as _Req
+from fastapi.responses import RedirectResponse as _RR
 
 app = FastAPI(title="AInterceptor", version="0.1.0")
 
@@ -28,12 +31,21 @@ app.include_router(chat_routes.router)
 app.include_router(login_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(login_page.router)
+app.include_router(dashboard_routes.router)
 
 
 @app.get("/")
-def root():
+def root(request: _Req):
+    """Browser -> dashboard/login. API client -> JSON discovery."""
+    accept = (request.headers.get("accept") or "").lower()
+    if "text/html" in accept:
+        from app.deps import SESSION_COOKIE
+        return _RR("/dashboard" if request.cookies.get(SESSION_COOKIE)
+                   else "/auth/login")
     return {"name": "AInterceptor", "version": "0.1.0",
-            "docs": "/docs", "health": "/healthz"}
+            "docs": "/docs", "health": "/healthz",
+            "login": "/auth/login", "signup": "/auth/signup",
+            "dashboard": "/dashboard"}
 
 # noVNC static assets (served from /opt/noVNC)
 try:
