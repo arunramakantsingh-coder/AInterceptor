@@ -1,16 +1,19 @@
-"""User dashboard — shell now, keys/sessions/devices in later phases."""
+"""User dashboard — shell + API keys UI."""
 from __future__ import annotations
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import User, ApiKey, UserSession, Device
+from app.auth import generate_api_key
 from app.deps import current_user_web
 from app.api import web_common as W
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+
+# ── home ─────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
 def dashboard_home(user: User = Depends(current_user_web),
@@ -58,26 +61,154 @@ def dashboard_home(user: User = Depends(current_user_web),
     return HTMLResponse(W.page("Dashboard", body, W.topbar(user.email)))
 
 
-@router.get("/keys", response_class=HTMLResponse)
-def dashboard_keys(user: User = Depends(current_user_web),
-                   db: Session = Depends(get_db)):
+# ── API keys ─────────────────────────────────────────────────────────
+
+def _keys_page(user: User, db: Session,
+               new_key: str | None = None, error: str = "") -> HTMLResponse:
+    rows = (db.query(ApiKey)
+            .filter(ApiKey.user_id == user.id)
+            .order_by(ApiKey.created_at.desc())
+            .all())
+
+    if rows:
+        trs = ""
+        for r in rows:
+            revoked = r.revoked_at is not None
+            status = ('<span style="color:#f87171">revoked</span>' if revoked
+                      else '<span style="color:#4ade80">active</span>')
+            last_used = (r.last_used_at.strftime("%Y-%m-%d %H:%M")
+                         if r.last_used_at else "never")
+            action = "" if revoked else (
+                f'<form method="POST" action="/dashboard/keys/{r.id}/revoke" '
+                f'style="display:inline" '
+                f'onsubmit="return confirm(\'Revoke this key? Apps using it will stop working.\')">'
+                f'<button type="submit" class="btn-secondary" '
+                f'style="padding:5px 12px; font-size:12px;">revoke</button></form>'
+            )
+            trs += (
+                f'<tr>'
+                f'<td style="padding:12px 8px;border-bottom:1px solid #1f1f1f;">'
+                f'{W.esc(r.name)}</td>'
+                f'<td style="padding:12px 8px;border-bottom:1px solid #1f1f1f;'
+                f'font-family:monospace;font-size:12px;">{W.esc(r.key_prefix)}…</td>'
+                f'<td style="padding:12px 8px;border-bottom:1px solid #1f1f1f;">{status}</td>'
+                f'<td style="padding:12px 8px;border-bottom:1px solid #1f1f1f;'
+                f'color:#888;font-size:12px;">{last_used}</td>'
+                f'<td style="padding:12px 8px;border-bottom:1px solid #1f1f1f;'
+                f'text-align:right;">{action}</td>'
+                f'</tr>'
+            )
+        table = (
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            '<thead><tr style="text-align:left;color:#888;">'
+            '<th style="padding:8px;">Name</th>'
+            '<th style="padding:8px;">Prefix</th>'
+            '<th style="padding:8px;">Status</th>'
+            '<th style="padding:8px;">Last used</th>'
+            '<th style="padding:8px;"></th>'
+            '</tr></thead>'
+            f'<tbody>{trs}</tbody></table>'
+        )
+    else:
+        table = '<p class="muted">No keys yet. Create one below.</p>'
+
+    new_block = ""
+    if new_key:
+        new_block = f'''
+<div class="card" style="margin-top:20px; border-color:#1d4ed8;">
+  <h3 style="color:#60a5fa;">Your new API key</h3>
+  <p class="muted" style="margin-bottom:12px;">
+    This is shown <strong>once</strong>. Copy it now — you won't be able to see it again.
+  </p>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <input type="text" value="{W.esc(new_key)}" readonly
+           style="flex:1; font-family:monospace; font-size:13px;"
+           onclick="this.select()" id="newkey">
+    <button type="button" class="btn-secondary" onclick="
+      navigator.clipboard.writeText(document.getElementById('newkey').value);
+      this.textContent='copied';
+      setTimeout(()=>this.textContent='copy', 1500);
+    ">copy</button>
+  </div>
+</div>
+'''
+
+    err_block = f'<div class="err" style="margin-top:12px;">{W.esc(error)}</div>' if error else ""
+
     body = f'''
 <div class="container">
   <div class="row" style="justify-content:space-between;">
-    <div><h2>API keys</h2>
-      <p class="muted">Use these with CareerOS or any external app.</p></div>
+    <div>
+      <h2>API keys</h2>
+      <p class="muted">Use these with CareerOS or any external app.</p>
+    </div>
     <a class="btn btn-secondary" href="/dashboard">← back</a>
   </div>
+  {new_block}
   <div class="card" style="margin-top:20px;">
-    <p class="muted">Key management UI arrives in Phase B. For now, use the CLI:</p>
-    <pre style="background:#0a0a0a; padding:14px; border-radius:6px; color:#ccc; font-size:12px; overflow-x:auto;">akeys create &lt;name&gt; --save
-akeys list
-akeys revoke &lt;id&gt;</pre>
+    {table}
+  </div>
+  <div class="card" style="margin-top:20px;">
+    <h3>Create a new key</h3>
+    <form method="POST" action="/dashboard/keys" style="margin-top:10px;">
+      <label>Key name (for your reference, e.g. "careeros-prod")</label>
+      <input type="text" name="name" required maxlength="64"
+             pattern="[a-zA-Z0-9_\\-]+"
+             title="letters, digits, underscore, hyphen only"
+             placeholder="careeros-prod" autocomplete="off">
+      {err_block}
+      <div style="margin-top:16px;"><button type="submit">Create key</button></div>
+    </form>
   </div>
 </div>
 '''
     return HTMLResponse(W.page("API keys", body, W.topbar(user.email)))
 
+
+@router.get("/keys", response_class=HTMLResponse)
+def dashboard_keys(user: User = Depends(current_user_web),
+                   db: Session = Depends(get_db)):
+    return _keys_page(user, db)
+
+
+@router.post("/keys", response_class=HTMLResponse)
+def dashboard_keys_create(
+    name: str = Form(...),
+    user: User = Depends(current_user_web),
+    db: Session = Depends(get_db),
+):
+    name = (name or "").strip()
+    if not name or len(name) > 64:
+        return _keys_page(user, db, error="Name must be 1-64 characters.")
+    if not all(c.isalnum() or c in "_-" for c in name):
+        return _keys_page(user, db,
+                          error="Name may only contain letters, digits, _, -")
+
+    full, prefix, hashed = generate_api_key()
+    row = ApiKey(user_id=user.id, key_hash=hashed, key_prefix=prefix, name=name)
+    db.add(row)
+    db.commit()
+
+    return _keys_page(user, db, new_key=full)
+
+
+@router.post("/keys/{key_id}/revoke", response_class=HTMLResponse)
+def dashboard_keys_revoke(
+    key_id: str,
+    user: User = Depends(current_user_web),
+    db: Session = Depends(get_db),
+):
+    k = db.get(ApiKey, key_id)
+    if not k or k.user_id != user.id:
+        raise HTTPException(404, "key not found")
+    if k.revoked_at is None:
+        from datetime import datetime, timezone
+        k.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+    return _keys_page(user, db)
+
+
+# ── sessions ─────────────────────────────────────────────────────────
 
 @router.get("/sessions", response_class=HTMLResponse)
 def dashboard_sessions(user: User = Depends(current_user_web),
@@ -111,6 +242,8 @@ def dashboard_sessions(user: User = Depends(current_user_web),
 '''
     return HTMLResponse(W.page("Sessions", body, W.topbar(user.email)))
 
+
+# ── devices ──────────────────────────────────────────────────────────
 
 @router.get("/devices", response_class=HTMLResponse)
 def dashboard_devices(user: User = Depends(current_user_web),
