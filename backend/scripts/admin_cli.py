@@ -543,6 +543,138 @@ def do_hide() -> int:
     return 0
 
 
+# ── atest ───────────────────────────────────────────────────────────
+async def _do_atest(provider: str, timeout_s: int = 45) -> int:
+    if not require_cdp():
+        return 2
+    provider = provider.lower()
+    if provider not in ALL_PROVIDERS:
+        print(f"[FAIL] unknown provider: {provider}")
+        return 1
+
+    print(f"[..] Testing {provider} (message WILL appear in real chat history)")
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "backend")}
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "scripts.chat_any", provider,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        env=env,
+    )
+    try:
+        proc.stdin.write(b"[AINT TEST] Reply with exactly: OK\n")
+        await proc.stdin.drain()
+    except Exception as e:
+        print(f"[FAIL] write to subprocess: {e}")
+        try: proc.kill()
+        except Exception: pass
+        return 1
+
+    t0 = time.monotonic()
+    output = b""
+    try:
+        while time.monotonic() - t0 < timeout_s:
+            try:
+                chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=1.5)
+                if not chunk:
+                    break
+                output += chunk
+                if b"OK" in output and b"Connected to" in output:
+                    break
+            except asyncio.TimeoutError:
+                continue
+    except Exception:
+        pass
+    finally:
+        try: proc.kill()
+        except Exception: pass
+        try: await asyncio.wait_for(proc.wait(), timeout=2)
+        except Exception: pass
+
+    text = output.decode("utf-8", "replace")
+    print()
+    print("[..] last 25 lines of output:")
+    for line in text.splitlines()[-25:]:
+        print(f"    {line}")
+    print()
+    print("=" * 60)
+    ok = (b"OK" in output) and (b"Connected to" in output)
+    if ok:
+        print(f"ATEST {provider}: PASS ({int(time.monotonic()-t0)}s)")
+        return 0
+    print(f"ATEST {provider}: FAIL (no reply in {timeout_s}s)")
+    print(f"  next:  aprobe {provider}      check session")
+    print(f"         alogin {provider}      log in (VNC)")
+    return 1
+
+
+# ── aconfig ─────────────────────────────────────────────────────────
+KNOWN_CONFIG = {
+    "AINTERCEPTOR_PROBER_ENABLED":   "0/1 - background prober (INVASIVE: sends pings)",
+    "AINTERCEPTOR_ACTIVE_PROVIDERS": "comma-separated list of active provider names",
+}
+
+def cmd_aconfig_show() -> int:
+    env = read_env()
+    aint = {k: v for k, v in env.items() if k.startswith("AINTERCEPTOR_")}
+    if not aint:
+        print("  (no AINTERCEPTOR_* keys set)")
+        return 0
+    for k in sorted(aint):
+        print(f"  {k} = {aint[k]}")
+        if k in KNOWN_CONFIG:
+            print(f"      {KNOWN_CONFIG[k]}")
+    return 0
+
+def cmd_aconfig_list() -> int:
+    print("Known config keys:")
+    for k, d in KNOWN_CONFIG.items():
+        print(f"  {k}")
+        print(f"      {d}")
+    return 0
+
+def cmd_aconfig_get(key: str) -> int:
+    env = read_env()
+    if key not in env:
+        print(f"[FAIL] key not set: {key}")
+        return 1
+    print(env[key])
+    return 0
+
+def cmd_aconfig_set(key: str, value: str) -> int:
+    if not key.startswith("AINTERCEPTOR_"):
+        print("[FAIL] keys must start with AINTERCEPTOR_")
+        return 1
+    if key not in KNOWN_CONFIG:
+        print(f"[warn] {key} is not a recognised key — setting anyway")
+    write_env_key(key, value)
+    print(f"[OK] {key} = {value}")
+    print()
+    print("Restart daemon to apply:")
+    print("  pkill -f app.runtime.daemon && cd ~/ainterceptor && ./run-linux.sh")
+    return 0
+
+def handle_aconfig(args: list[str]) -> int:
+    if not args or args[0] in ("show", "ls"):
+        return cmd_aconfig_show()
+    sub = args[0].lower()
+    if sub == "list":
+        return cmd_aconfig_list()
+    if sub == "get":
+        if len(args) < 2:
+            print("usage: aconfig get <key>")
+            return 1
+        return cmd_aconfig_get(args[1])
+    if sub == "set":
+        if len(args) < 3:
+            print("usage: aconfig set <key> <value>")
+            return 1
+        return cmd_aconfig_set(args[1], " ".join(args[2:]))
+    print(f"unknown: {sub}")
+    print("usage: aconfig [show|list|get <k>|set <k> <v>]")
+    return 1
+
+
 # ── main ────────────────────────────────────────────────────────────
 def main() -> int:
     args = sys.argv[1:]
@@ -554,6 +686,8 @@ def main() -> int:
         print("  alogout <provider>     clear that provider's cookies only")
         print("  ashow                  move Chrome on-screen")
         print("  ahide                  move Chrome off-screen")
+        print("  atest <provider>       send [AINT TEST], verify reply")
+        print("  aconfig [show|list|get|set]   read/write .env keys")
         return 0
 
     cmd = args[0].lower()
@@ -575,6 +709,13 @@ def main() -> int:
         return do_show()
     if cmd == "hide":
         return do_hide()
+    if cmd == "test":
+        if not rest:
+            print("usage: atest <provider>")
+            return 1
+        return asyncio.run(_do_atest(rest[0]))
+    if cmd == "config":
+        return handle_aconfig(rest)
 
     print(f"unknown command: {cmd}")
     print("try: aproviders | alogin | alogout | ashow | ahide")
