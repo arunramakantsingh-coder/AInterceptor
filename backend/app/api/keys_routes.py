@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import User, ApiKey
 from app.auth import generate_api_key
-from app.deps import current_user
+from app.deps import current_user_or_key
 
 router = APIRouter(prefix="/api/keys", tags=["keys"])
 
@@ -33,7 +33,7 @@ class KeyOut(BaseModel):
 
 
 @router.post("", response_model=CreateKeyOut)
-def create(body: CreateKeyIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def create(body: CreateKeyIn, user: User = Depends(current_user_or_key), db: Session = Depends(get_db)):
     full, prefix, hashed = generate_api_key()
     k = ApiKey(user_id=user.id, key_hash=hashed, key_prefix=prefix, name=body.name)
     db.add(k)
@@ -43,7 +43,7 @@ def create(body: CreateKeyIn, user: User = Depends(current_user), db: Session = 
 
 
 @router.get("", response_model=list[KeyOut])
-def list_keys(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_keys(user: User = Depends(current_user_or_key), db: Session = Depends(get_db)):
     rows = db.query(ApiKey).filter(ApiKey.user_id == user.id).all()
     return [KeyOut(id=r.id, prefix=r.key_prefix, name=r.name,
                    created_at=r.created_at.isoformat(),
@@ -53,7 +53,7 @@ def list_keys(user: User = Depends(current_user), db: Session = Depends(get_db))
 
 
 @router.delete("/{key_id}")
-def revoke(key_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def revoke(key_id: str, user: User = Depends(current_user_or_key), db: Session = Depends(get_db)):
     k = db.get(ApiKey, key_id)
     if not k or k.user_id != user.id:
         raise HTTPException(404, "key not found")
