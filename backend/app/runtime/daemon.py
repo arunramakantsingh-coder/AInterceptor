@@ -98,22 +98,10 @@ async def _bootstrap() -> dict:
         except Exception as e:
             print(f"[prober] {provider}:{path} fail: {e}", flush=True)
             return False
-
-    prober = HealthProber(
-        circuits=circuits,
-        providers=list(ALL_PROVIDERS),
-        path_a_providers=list(PATH_A_SUPPORTED),
-        path_b_providers=list(ALL_PROVIDERS),
-        dispatcher_fn=_probe_dispatch,
-        interval_s=probe_interval,
-    )
-    if prober is not None:
-        prober.start()
-        sr.set_prober(prober)
-        print("[daemon] prober started", flush=True)
-    else:
-        print("[daemon] prober disabled (set AINTERCEPTOR_PROBER_ENABLED=1 to enable)", flush=True)
-
+    # PROBER DISABLED — it writes ping/pong into real provider chats.
+    # Re-enable only after implementing a non-invasive probe.
+    prober = None
+    print('[daemon] prober disabled (invasive — sends real chat messages)', flush=True)
     print(f"[daemon] up. profile={profile_dir} exports={export_dir}", flush=True)
     return {
         "supervisor": supervisor,
