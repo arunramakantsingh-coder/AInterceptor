@@ -664,8 +664,11 @@ async def _do_atest(provider: str, timeout_s: int = 45) -> int:
 
 # ── aconfig ─────────────────────────────────────────────────────────
 KNOWN_CONFIG = {
-    "AINTERCEPTOR_PROBER_ENABLED":   "0/1 - background prober (INVASIVE: sends pings)",
-    "AINTERCEPTOR_ACTIVE_PROVIDERS": "comma-separated list of active provider names",
+    "AINTERCEPTOR_PROBER_ENABLED":     "0/1 - background prober (INVASIVE: sends pings)",
+    "AINTERCEPTOR_ACTIVE_PROVIDERS":   "comma-separated list of active provider names",
+    "AINTERCEPTOR_WEB_LOGIN_PASSWORD": "admin password for /login/<provider> pages",
+    "AINTERCEPTOR_WEB_COOKIE_SECRET":  "HMAC secret for /login session cookie (do not change while sessions active)",
+    "AINTERCEPTOR_VNC_PASSWORD":       "password for x11vnc (embedded in login-page iframe URL)",
 }
 
 def cmd_aconfig_show() -> int:

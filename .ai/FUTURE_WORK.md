@@ -46,3 +46,23 @@ validation remaining.
 - Phase 3: Tailscale Funnel (public HTTPS at `<tailnet>.ts.net`) +
   hardened auth for external users
 - See `PROJECT/ARCHITECTURE_VNC_LOGIN.md` for the full plan
+
+
+## CLI UX — Cisco IOS/Nexus-style interactive shell
+
+Currently each `a*` command is a standalone script. Users asked for a
+unified interactive shell with:
+
+- `?` context help at any position
+  (e.g. `aproviders ?` → lists subcommands; `aproviders enable ?` → lists providers)
+- Tab completion for subcommands, provider names, config keys
+- Command history (up-arrow) persisted to `.ainterceptor/cli_history`
+- Context prompts like `AIRouter(config-ai-provider-claude)#`
+- Inline `[OK]` / `[FAIL]` / next-step hints (already the convention)
+
+Reference: Cisco IOS / Cisco Nexus CLI conventions.
+
+This supersedes the per-command `--help` flags long-term, but does not
+break them. Implementation candidates: Python `prompt_toolkit` or `cmd` module.
+
+Parked until core functionality (login page, /v1 API) is stable.
