@@ -185,3 +185,50 @@ commands.txt example:
 
 Exit 0 on success, non-zero on first failure. Failures print offending
 command.
+
+---
+
+## 14. AInterceptor Admin CLI (Linux) — Currently Implemented
+
+These are the standalone admin commands that work on the Debian VM. They
+sit alongside the Cisco-style CLI above (which is aspirational, not yet
+built). All are short and fast to type. Prefix `a` = AInterceptor.
+
+| Command | Purpose |
+|---|---|
+| `astatus` | Show daemon/CDP/Xvfb/x11vnc state and open tabs |
+| `aprobe` | Read-only health check of all active providers |
+| `aprobe <provider>` | Check one provider |
+| `aprobe-on` | Enable the (invasive) background prober in `.env` |
+| `aprobe-off` | Disable it |
+| `chatgpt` / `claude` / `deepseek` / `gemini` | Enter chat with that provider |
+
+**Probe states**
+
+| State | Meaning | Suggested action |
+|---|---|---|
+| `REACHABLE` | Tab open, chat input found | none |
+| `LOGIN_REQUIRED` | URL matches login markers | `alogin <provider>` (VNC) |
+| `CLOUDFLARE` | CF challenge page | reload tab / wait |
+| `SESSION_EXPIRED` | no chat input, not a login URL | `alogin <provider>` |
+| `NO_TAB` | tab not open | restart daemon |
+| `DOWN` | tab evaluate failed | check daemon |
+
+**Prober flag**
+
+The background prober (daemon) is controlled by `AINTERCEPTOR_PROBER_ENABLED`
+in `.env`. When ON, it sends real "ping" messages — this pollutes chat
+history. Default: OFF. Toggle with `aprobe-on` / `aprobe-off`, then
+restart the daemon.
+
+The `aprobe` command is **read-only** and is the recommended way to check
+provider health. It never sends a message.
+
+**Planned admin commands (script 2, not yet built)**
+
+| Command | Purpose |
+|---|---|
+| `alogin <provider>` | Bring Chrome on-screen (VNC); wait; save storage_state |
+| `alogout <provider>` | Clear that provider's cookies only |
+| `atest <provider>` | Send "hi" and check the reply round-trip |
+| `ashow` / `ahide` | Move Chrome on-screen / off-screen |
