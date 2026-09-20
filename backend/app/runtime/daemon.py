@@ -99,6 +99,7 @@ async def _bootstrap() -> dict:
             print(f"[prober] {provider}:{path} fail: {e}", flush=True)
             return False
     print(f"[daemon] up. profile={profile_dir} exports={export_dir}", flush=True)
+    prober = None
     return {
         "supervisor": supervisor,
         "exporter": exporter,
