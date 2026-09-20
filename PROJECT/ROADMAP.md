@@ -134,3 +134,13 @@ Deliverables:
 - Verified end-to-end: signup → API key → agent upload → curl chat
 
 Next: Phase 2 — DeepSeek/Claude/Gemini real streaming (Path A/B).
+
+
+## Post-M5 — Accounts & Dashboard (see ARCHITECTURE_ACCOUNTS.md)
+
+  Phase A  User accounts (signup/login/session/dashboard shell)
+  Phase B  Dashboard: API keys
+  Phase C  Dashboard: sessions
+  Phase D  Device code flow + agent `connect` subcommand
+  Phase E  Google OAuth
+  Phase F  User-scoped session upload (CDP-inject admin-only)

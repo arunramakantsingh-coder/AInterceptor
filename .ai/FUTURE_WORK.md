@@ -95,3 +95,10 @@ to scale, the architecture is:
 Path B pool options: Playwright-on-K8s, Steel.dev, Browserless.io.
 
 See PROJECT/ARCHITECTURE_VNC_LOGIN.md
+
+
+## Email delivery (deferred)
+
+- SMTP provider (Sendgrid / Mailgun / Postmark)
+- Invitation emails, password reset, "device connected" notifications
+- Deferred: dashboard-only delivery for phase 1-4
