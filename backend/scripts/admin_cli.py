@@ -143,8 +143,8 @@ def move_chrome_windows(x: int, y: int) -> int:
     wids: list[str] = []
     # try multiple search modes — Chrome window class is google-chrome / Google-chrome
     for args in (
-        ["search", "--onlyvisible", "--class", "google-chrome"],
-        ["search", "--onlyvisible", "--class", "Google-chrome"],
+        ["search", "--class", "google-chrome"],
+        ["search", "--class", "Google-chrome"],
         ["search", "--name", "Chrome"],
         ["search", "--name", "ChatGPT"],
         ["search", "--name", "Claude"],
@@ -152,19 +152,24 @@ def move_chrome_windows(x: int, y: int) -> int:
         ["search", "--name", "DeepSeek"],
     ):
         try:
-            r = subprocess.run(["xdotool"] + args,
-                               capture_output=True, text=True, timeout=5)
+            r = subprocess.run(
+                ["xdotool"] + args,
+                capture_output=True, text=True, timeout=5,
+                env={**os.environ, "DISPLAY": os.environ.get("AINTERCEPTOR_DISPLAY", ":99")},
+            )
             wids.extend(w.strip() for w in r.stdout.split() if w.strip())
         except Exception:
             continue
     wids = list(dict.fromkeys(wids))  # unique, order-preserving
     moved = 0
     for wid in wids:
+        env = {**os.environ,
+               "DISPLAY": os.environ.get("AINTERCEPTOR_DISPLAY", ":99")}
         try:
             subprocess.run(["xdotool", "windowmove", wid, str(x), str(y)],
-                           capture_output=True, timeout=5)
+                           capture_output=True, timeout=5, env=env)
             subprocess.run(["xdotool", "windowraise", wid],
-                           capture_output=True, timeout=5)
+                           capture_output=True, timeout=5, env=env)
             moved += 1
         except Exception:
             continue
