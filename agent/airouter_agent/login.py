@@ -9,6 +9,17 @@ LOGIN_URLS = {
     "gemini":   "https://gemini.google.com/",
     "deepseek": "https://chat.deepseek.com/",
 }
+# Body-text markers that mean "not logged in" even on a clean URL
+ANON_MARKERS = (
+    "log in to get answers",
+    "sign up for free",
+    "log in to chat",
+    "sign in to continue",
+    "please log in",
+    "please sign in",
+    "sign in with",
+)
+
 LOGIN_MARKERS = {
     "claude":   ("/login", "/auth", "/signin"),
     "chatgpt":  ("/auth/login", "/auth/0"),
@@ -22,14 +33,27 @@ async def _wait_until_logged_in(page, provider: str, timeout: int = 600) -> None
     import time
     t0 = time.monotonic()
     print("Waiting for you to log in (up to 10 minutes)…")
+    confirmed = 0
     while time.monotonic() - t0 < timeout:
         await asyncio.sleep(2)
         url = (page.url or "").lower()
-        if not any(m.lower() in url for m in markers):
-            await asyncio.sleep(2)
-            if not any(m.lower() in (page.url or "").lower() for m in markers):
-                print("Login detected.")
-                return
+        # URL still on a login page → definitely not logged in
+        if any(m.lower() in url for m in markers):
+            confirmed = 0
+            continue
+        # URL is clean → check the body for anonymous prompts
+        try:
+            body = (await page.evaluate("document.body.innerText") or "").lower()
+        except Exception:
+            body = ""
+        if any(m in body for m in ANON_MARKERS):
+            confirmed = 0
+            continue
+        # Clean URL + no anonymous prompt. Confirm stability for 4s.
+        confirmed += 1
+        if confirmed >= 2:
+            print("Login detected.")
+            return
     raise TimeoutError("login did not complete in time")
 
 
