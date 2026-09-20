@@ -36,3 +36,27 @@ def key_user(authorization: str = Header(...), db: Session = Depends(get_db)) ->
                 raise HTTPException(401, "user inactive")
             return user, k
     raise HTTPException(401, "invalid API key")
+
+def current_user_or_key(authorization: str = Header(...),
+                        db: Session = Depends(get_db)) -> User:
+    """Accept either a JWT (browser) or an sk-aint-* API key (agent)."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "invalid authorization header")
+    token = authorization[7:]
+    if token.startswith("sk-aint-"):
+        prefix = token[:16]
+        candidates = db.query(ApiKey).filter(
+            ApiKey.key_prefix == prefix, ApiKey.revoked_at.is_(None)
+        ).all()
+        for k in candidates:
+            if verify_api_key(token, k.key_hash):
+                user = db.get(User, k.user_id)
+                if user and user.is_active:
+                    return user
+        raise HTTPException(401, "invalid API key")
+    uid = read_jwt(token)
+    if uid:
+        user = db.get(User, uid)
+        if user and user.is_active:
+            return user
+    raise HTTPException(401, "invalid token")

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import User, UserSession
-from app.deps import current_user
+from app.deps import current_user, current_user_or_key
 from app.crypto.aes import encrypt_for_user, decrypt_for_user
 from app.config import settings
 
@@ -36,12 +36,12 @@ def _to_out(r: UserSession) -> SessionOut:
     )
 
 
-@router.post("/upload", response_model=SessionOut)
+@router.post("/upload")
 async def upload(
     provider: str = Form(...),
     alias: str = Form("default"),
     file: UploadFile = File(...),
-    user: User = Depends(current_user),
+    user: User = Depends(current_user_or_key),
     db: Session = Depends(get_db),
 ):
     if provider not in VALID_PROVIDERS:
@@ -75,14 +75,38 @@ async def upload(
         existing.created_at = datetime.utcnow()
         db.commit()
         db.refresh(existing)
-        return _to_out(existing)
+        injected = await _inject_to_live(provider, raw)
+        out = _to_out(existing).model_dump()
+        out["injected"] = injected
+        return out
 
     row = UserSession(user_id=user.id, provider=provider, alias=alias,
                       encrypted_blob=ct, nonce=nonce, status="active")
     db.add(row)
     db.commit()
     db.refresh(row)
-    return _to_out(row)
+
+    injected = await _inject_to_live(provider, raw)
+    out = _to_out(row).model_dump()
+    out["injected"] = injected
+    return out
+
+
+async def _inject_to_live(provider: str, raw: bytes) -> dict:
+    """Push uploaded storage_state into the live Chrome tab via CDP."""
+    from app.runtime import supervisor_registry
+    from app.runtime.session_importer import apply_state_to_provider
+    sup = supervisor_registry.get_supervisor()
+    if sup is None:
+        return {"ok": False, "error": "supervisor not running"}
+    try:
+        state = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        return {"ok": False, "error": f"parse: {e}"}
+    try:
+        return await apply_state_to_provider(sup, provider, state)
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 @router.get("", response_model=list[SessionOut])
