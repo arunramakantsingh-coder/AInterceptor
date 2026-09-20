@@ -1,6 +1,6 @@
 """Session upload + management endpoints."""
 from __future__ import annotations
-import json, pathlib
+import json, os, pathlib
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
@@ -15,6 +15,13 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 from app.providers_list import ALL_PROVIDERS
 VALID_PROVIDERS = set(ALL_PROVIDERS)
+
+
+def _is_admin(user: User) -> bool:
+    """True if this user is the VM admin whose Chrome we can inject into."""
+    admin_email = (os.environ.get("AINTERCEPTOR_ADMIN_EMAIL")
+                   or "admin@ainterceptor.local").strip().lower()
+    return (user.email or "").strip().lower() == admin_email
 
 
 class SessionOut(BaseModel):
@@ -75,7 +82,11 @@ async def upload(
         existing.created_at = datetime.utcnow()
         db.commit()
         db.refresh(existing)
-        injected = await _inject_to_live(provider, raw)
+        if _is_admin(user):
+            injected = await _inject_to_live(provider, raw)
+        else:
+            injected = {"ok": False, "skipped": "not_admin",
+                        "reason": "session stored; use via /v1 (Path A) when available"}
         out = _to_out(existing).model_dump()
         out["injected"] = injected
         return out
@@ -86,7 +97,11 @@ async def upload(
     db.commit()
     db.refresh(row)
 
-    injected = await _inject_to_live(provider, raw)
+    if _is_admin(user):
+        injected = await _inject_to_live(provider, raw)
+    else:
+        injected = {"ok": False, "skipped": "not_admin",
+                    "reason": "session stored; use via /v1 (Path A) when available"}
     out = _to_out(row).model_dump()
     out["injected"] = injected
     return out
