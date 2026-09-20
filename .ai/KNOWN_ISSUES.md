@@ -1,14 +1,9 @@
-# .ai/KNOWN_ISSUES.md
+# Known Issues
 
-| ID | Sev | Area | Summary | Status |
+| ID | Severity | Area | Summary | Status |
 |---|---|---|---|---|
-| K001 | Low | Docs | README listed Phase 1+ cmds before they existed | Resolved |
-| K002 | Low | Validation | datetime.utcnow deprecation | Resolved |
-| K003 | High | Dashboard | next@15.0.3 CVE | Resolved |
-| K004 | Med | Runtime | Claude CDP attach hangs if Chrome dead | Phase 2 |
-| K005 | Med | Runtime | Non-Claude parser drops fragments on partial frames | Partial |
-| K006 | Low | Repo | _bundle.zip, .bak, test_input.txt tracked | Open |
-| K007 | Med | Repo | .evidence/raw/*.raw tracked | Open |
-| K008 | Info | Process | Silent "pattern not matched" commits | Resolved |
-| K009 | Low | Config | Two pytest.ini files, ambiguous | Open |
-| K010 | Info | Governance | Research register not linked from AGENTS.md | Open |
+| B001 | Medium | chatgpt | `atest chatgpt` connects but reply never extracted (session OK, parser misses DOM) | Open |
+| B002 | Low | sessions | Fake cookie uploaded during testing sits as `claude/default/active` — delete with `asessions delete claude` | Open |
+| B003 | Low | claude | `claude login` uses Windows-only `ctypes.windll` — VNC/agent path works instead | Won't fix (superseded) |
+| B004 | Low | config | `AINTERCEPTOR_PROBER_ENABLED=1` in `.env` — background prober sends "ping" and pollutes chat history | Should be 0 |
+| B005 | Low | providers | `perplexity` listed but no runtime file; `character` has runtime but not registered | Open |
