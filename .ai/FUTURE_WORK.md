@@ -66,3 +66,32 @@ This supersedes the per-command `--help` flags long-term, but does not
 break them. Implementation candidates: Python `prompt_toolkit` or `cmd` module.
 
 Parked until core functionality (login page, /v1 API) is stable.
+
+## Scaling to thousands of users (not this week)
+
+The VNC `/login/<provider>` page is an admin tool for 1-5 users. It does
+NOT scale to thousands because:
+
+  - One Chrome, one profile, one set of cookies per VM
+  - One Xvfb desktop
+  - One FastAPI process proxying WS bytes
+
+The path to thousands of users is the agent-based flow:
+
+  user's own browser  ->  agent captures storage_state
+                     ->  POST /api/sessions/upload with API key
+                     ->  server stores, routes via Path A (direct HTTP)
+
+Thousands of users = no browsers on the server. Session JSONs + routing.
+
+When Path B (browser-required providers: chatgpt, gemini, poe) needs
+to scale, the architecture is:
+
+  LB  ->  N x API servers
+            ->  Redis / Postgres  (session + rate-limit state)
+            ->  Path A workers  (direct HTTP, no browser)
+            ->  Path B worker pool  (headless Chromes per tenant)
+
+Path B pool options: Playwright-on-K8s, Steel.dev, Browserless.io.
+
+See PROJECT/ARCHITECTURE_VNC_LOGIN.md
