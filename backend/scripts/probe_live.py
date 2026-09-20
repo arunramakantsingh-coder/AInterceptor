@@ -59,6 +59,16 @@ CHAT_INPUT_SELECTORS = [
     'div.ProseMirror',
 ]
 
+# text on the page indicating "not logged in" even though URL is clean
+ANON_MARKERS = (
+    "log in to get answers",
+    "sign up for free",
+    "log in to chat",
+    "sign in to continue",
+    "please log in",
+    "please sign in",
+)
+
 CF_MARKERS = (
     "just a moment",
     "checking your browser",
@@ -116,6 +126,16 @@ async def _probe_page(page, provider: str) -> dict:
     if any(m in tl or m in ul for m in CF_MARKERS):
         return {"provider": provider, "state": "CLOUDFLARE",
                 "url": url[:90], "title": title[:70]}
+
+    # Anonymous page check (URL clean but body shows "Log in" prompt)
+    try:
+        body_text = (await page.evaluate("document.body.innerText") or "").lower()
+    except Exception:
+        body_text = ""
+    if body_text and any(m in body_text for m in ANON_MARKERS):
+        return {"provider": provider, "state": "LOGIN_REQUIRED",
+                "url": url[:90], "title": title[:70],
+                "detail": "anonymous page (login prompt in body)"}
 
     if is_login_url(provider, url):
         return {"provider": provider, "state": "LOGIN_REQUIRED",
