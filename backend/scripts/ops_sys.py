@@ -35,28 +35,6 @@ def astop():
     return 0
 
 
-def arestart():
-    print("[..] stopping")
-    astop()
-    print("[..] starting (background)")
-    log = ROOT / ".ainterceptor" / "daemon.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "ab") as fh:
-        subprocess.Popen(
-            ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
-            stdout=fh, stderr=fh, start_new_session=True,
-        )
-    for _ in range(60):
-        time.sleep(0.5)
-        if _daemon_pid():
-            print(f"[OK] daemon up (pid {_daemon_pid()})")
-            print("     log: alogs daemon")
-            return 0
-    print("[FAIL] daemon did not come up in 30s")
-    print("       check: alogs daemon")
-    return 1
-
-
 def abootstrap():
     print("[..] running bootstrap_admin")
     return subprocess.call(["python", "-m", "scripts.bootstrap_admin"],
@@ -111,3 +89,67 @@ def aconfig_reset(key):
     print(f"[OK] {key} = {defaults[key]}")
     print("     restart daemon to apply:  arestart")
     return 0
+
+def _port_8000_listening():
+    import socket
+    s = socket.socket()
+    s.settimeout(1.0)
+    try:
+        s.connect(("127.0.0.1", 8000))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def astart():
+    """Idempotent start: refuses to launch a second daemon."""
+    if _daemon_pid() and _port_8000_listening():
+        print(f"[i] daemon already running (pid {_daemon_pid()}, port 8000 up)")
+        print("     use: arestart  (to restart)")
+        print("     or:  astop     (to stop)")
+        return 0
+    if _daemon_pid() and not _port_8000_listening():
+        print(f"[warn] daemon pid {_daemon_pid()} exists but port 8000 not up")
+        print("       stopping it first")
+        astop()
+    print("[..] starting daemon (background)")
+    log = ROOT / ".ainterceptor" / "daemon.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "ab") as fh:
+        subprocess.Popen(
+            ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
+            stdout=fh, stderr=fh, start_new_session=True,
+        )
+    for _ in range(60):
+        time.sleep(0.5)
+        if _port_8000_listening() and _daemon_pid():
+            print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
+            print("     log: alogs daemon")
+            return 0
+    print("[FAIL] daemon did not bind 8000 in 30s")
+    print("       check: alogs daemon")
+    return 1
+
+
+def arestart():
+    print("[..] stopping")
+    astop()
+    print("[..] starting (background)")
+    log = ROOT / ".ainterceptor" / "daemon.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "ab") as fh:
+        subprocess.Popen(
+            ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
+            stdout=fh, stderr=fh, start_new_session=True,
+        )
+    for _ in range(60):
+        time.sleep(0.5)
+        if _port_8000_listening() and _daemon_pid():
+            print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
+            print("     log: alogs daemon")
+            return 0
+    print("[FAIL] daemon did not bind 8000 in 30s")
+    print("       check: alogs daemon")
+    return 1

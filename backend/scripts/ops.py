@@ -16,7 +16,7 @@ def main():
         print("  aversion")
         print("  alogs [daemon|chrome|x11vnc]")
         print("  aevidence [list|show <name>|clear [days]]")
-        print("  arestart | astop")
+        print("  astart | arestart | astop")
         print("  abootstrap")
         print("  asave \"message\"")
         print("  aconfig-reset <key>")
@@ -60,6 +60,7 @@ def main():
         print(f"unknown: {sub}")
         return 1
 
+    if cmd == "astart":         return S.astart()
     if cmd == "arestart":       return S.arestart()
     if cmd == "astop":          return S.astop()
     if cmd == "abootstrap":     return S.abootstrap()

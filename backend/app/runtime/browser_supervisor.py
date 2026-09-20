@@ -167,6 +167,28 @@ class BrowserSupervisor:
 
     # ── tab management ────────────────────────────────────────────────
 
+    def snapshot(self) -> dict:
+        """Health summary for /health endpoint."""
+        import time as _t
+        tabs: dict[str, dict] = {}
+        for name, tab in (self.state.tabs or {}).items():
+            tabs[name] = {
+                "url": getattr(tab, "url", None),
+                "last_used_s": (int(_t.time() - tab.last_used)
+                                if getattr(tab, "last_used", 0) else None),
+                "errors_since_success": getattr(tab, "errors_since_success", 0),
+            }
+        return {
+            "ready": bool(getattr(self.state, "ready", False)),
+            "started_at": getattr(self.state, "started_at", 0.0),
+            "uptime_s": (int(_t.time() - self.state.started_at)
+                         if getattr(self.state, "started_at", 0) else 0),
+            "restarts": getattr(self.state, "restarts", 0),
+            "tabs": tabs,
+            "tab_count": len(tabs),
+        }
+
+
     async def get_tab(self, provider: str) -> Tab:
         """Return the tab for a provider; open if missing or stale."""
         if provider not in PROVIDER_URLS:
