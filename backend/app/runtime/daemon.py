@@ -98,10 +98,6 @@ async def _bootstrap() -> dict:
         except Exception as e:
             print(f"[prober] {provider}:{path} fail: {e}", flush=True)
             return False
-    # PROBER DISABLED — it writes ping/pong into real provider chats.
-    # Re-enable only after implementing a non-invasive probe.
-    prober = None
-    print('[daemon] prober disabled (invasive — sends real chat messages)', flush=True)
     print(f"[daemon] up. profile={profile_dir} exports={export_dir}", flush=True)
     return {
         "supervisor": supervisor,
