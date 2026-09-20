@@ -1,7 +1,8 @@
 """User dashboard — shell + API keys UI."""
 from __future__ import annotations
+import time
 from fastapi import APIRouter, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,6 +12,11 @@ from app.deps import current_user_web
 from app.api import web_common as W
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+# One-time token reveal: after POST creates a key, the plaintext is held
+# here for 60s so the following GET (PRG redirect) can display it once.
+_pending_keys: dict[str, tuple[str, float]] = {}
+_PENDING_TTL = 60
 
 
 # ── home ─────────────────────────────────────────────────────────────
@@ -168,7 +174,13 @@ def _keys_page(user: User, db: Session,
 @router.get("/keys", response_class=HTMLResponse)
 def dashboard_keys(user: User = Depends(current_user_web),
                    db: Session = Depends(get_db)):
-    return _keys_page(user, db)
+    new_key = None
+    entry = _pending_keys.pop(user.id, None)
+    if entry:
+        token, ts = entry
+        if time.time() - ts < _PENDING_TTL:
+            new_key = token
+    return _keys_page(user, db, new_key=new_key)
 
 
 @router.post("/keys", response_class=HTMLResponse)
@@ -189,7 +201,9 @@ def dashboard_keys_create(
     db.add(row)
     db.commit()
 
-    return _keys_page(user, db, new_key=full)
+    # PRG: hold the plaintext briefly, redirect to GET /keys
+    _pending_keys[user.id] = (full, time.time())
+    return RedirectResponse(url="/dashboard/keys", status_code=303)
 
 
 @router.post("/keys/{key_id}/revoke", response_class=HTMLResponse)
@@ -205,7 +219,7 @@ def dashboard_keys_revoke(
         from datetime import datetime, timezone
         k.revoked_at = datetime.now(timezone.utc)
         db.commit()
-    return _keys_page(user, db)
+    return RedirectResponse(url="/dashboard/keys", status_code=303)
 
 
 # ── sessions ─────────────────────────────────────────────────────────
