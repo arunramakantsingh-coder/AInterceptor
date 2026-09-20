@@ -43,3 +43,4 @@ agent/airouter_agent.egg-info/
 body.json
 .env.windows
 .venv-windows/
+nohup.out
