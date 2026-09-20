@@ -60,6 +60,7 @@ PROVIDER_URLS: dict[str, str] = {
 def _chrome_args(profile_dir: pathlib.Path, off_screen: bool = True) -> list[str]:
     pos = "-32000,-32000" if off_screen else "100,100"
     return [
+        f"--user-data-dir={profile_dir}",
         f"--remote-debugging-port={CDP_PORT}",
         "--no-first-run",
         "--no-default-browser-check",
@@ -68,6 +69,9 @@ def _chrome_args(profile_dir: pathlib.Path, off_screen: bool = True) -> list[str
         f"--window-position={pos}",
         "--window-size=1400,900",
         "--disable-features=ChromeWhatsNewUI",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
     ]
 
 
@@ -242,12 +246,15 @@ class BrowserSupervisor:
             log_dir = pathlib.Path(".ainterceptor")
             log_dir.mkdir(parents=True, exist_ok=True)
             chrome_log = open(log_dir / "chrome_launch.log", "ab")
-            self._chrome_proc = subprocess.Popen(
-                cmd,
-                stdout=chrome_log, stderr=chrome_log,
-                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
-                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-            )
+            popen_kwargs = {"stdout": chrome_log, "stderr": chrome_log}
+            if sys.platform.startswith("win"):
+                popen_kwargs["creationflags"] = (
+                    getattr(subprocess, "DETACHED_PROCESS", 0)
+                    | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                )
+            else:
+                popen_kwargs["start_new_session"] = True
+            self._chrome_proc = subprocess.Popen(cmd, **popen_kwargs)
             self.log(f"Chrome PID: {self._chrome_proc.pid}")
 
             ready = False
@@ -308,6 +315,9 @@ class BrowserSupervisor:
 # ── off-screen enforcement (Windows) ──────────────────────────────────
 
 def push_chrome_off_screen() -> int:
+    if not sys.platform.startswith("win"):
+        # Xvfb has no physical screen — nothing to hide
+        return 0
     """Hide every Chrome window belonging to us. Belt-and-suspenders:
     MoveWindow off-screen + ShowWindow(SW_HIDE). Returns count hidden.
     """
