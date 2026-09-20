@@ -38,3 +38,11 @@ Parking lot. Not committed to a phase.
 Run `airouter-agent login claude` from a Windows laptop against the VM.
 Proves the full user-side flow end-to-end. Deferred but highest-value
 validation remaining.
+
+
+## Tailscale publishing (future)
+
+- Phase 2: MagicDNS hostname (tailnet-only, e.g. `http://ainterceptor:8000`)
+- Phase 3: Tailscale Funnel (public HTTPS at `<tailnet>.ts.net`) +
+  hardened auth for external users
+- See `PROJECT/ARCHITECTURE_VNC_LOGIN.md` for the full plan
