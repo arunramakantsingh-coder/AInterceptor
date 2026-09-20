@@ -14,3 +14,5 @@
 ## Regression
 | ID | Title | Test That Should Catch |
 |---|---|---|
+
+| B001 | Medium | chatgpt | 1 | `atest chatgpt` connects but no reply — session OK, reply extraction failed | Open |
