@@ -61,3 +61,20 @@ Repo at `~/ainterceptor`.
 - `alogout <provider>` — clear that provider's cookies
 - `atest <provider>` — send "hi", verify reply
 - `ashow` / `ahide` — window position toggle
+
+
+---
+
+## Agent-based login (user-side)
+
+See docs/AGENT_INSTALL.md for the full guide.
+
+| Command | Purpose |
+|---|---|
+| akeys list | Show all API keys + status |
+| akeys create <name> --save | Mint a key, save locally |
+| akeys current | Show prefix of loaded key |
+| akeys revoke <id> | Revoke a key |
+
+Admin sends the token once privately. User runs airouter-agent config
+then airouter-agent login <provider>. Server CDP-injects the session.
