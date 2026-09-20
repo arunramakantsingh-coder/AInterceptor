@@ -299,13 +299,67 @@ def handle_providers(args: list[str]) -> int:
         if len(args) < 2:
             print("usage: aproviders test <name>  (alias: aprobe <name>)")
             return 1
-        # delegate to probe_live
         try:
             from scripts import probe_live
             return asyncio.run(probe_live.run([args[1].lower()]))
         except Exception as e:
             print(f"[FAIL] probe failed: {e}")
             return 1
+    if sub == "add":
+        if len(args) < 2:
+            print("usage: aproviders add <name> [--url ... --yes]")
+            return 1
+        try:
+            from scripts import ops_provider_wizard as W
+            return W.add_provider(args[1], interactive=True)
+        except Exception as e:
+            print(f"[FAIL] {e}")
+            return 1
+    if sub == "remove":
+        if len(args) < 2:
+            print("usage: aproviders remove <name>")
+            return 1
+        try:
+            from scripts import ops_provider_wizard as W
+            return W.remove_provider(args[1], interactive=True)
+        except Exception as e:
+            print(f"[FAIL] {e}")
+            return 1
+    if sub in ("status", "check"):
+        if len(args) < 2:
+            print("usage: aproviders status <name>")
+            return 1
+        try:
+            from scripts import ops_provider
+            return ops_provider.handle_providers_status(args[1:])
+        except Exception as e:
+            print(f"[FAIL] {e}")
+            return 1
+    if sub == "validate":
+        if len(args) < 2:
+            print("usage: aproviders validate <name>")
+            return 1
+        name = args[1].lower()
+        print(f"[..] validate: {name}")
+        print()
+        # 1. structural
+        try:
+            from scripts import ops_provider
+            ops_provider.provider_status(name)
+        except Exception as e:
+            print(f"  [FAIL] status check: {e}")
+        # 2. runtime probe (if active)
+        from scripts import probe_live
+        if name in active_providers():
+            print(f"[..] probe: {name}")
+            try:
+                asyncio.run(probe_live.run([name]))
+            except Exception as e:
+                print(f"  [FAIL] probe: {e}")
+        else:
+            print(f"[i] {name} is not active — skipping probe")
+            print(f"    to activate:  aproviders enable {name}")
+        return 0
     print(f"unknown subcommand: {sub}")
     print("usage: aproviders [list|enable <n>|disable <n>|info <n>|test <n>]")
     return 1
@@ -681,7 +735,7 @@ def main() -> int:
     if not args or args[0] in ("-h", "--help", "help"):
         print("AInterceptor admin CLI")
         print()
-        print("  aproviders [list|enable <n>|disable <n>|info <n>|test <n>]")
+        print("  aproviders [list|enable|disable|info|test|status|validate|add|remove]")
         print("  alogin <provider>      bring Chrome on-screen, wait, save state")
         print("  alogout <provider>     clear that provider's cookies only")
         print("  ashow                  move Chrome on-screen")

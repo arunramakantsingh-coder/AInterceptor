@@ -182,3 +182,55 @@ All commands assume:
 - `~/bin` on PATH
 - `x11vnc` on `:5900` (for VNC login)
 - Xvfb on `:99`
+
+
+---
+
+## Provider wizard (Batch 2)
+
+### Diagnostic
+
+| Command | Purpose |
+|---|---|
+| `aproviders status <name>` | Show 5-layer state: listed / registry / runtime file / active / session |
+| `aproviders validate <name>` | status + probe (tab reachable, login state) |
+
+`status` output shows exactly which layer is missing and prints the next
+command to fix it.
+
+### Add a new provider
+
+Interactive (prompts for URL, tab prefix, login markers, selectors, activation):
+
+    aproviders add <name>
+
+Non-interactive (for scripts/agents):
+
+    aproviders add <name> \
+      --url https://<name>.example/ \
+      --tab-prefix <name>.example \
+      --login-markers /login,/signin \
+      --composer-selectors 'div[contenteditable="true"],textarea' \
+      --no-activate \
+      --yes
+
+`add` performs three edits:
+1. Append `<name>` to `backend/app/providers_list.py` (ALL_PROVIDERS)
+2. Insert a `ProviderEntry` into `backend/app/interception/registry.py`
+3. Scaffold `backend/app/interception/<name>.py` with a working skeleton
+   and `# TODO` markers
+
+It does NOT delete or overwrite anything. If the file exists, it skips.
+
+After add:
+
+    arestart                  # apply new registry
+    alogin <name>             # log in via VNC
+    aproviders validate <name>
+
+### Remove a provider
+
+    aproviders remove <name>
+
+Deactivates only (removes from `AINTERCEPTOR_ACTIVE_PROVIDERS`). Does NOT
+delete files. Manual cleanup commands printed at the end.
