@@ -32,7 +32,7 @@ REGISTRY: dict[str, ProviderEntry] = {
         home_url="https://chatgpt.com/",
         tab_url_prefix="chatgpt.com",
         default_model="chatgpt-web",
-        composer_selectors=("#prompt-textarea", 'div[contenteditable="true"]', "textarea"),
+        composer_selectors=("textarea[placeholder]", "textarea", "#prompt-textarea", 'div[contenteditable="true"]', '[role="textbox"]'),
         login_markers=("/auth/login",),
         response_markers=("/backend-api/conversation",),
         request_markers=("/backend-api/conversation",),

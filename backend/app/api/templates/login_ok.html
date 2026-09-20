@@ -1,9 +1,52 @@
 <header>
   <span class="badge">AInterceptor</span>
   <h1>Log in to __PROVIDER__</h1>
+  <a class="logout" href="/login">← all providers</a>
   <a class="logout" href="/login/__PROVIDER__/logout">Sign out</a>
 </header>
 <div class="hint">
-  Log into <strong>__PROVIDER__</strong> in the browser below. When done, close this tab — the session is saved on the server.
+  Log into <strong>__PROVIDER__</strong> below. When done, close this tab — the session is saved on the server.
 </div>
-<iframe src="__NOVNC_URL__" allow="clipboard-read; clipboard-write"></iframe>
+<div id="screen" style="flex:1 1 auto; min-height:0; background:#000; overflow:hidden; position:relative;"></div>
+<div id="status" style="padding:6px 20px; font-size:12px; color:#888; background:#0f0f0f;">
+  connecting...
+</div>
+<script type="module">
+import RFB from '/novnc/core/rfb.js';
+
+const screenEl = document.getElementById('screen');
+const statusEl = document.getElementById('status');
+const provider = "__PROVIDER__";
+const wsProto  = (location.protocol === 'https:') ? 'wss' : 'ws';
+const wsUrl    = `${wsProto}://${location.host}/login/${provider}/ws`;
+const vncPass  = "__VNC_PASSWORD__";
+
+statusEl.textContent = "connecting to VM browser…";
+
+const rfb = new RFB(screenEl, wsUrl, {
+  credentials: { password: vncPass },
+  wsProtocols: ['binary'],
+});
+
+// defaults first — do NOT set scaleViewport before connect
+rfb.viewOnly = false;
+rfb.clipViewport = false;
+rfb.resizeSession = false;
+rfb.background = '#000000';
+
+window._rfb = rfb;   // debugging hook
+
+rfb.addEventListener('connect', () => {
+  // set scaleViewport AFTER ServerInit so fbWidth/fbHeight are known
+  rfb.scaleViewport = true;
+  statusEl.textContent = 'connected — log into ' + provider + ' in the window above';
+  console.log('[rfb] fb=', rfb._fbWidth, 'x', rfb._fbHeight,
+              'canvas=', rfb._canvas && rfb._canvas.width, 'x', rfb._canvas && rfb._canvas.height);
+});
+rfb.addEventListener('disconnect', (e) => {
+  statusEl.textContent = 'disconnected' + (e.detail && e.detail.clean ? '' : ' — refresh to retry');
+});
+rfb.addEventListener('securityfailure', () => {
+  statusEl.textContent = 'VNC password rejected';
+});
+</script>

@@ -57,6 +57,85 @@ def _safe(name: str) -> str:
     return name
 
 
+def _move_chrome_onscreen(x: int, y: int) -> int:
+    """Move every Chrome window to (x, y). Self-contained — no imports
+    from scripts/ which is not on sys.path here."""
+    import os, subprocess
+    env = {**os.environ, "DISPLAY": os.environ.get("AINTERCEPTOR_DISPLAY", ":99")}
+    wids: list[str] = []
+    for args in (
+        ["search", "--class", "google-chrome"],
+        ["search", "--class", "Google-chrome"],
+        ["search", "--name", "Chrome"],
+    ):
+        try:
+            r = subprocess.run(["xdotool"] + args, capture_output=True,
+                               text=True, timeout=5, env=env)
+            wids.extend(w.strip() for w in r.stdout.split() if w.strip())
+        except Exception:
+            continue
+    wids = list(dict.fromkeys(wids))
+    moved = 0
+    for wid in wids:
+        try:
+            subprocess.run(["xdotool", "windowmove", wid, str(x), str(y)],
+                           capture_output=True, timeout=5, env=env)
+            subprocess.run(["xdotool", "windowraise", wid],
+                           capture_output=True, timeout=5, env=env)
+            moved += 1
+        except Exception:
+            continue
+    return moved
+
+
+PROVIDER_DISPLAY = {
+    "claude":       ("Claude",       "#d97706"),
+    "chatgpt":      ("ChatGPT",      "#10a37f"),
+    "gemini":       ("Gemini",       "#4285f4"),
+    "deepseek":     ("DeepSeek",     "#4d6bfe"),
+    "mistral":      ("Mistral",      "#ff7000"),
+    "qwen":         ("Qwen",         "#615ced"),
+    "huggingchat":  ("HuggingChat",  "#ffd21e"),
+    "perplexity":   ("Perplexity",   "#20808d"),
+    "grok":         ("Grok",         "#000000"),
+    "poe":          ("Poe",          "#5d3fd3"),
+    "kimi":         ("Kimi",         "#000000"),
+    "yi":           ("Yi",           "#003425"),
+    "lechat":       ("Le Chat",      "#ff7000"),
+    "glm":          ("GLM",          "#3859ff"),
+    "you":          ("You.com",      "#7c3aed"),
+    "phind":        ("Phind",        "#2c7a7b"),
+    "doubao":       ("Doubao",       "#1664ff"),
+    "copilot":      ("Copilot",      "#0078d4"),
+    "meta":         ("Meta AI",      "#0866ff"),
+    "character":    ("Character.AI", "#0f0f0f"),
+}
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_index():
+    cards = []
+    for name in PROVIDER_DISPLAY:
+        label, color = PROVIDER_DISPLAY.get(name, (name.title(), "#333"))
+        initial = label[0].upper()
+        cards.append(
+            f'<a href="/login/{name}" style="display:flex; align-items:center; gap:12px;'
+            f' padding:16px; background:#111; border:1px solid #222; border-radius:8px;'
+            f' text-decoration:none; color:#e6e6e6; font-weight:500; font-size:14px;'
+            f' transition: all .15s;" '
+            f'onmouseover="this.style.borderColor=\'{color}\';this.style.background=\'#161616\'" '
+            f'onmouseout="this.style.borderColor=\'#222\';this.style.background=\'#111\'">'
+            f'<span style="display:inline-flex; align-items:center; justify-content:center;'
+            f' width:32px; height:32px; border-radius:6px; background:{color}; color:#fff;'
+            f' font-weight:700; font-size:15px;">{initial}</span>'
+            f'<span>{label}</span></a>'
+        )
+    cards_html = "".join(cards)
+    body = (TEMPLATES / "login_index.html").read_text().replace("__CARDS__", cards_html)
+    html = (TEMPLATES / "login.html").read_text().replace("__PROVIDER__", "AInterceptor")                                           .replace("__BODY__", body)
+    return HTMLResponse(html)
+
+
 @router.get("/login/{provider}", response_class=HTMLResponse)
 async def login_page(provider: str, aint_login: Optional[str] = Cookie(None)):
     provider = _safe(provider)
@@ -72,16 +151,11 @@ async def login_page(provider: str, aint_login: Optional[str] = Cookie(None)):
                         await tab.page.bring_to_front()
                     except Exception:
                         pass
-            from scripts.admin_cli import move_chrome_windows
-            move_chrome_windows(80, 60)
+            _move_chrome_onscreen(80, 60)
         except Exception:
             pass
 
-        novnc_url = (
-            f"/novnc/vnc.html?autoconnect=1&resize=scale&reconnect=1"
-            f"&password={_vnc_pw()}&path=/login/{provider}/ws"
-        )
-        body = _render("login_ok.html", provider=provider, novnc_url=novnc_url)
+        body = _render("login_ok.html", provider=provider, vnc_password=_vnc_pw())
     else:
         body = _render("login_denied.html", provider=provider, err="")
     return HTMLResponse(_render("login.html", provider=provider, body=body))
