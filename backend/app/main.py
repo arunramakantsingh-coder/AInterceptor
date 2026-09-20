@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth_routes, keys_routes, health_routes, sessions_routes, chat_routes, login_routes, admin_routes
 from app.api import login_page
 from app.api import dashboard_routes
+from app.api import device_routes
+from app.api import device_ui
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
 
@@ -32,6 +34,8 @@ app.include_router(login_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(login_page.router)
 app.include_router(dashboard_routes.router)
+app.include_router(device_routes.router)
+app.include_router(device_ui.router)
 
 
 @app.get("/")
