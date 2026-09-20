@@ -14,6 +14,37 @@ from app.api.device_routes import generate_device_code, CODE_TTL
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard-devices"])
 
+# Copy helper — works over plain HTTP (navigator.clipboard requires HTTPS)
+_COPY_JS = """
+function _aintCopy(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const text = el.innerText || el.value || el.textContent || '';
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => _aintFlash(elId + '_btn'));
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); _aintFlash(elId + '_btn'); }
+  catch (e) { alert('Copy failed — select manually'); }
+  document.body.removeChild(ta);
+}
+function _aintFlash(btnId) {
+  const b = document.getElementById(btnId);
+  if (!b) return;
+  const old = b.textContent;
+  b.textContent = 'copied';
+  setTimeout(() => b.textContent = old, 1200);
+}
+"""
+
+
+
 DEFAULT_SERVER = "http://100.82.62.82:8000"
 
 
@@ -29,36 +60,37 @@ def _connect_page(user: User, db: Session) -> HTMLResponse:
     if row:
         code = row.code
         exp_iso = row.expires_at.isoformat()
+        full_cmd = (
+            f"airouter-agent connect --server {DEFAULT_SERVER} --code {code}"
+        )
         code_block = (
             '<div class="card" style="border-color:#1d4ed8;">'
-            '<h3 style="color:#60a5fa;">Your device code</h3>'
+            '<h3 style="color:#60a5fa;">Connect this device</h3>'
             '<p class="muted" style="margin-bottom:14px;">'
             'On the laptop you want to connect, open a terminal and run:'
             '</p>'
             '<div style="background:#0a0a0a; padding:16px; border-radius:6px;'
             ' font-family:monospace; font-size:13px; line-height:1.7; color:#ccc;'
             ' overflow-x:auto; margin-bottom:14px;">'
-            '<div style="color:#666;">$</div>'
-            f'<div>airouter-agent connect --server {W.esc(DEFAULT_SERVER)} \\</div>'
-            f'<div style="padding-left:24px;">--code '
-            f'<span style="color:#4ade80;font-weight:700;">{W.esc(code)}</span></div>'
+            f'<div id="fullcmd">airouter-agent connect --server {W.esc(DEFAULT_SERVER)} '
+            f'--code {W.esc(code)}</div>'
             '</div>'
             '<div class="row" style="gap:10px; margin-bottom:14px;">'
-            '<span class="muted">Code:</span>'
-            f'<code id="code" style="font-size:18px; font-weight:700;'
+            f'<button type="button" class="btn" style="padding:8px 16px; font-size:13px;"'
+            f' id="fullcmd_btn" onclick="_aintCopy(\'fullcmd\')">Copy full command</button>'
+            '<span class="muted">or copy just the code:</span>'
+            f'<code id="code" style="font-size:16px; font-weight:700;'
             f' letter-spacing:2px; color:#fff;">{W.esc(code)}</code>'
             '<button type="button" class="btn-secondary"'
             ' style="padding:5px 12px; font-size:12px;"'
-            f" onclick=\"navigator.clipboard.writeText('{W.esc(code)}');"
-            " this.textContent='copied';"
-            " setTimeout(()=>this.textContent='copy',1500);\">copy</button>"
+            f' id="code_btn" onclick="_aintCopy(\'code\')">copy</button>'
             '</div>'
             '<p class="muted" id="status" style="margin-top:4px;">'
             '<span style="color:#facc15;">&#9679; waiting&hellip;</span>'
             ' <span style="margin-left:8px;">expires in '
             '<span id="countdown">--</span></span></p>'
             '</div>'
-            f'<script>'
+            f'<script>{_COPY_JS}'
             f'const expires = new Date("{exp_iso}");'
             'const cd = document.getElementById("countdown");'
             'const st = document.getElementById("status");'
