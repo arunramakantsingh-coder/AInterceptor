@@ -11,7 +11,7 @@ def main():
     if not args or args[0] in ("-h", "--help", "help"):
         print("AInterceptor extended admin")
         print()
-        print("  asessions [list|export <p> [path]|delete <p>]")
+        print("  asessions [list|--all|export <p> [path]|delete <p>]")
         print("  ahealth")
         print("  aversion")
         print("  alogs [daemon|chrome|x11vnc]")
@@ -25,6 +25,8 @@ def main():
     cmd, rest = args[0].lower(), args[1:]
 
     if cmd == "asessions":
+        if rest and rest[0] in ("--all", "all"):
+            return R.asessions_all()
         sub = rest[0].lower() if rest else "list"
         if sub in ("list", "ls", ""):
             return R.asessions_list()

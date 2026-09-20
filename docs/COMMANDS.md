@@ -88,7 +88,8 @@ then airouter-agent login <provider>. Server CDP-injects the session.
 
 | Command | Purpose |
 |---|---|
-| `asessions` | List all sessions (provider, alias, status, created) |
+| `asessions` | List **your** (admin's) sessions |
+| `asessions --all` | **Admin view**: every session across all users, with owning email |
 | `asessions export <p> [path]` | Copy local export file for a provider |
 | `asessions delete <p>` | Delete a provider's session row from the DB |
 

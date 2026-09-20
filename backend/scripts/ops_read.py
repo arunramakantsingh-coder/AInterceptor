@@ -216,3 +216,56 @@ def aevidence_clear(days=30):
             pass
     print(f"[OK] removed {n} file(s) older than {days}d")
     return 0
+
+# ── admin view: all sessions across all users ────────────────────────
+
+def asessions_all():
+    """Admin-only: list every session in the DB with the owning user."""
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "backend"))
+    try:
+        from app.db.session import SessionLocal
+        from app.db.models import UserSession, User
+    except Exception as e:
+        print(f"[FAIL] DB import: {e}")
+        return 1
+
+    db = SessionLocal()
+    try:
+        rows = (db.query(UserSession)
+                .order_by(UserSession.created_at.desc())
+                .all())
+    finally:
+        pass
+
+    if not rows:
+        print("  (no sessions in DB)")
+        db.close()
+        return 0
+
+    print(f"  {'PROVIDER':12s}  {'USER':32s}  {'ALIAS':10s}  {'STATUS':10s}  CREATED")
+    print("  " + "-" * 86)
+    for r in rows:
+        u = db.get(User, r.user_id)
+        email = (u.email if u else "?")[:32]
+        created = (r.created_at.strftime("%Y-%m-%d %H:%M")
+                   if r.created_at else "?")
+        print(f"  {r.provider:12s}  {email:32s}  {r.alias:10s}  "
+              f"{r.status:10s}  {created}")
+
+    print("  " + "-" * 86)
+    print(f"  Total: {len(rows)}")
+
+    # also print per-user counts
+    from collections import Counter
+    by_user = Counter()
+    for r in rows:
+        u = db.get(User, r.user_id)
+        by_user[u.email if u else "?"] += 1
+    print()
+    print("  Per user:")
+    for email, count in by_user.most_common():
+        print(f"    {email:40s}  {count}")
+
+    db.close()
+    return 0
