@@ -102,3 +102,14 @@ See PROJECT/ARCHITECTURE_VNC_LOGIN.md
 - SMTP provider (Sendgrid / Mailgun / Postmark)
 - Invitation emails, password reset, "device connected" notifications
 - Deferred: dashboard-only delivery for phase 1-4
+
+
+## Admin: all-user session view
+
+Currently each user only sees their own sessions (by design).
+For admin diagnostics, add:
+
+  /dashboard/admin/sessions   — list every user's sessions, admin-only
+  /dashboard/admin/keys       — list every user's keys, admin-only
+
+Gated by AINTERCEPTOR_ADMIN_EMAIL. Deferred until we have >1 real user.
