@@ -4,7 +4,7 @@ from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import User, ApiKey
-from app.auth import read_jwt, verify_api_key
+from app.auth import read_jwt, verify_api_key, verify_password
 
 
 def current_user(authorization: str = Header(...), db: Session = Depends(get_db)) -> User:
@@ -43,6 +43,8 @@ def current_user_or_key(authorization: str = Header(...),
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "invalid authorization header")
     token = authorization[7:]
+
+    # ── API key (sk-aint-*) ──
     if token.startswith("sk-aint-"):
         prefix = token[:16]
         candidates = db.query(ApiKey).filter(
@@ -54,6 +56,25 @@ def current_user_or_key(authorization: str = Header(...),
                 if user and user.is_active:
                     return user
         raise HTTPException(401, "invalid API key")
+
+    # ── device token (sk-dev-*) ──
+    if token.startswith("sk-dev-"):
+        from app.db.models import Device
+        prefix = token[:16]
+        candidates = db.query(Device).filter(
+            Device.token_prefix == prefix, Device.revoked_at.is_(None)
+        ).all()
+        for d in candidates:
+            if verify_password(token, d.token_hash):
+                user = db.get(User, d.user_id)
+                if user and user.is_active:
+                    from datetime import datetime, timezone
+                    d.last_seen_at = datetime.now(timezone.utc)
+                    db.commit()
+                    return user
+        raise HTTPException(401, "invalid device token")
+
+    # ── JWT session cookie ──
     uid = read_jwt(token)
     if uid:
         user = db.get(User, uid)
