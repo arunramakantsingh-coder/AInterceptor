@@ -103,53 +103,107 @@ def _port_8000_listening():
         s.close()
 
 
-def astart():
-    """Idempotent start: refuses to launch a second daemon."""
-    if _daemon_pid() and _port_8000_listening():
-        print(f"[i] daemon already running (pid {_daemon_pid()}, port 8000 up)")
-        print("     use: arestart  (to restart)")
-        print("     or:  astop     (to stop)")
+def _daemon_up_in_log():
+    log = ROOT / ".ainterceptor" / "daemon.log"
+    if not log.exists():
+        return False
+    try:
+        return "[daemon] up." in log.read_text(errors="replace")
+    except Exception:
+        return False
+
+
+def _wait_daemon_gone(timeout_s=15):
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        if not _daemon_pid() and not _port_8000_listening():
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _wait_chrome_gone(timeout_s=15):
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        r = subprocess.run(["pgrep", "-f", "remote-debugging-port=9222"],
+                           capture_output=True, text=True)
+        if not r.stdout.strip():
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def astop():
+    pid = _daemon_pid()
+    if not pid:
+        print("[i] daemon not running")
         return 0
+    print(f"[..] stopping daemon (pid {pid})")
+    subprocess.run(["pkill", "-f", "app.runtime.daemon"], capture_output=True)
+    subprocess.run(["pkill", "-f", f"remote-debugging-port={CDP_PORT}"],
+                   capture_output=True)
+    if not _wait_daemon_gone(15):
+        print("[warn] daemon still present after 15s")
+    if not _wait_chrome_gone(15):
+        print("[warn] Chrome still running after 15s")
+    for f in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        lock = ROOT / ".ainterceptor" / "chrome-profile" / f
+        try:
+            if lock.exists() or lock.is_symlink():
+                lock.unlink()
+        except Exception:
+            pass
+    time.sleep(1)
+    print("[OK] daemon + Chrome stopped")
+    return 0
+
+
+def _spawn_daemon():
+    log = ROOT / ".ainterceptor" / "daemon.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        log.write_text("", encoding="utf-8")
+    except Exception:
+        pass
+    fh = open(log, "ab")
+    subprocess.Popen(
+        ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
+        stdout=fh, stderr=fh, start_new_session=True,
+    )
+
+
+def _poll_up(timeout_s=60):
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        if _daemon_up_in_log() and _port_8000_listening():
+            return True
+        time.sleep(1.0)
+    return False
+
+
+def astart(fg=False):
+    if not fg and _daemon_pid() and _port_8000_listening():
+        print(f"[i] daemon already running (pid {_daemon_pid()}, port 8000)")
+        print("     arestart    restart (background)")
+        print("     astop       stop")
+        return 0
+    if fg:
+        print("[..] starting in FOREGROUND (Ctrl+C to stop)")
+        return subprocess.call(["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"])
     if _daemon_pid() and not _port_8000_listening():
-        print(f"[warn] daemon pid {_daemon_pid()} exists but port 8000 not up")
-        print("       stopping it first")
+        print(f"[warn] stale pid {_daemon_pid()} without port 8000 — stopping")
         astop()
-    print("[..] starting daemon (background)")
-    log = ROOT / ".ainterceptor" / "daemon.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "ab") as fh:
-        subprocess.Popen(
-            ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
-            stdout=fh, stderr=fh, start_new_session=True,
-        )
-    for _ in range(60):
-        time.sleep(0.5)
-        if _port_8000_listening() and _daemon_pid():
-            print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
-            print("     log: alogs daemon")
-            return 0
-    print("[FAIL] daemon did not bind 8000 in 30s")
-    print("       check: alogs daemon")
-    return 1
-
-
-def arestart():
-    print("[..] stopping")
-    astop()
     print("[..] starting (background)")
-    log = ROOT / ".ainterceptor" / "daemon.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "ab") as fh:
-        subprocess.Popen(
-            ["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"],
-            stdout=fh, stderr=fh, start_new_session=True,
-        )
-    for _ in range(60):
-        time.sleep(0.5)
-        if _port_8000_listening() and _daemon_pid():
-            print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
-            print("     log: alogs daemon")
-            return 0
-    print("[FAIL] daemon did not bind 8000 in 30s")
-    print("       check: alogs daemon")
+    _spawn_daemon()
+    if _poll_up(60):
+        print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
+        print("     alogs daemon")
+        return 0
+    print("[FAIL] daemon did not come up within 60s")
+    print("       alogs daemon")
     return 1
+
+
+def arestart(fg=False):
+    astop()
+    return astart(fg=fg)

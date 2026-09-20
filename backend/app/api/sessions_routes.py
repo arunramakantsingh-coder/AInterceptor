@@ -110,13 +110,13 @@ async def _inject_to_live(provider: str, raw: bytes) -> dict:
 
 
 @router.get("", response_model=list[SessionOut])
-def list_sessions(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_sessions(user: User = Depends(current_user_or_key), db: Session = Depends(get_db)):
     rows = db.query(UserSession).filter(UserSession.user_id == user.id).all()
     return [_to_out(r) for r in rows]
 
 
 @router.delete("/{session_id}")
-def delete(session_id: str, user: User = Depends(current_user),
+def delete(session_id: str, user: User = Depends(current_user_or_key),
            db: Session = Depends(get_db)):
     row = db.get(UserSession, session_id)
     if not row or row.user_id != user.id:
