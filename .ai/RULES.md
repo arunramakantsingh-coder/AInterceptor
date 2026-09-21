@@ -55,3 +55,16 @@ No exceptions for milestone work.
 
 Ideas, "we should later", "not now but important" — all land in
 `.ai/FUTURE_WORK.md`, not in chat history, not in comments.
+
+
+## R6 — Session log on every decision
+
+Any time we choose between options — even obvious ones — append an entry
+to .ai/SESSION_LOG.md with: Title, Context, Options, Chosen, Why, Drift,
+Impact. Durable record across chat sessions.
+
+## R7 — Automation by default
+
+Manual doc updates are a failure mode. When a task CAN be automated,
+prefer the automated path even if it costs extra work now. Track gaps in
+PROJECT/AUTOMATION.md.
