@@ -11,6 +11,7 @@ from app.api import google_auth
 from app.api import agents_ui
 from app.api import sessions_ui
 from app.api import devices_ui
+from app.api import providers_ui
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
 
@@ -44,6 +45,7 @@ app.include_router(google_auth.router)
 app.include_router(agents_ui.router)
 app.include_router(sessions_ui.router)
 app.include_router(devices_ui.router)
+app.include_router(providers_ui.router)
 
 
 @app.get("/")
