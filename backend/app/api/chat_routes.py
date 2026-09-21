@@ -62,6 +62,52 @@ async def chat(body: ChatIn,
     state = load_session_state(db, user.id, provider)
 
     t0 = time.monotonic()
+
+    # ── non-streaming path ──────────────────────────────────────────
+    if not body.stream:
+        chunks: list[str] = []
+        status = "ok"
+        try:
+            async for delta in stream_reply(provider, state, prompt):
+                chunks.append(delta)
+            if not chunks:
+                status = "empty_stream"
+        except ProviderUnavailable as e:
+            status = "provider_unavailable"
+            raise HTTPException(503, str(e))
+        except Exception as e:
+            status = "error"
+            raise HTTPException(500, str(e))
+        full = "".join(chunks)
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        try:
+            db.add(UsageEvent(
+                user_id=user.id, api_key_id=key.id,
+                provider=provider, model=body.model,
+                tokens_in=len(prompt), tokens_out=len(full),
+                latency_ms=latency_ms, status=status, path="A"))
+            from datetime import datetime, timezone as _tz
+            key.last_used_at = datetime.now(_tz.utc)
+            db.commit()
+        except Exception:
+            pass
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": body.model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": full},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": len(prompt),
+                "completion_tokens": len(full),
+                "total_tokens": len(prompt) + len(full),
+            },
+        }
+    # ── streaming path (existing) ───────────────────────────────────
     captured = {"text": "", "status": "ok"}
 
     async def gen():
