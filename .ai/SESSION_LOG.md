@@ -34,6 +34,17 @@ Chosen:  Funnel (5-min setup, auto-TLS).
 Drift:   Funnel exposes the app publicly. Mitigation: admin password.
 Impact:  https://ainterceptor.taila2310c.ts.net is public host
 
+## 2026-09-21 — S3 + S4 — page rebuild (one page = one file)
+
+Chosen:  Sessions and devices pages moved to their own modules
+         (sessions_ui.py, devices_ui.py). No more in-place patching of
+         large HTML-heavy functions in dashboard_routes.py.
+Why:     First S3 attempt broke Python syntax (nested f-string quotes).
+         Treating each dashboard page as a standalone module removes the
+         risk entirely. Each file < 200 lines, easy to rewrite whole.
+Impact:  backend/app/api/sessions_ui.py, devices_ui.py; dashboard_routes.py
+         now only handles overview + keys.
+
 ## 2026-09-21 — S2 — agents page runs commands live (localhost helper)
 
 Chosen:  Agent exposes http://127.0.0.1:45231 with CORS locked to

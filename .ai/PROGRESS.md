@@ -4,6 +4,26 @@ Newest entry at top. Updated per R1.
 
 ---
 
+## 2026-09-21 — UI build (S1–S4)
+
+Shipped:
+  S1  3226159  nav trimmed to real pages; /connect → /agents
+  S2  7ec265c  agents page detects local helper; one-click provider login
+  S3  d1b061c  sessions page: kill, last-used, refresh link
+  S4  8f119d0  devices page: inline connect-code generator
+
+Working end-to-end:
+  - Browser button → localhost helper (127.0.0.1:45231) → real Chrome on laptop
+  - Session uploads to account automatically
+  - All dashboard pages HTTP 200
+  - Nav shows only real pages
+
+Not built (deferred):
+  /dashboard/providers   (catalog, admin toggle)
+  /dashboard/usage       (/v1 call history)
+  /dashboard/settings    (account)
+  /dashboard/admin/*     (all-user views)
+
 ## 2026-09-21 — Session summary
 
 ### Shipped this session (31 commits)
