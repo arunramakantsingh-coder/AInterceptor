@@ -113,3 +113,22 @@ For admin diagnostics, add:
   /dashboard/admin/keys       — list every user's keys, admin-only
 
 Gated by AINTERCEPTOR_ADMIN_EMAIL. Deferred until we have >1 real user.
+
+
+## Tailscale admin CLI (future)
+
+Wire tailscale operational commands into the admin CLI so they're
+part of the same toolkit rather than memorized separately:
+
+  ats status               tailscale status (peers)
+  ats ip                   this node's Tailscale IP
+  ats funnel on [port]     tailscale funnel --bg <port>
+  ats funnel off           tailscale funnel --https=443 off
+  ats funnel status        tailscale funnel status
+  ats dns                  tailscale dns status
+
+Read-only wrappers around `tailscale` where safe. Write ops
+(funnel on/off) still require sudo; wrapper just prints the exact
+command if sudo fails.
+
+Parked until core product (/v1) is stable.
