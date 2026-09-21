@@ -116,6 +116,7 @@ def esc(s: str | None) -> str:
 def dashboard_nav(current: str = "") -> str:
     items = [
         ("/dashboard", "Overview"),
+        ("/dashboard/commandline", "Command Line"),
         ("/dashboard/agents", "Agents"),
         ("/dashboard/sessions", "Sessions"),
         ("/dashboard/devices", "Devices"),
