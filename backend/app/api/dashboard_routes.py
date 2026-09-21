@@ -224,35 +224,3 @@ def dashboard_keys_revoke(
 
 # ── sessions ─────────────────────────────────────────────────────────
 
-@router.get("/devices", response_class=HTMLResponse)
-def dashboard_devices(user: User = Depends(current_user_web),
-                      db: Session = Depends(get_db)):
-    rows = db.query(Device).filter(Device.user_id == user.id,
-                                   Device.revoked_at.is_(None)).all()
-    if rows:
-        trs = "".join(
-            f'<tr><td style="padding:10px 8px;border-bottom:1px solid #1f1f1f;">{W.esc(r.name)}</td>'
-            f'<td style="padding:10px 8px;border-bottom:1px solid #1f1f1f;">{W.esc(r.os or "—")}</td>'
-            f'<td style="padding:10px 8px;border-bottom:1px solid #1f1f1f;">'
-            f'{r.last_seen_at.strftime("%Y-%m-%d %H:%M") if r.last_seen_at else "never"}</td></tr>'
-            for r in rows)
-        table = (
-            '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-            '<thead><tr style="text-align:left;color:#888;">'
-            '<th style="padding:8px;">Name</th><th style="padding:8px;">OS</th>'
-            '<th style="padding:8px;">Last seen</th></tr></thead>'
-            f'<tbody>{trs}</tbody></table>'
-        )
-    else:
-        table = '<p class="muted">No devices connected. Device flow arrives in Phase D.</p>'
-    body = W.dashboard_nav("/dashboard/devices") + f'''
-<div class="container">
-  <div class="row" style="justify-content:space-between;">
-    <div><h2>Devices</h2>
-      <p class="muted">Laptops that can upload sessions on your behalf.</p></div>
-    <a class="btn btn-secondary" href="/dashboard">← back</a>
-  </div>
-  <div class="card" style="margin-top:20px;">{table}</div>
-</div>
-'''
-    return HTMLResponse(W.page("Devices", body, W.topbar(user.email)))
