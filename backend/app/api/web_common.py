@@ -42,6 +42,24 @@ button:hover, .btn:hover { background: #2563eb; text-decoration: none; }
 .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
 .row { display: flex; gap: 12px; align-items: center; }
 .grid { display: grid; gap: 14px; }
+.docs-content { padding: 28px 32px; line-height: 1.65; font-size: 14px; }
+.docs-content h1 { font-size: 26px; margin: 8px 0 16px; border-bottom: 1px solid #222; padding-bottom: 8px; }
+.docs-content h2 { font-size: 20px; margin: 26px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #1a1a1a; }
+.docs-content h3 { font-size: 16px; margin: 20px 0 10px; color: #ddd; }
+.docs-content h4 { font-size: 14px; margin: 16px 0 8px; color: #bbb; }
+.docs-content p { margin: 10px 0; }
+.docs-content a { color: #60a5fa; }
+.docs-content code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 12.5px; color: #e6e6e6; }
+.docs-content pre { background: #0a0a0a; padding: 16px; border-radius: 6px; overflow-x: auto; border: 1px solid #1f1f1f; }
+.docs-content pre code { background: transparent; padding: 0; font-size: 12.5px; }
+.docs-content table { border-collapse: collapse; margin: 14px 0; width: 100%; font-size: 13px; }
+.docs-content th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #333; color: #bbb; }
+.docs-content td { padding: 8px 10px; border-bottom: 1px solid #1f1f1f; }
+.docs-content ul, .docs-content ol { padding-left: 22px; }
+.docs-content li { margin: 4px 0; }
+.docs-content blockquote { border-left: 3px solid #333; padding-left: 14px; color: #999; margin: 10px 0; }
+.docs-content hr { border: 0; border-top: 1px solid #1f1f1f; margin: 22px 0; }
+
 .dashboard-nav { display: flex; gap: 4px; padding: 0 20px; background: #0f0f0f; border-bottom: 1px solid #1f1f1f; }
 .dashboard-nav a { padding: 10px 14px; font-size: 13px; color: #999; border-bottom: 2px solid transparent; }
 .dashboard-nav a:hover { color: #fff; text-decoration: none; }
@@ -105,6 +123,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/usage", "Usage"),
         ("/dashboard/keys", "API keys"),
         ("/dashboard/settings", "Settings"),
+        ("/docs", "Docs"),
         ("/login", "Admin (VNC)"),
     ]
     parts = ['<div class="dashboard-nav">']
