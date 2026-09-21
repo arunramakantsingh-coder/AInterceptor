@@ -144,10 +144,10 @@ def _connect_page(user: User, db: Session) -> HTMLResponse:
     return HTMLResponse(W.page("Connect device", body, W.topbar(user.email)))
 
 
-@router.get("/connect", response_class=HTMLResponse)
-def dashboard_connect(user: User = Depends(current_user_web),
-                      db: Session = Depends(get_db)):
-    return _connect_page(user, db)
+@router.get("/connect")
+def dashboard_connect_redirect():
+    """Deprecated — connect flow now lives on /dashboard/agents."""
+    return RedirectResponse(url="/dashboard/agents", status_code=301)
 
 
 @router.post("/connect", response_class=HTMLResponse)

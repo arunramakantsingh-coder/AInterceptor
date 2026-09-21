@@ -101,10 +101,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/agents", "Agents"),
         ("/dashboard/sessions", "Sessions"),
         ("/dashboard/devices", "Devices"),
-        ("/dashboard/providers", "Providers"),
-        ("/dashboard/usage", "Usage"),
         ("/dashboard/keys", "API keys"),
-        ("/dashboard/settings", "Settings"),
         ("/login", "Admin (VNC)"),
     ]
     parts = ['<div class="dashboard-nav">']
