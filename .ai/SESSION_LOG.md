@@ -34,6 +34,15 @@ Chosen:  Funnel (5-min setup, auto-TLS).
 Drift:   Funnel exposes the app publicly. Mitigation: admin password.
 Impact:  https://ainterceptor.taila2310c.ts.net is public host
 
+## 2026-09-21 — S2 — agents page runs commands live (localhost helper)
+
+Chosen:  Agent exposes http://127.0.0.1:45231 with CORS locked to
+         AInterceptor origins. Agents page detects it; Login buttons
+         spawn `airouter-agent login <p>` on the user's laptop.
+Why:     Browsers cannot run local commands. A localhost helper is the
+         pattern used by Docker Desktop / Tailscale / 1Password.
+Impact:  agent/airouter_agent/serve.py, /dashboard/agents, nav.
+
 ## 2026-09-21 — UI build S1-S3 before CareerOS integration
 Chosen:  Build the agent page + sessions enhancement first.
 Why:     User judged the agent page as the centerpiece of onboarding.
