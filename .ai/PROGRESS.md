@@ -6,6 +6,37 @@ Newest entry at top. Updated per R1.
 
 ## 2026-09-21 — auto-generated snapshot
 
+  Commits in view: 20
+  Active providers: claude, chatgpt, gemini, deepseek
+
+  feat (9):
+    a5ecda0  feat(automation): post-commit hook auto-syncs docs from commit tags
+    09541c5  feat(cli): sync_docs — parse commit tags, update ROADMAP/BUGS/FUTURE/CHANGELOG
+    c3b9b94  feat(cli): aprogress — auto-summary of git log into PROGRESS.md
+    d8a9466  feat(cli): asession — append decision to .ai/SESSION_LOG.md
+    8f119d0  feat(dashboard): S4 — devices page with inline connect-code generator
+    … and 4 more
+
+  fix (2):
+    d1b061c  fix(dashboard): S3 redo — sessions_ui.py separate module (was: broken patch)
+    3226159  fix(dashboard): nav shows only real pages; /dashboard/connect redirects to /agen
+
+  docs (8):
+    e6d93c2  docs(ai): fold auto-synced FUTURE_WORK entries from hook test
+    019a560  docs(ai): S1-S4 in progress log + session notes
+    31815ed  docs: session log, automation design, web UI proposal, R6+R7
+    372ac23  docs: session log, automation design, web UI proposal, R6+R7
+    1c70866  docs: session log, automation design, web UI proposal, R6+R7
+    … and 3 more
+
+  chore (1):
+    6296eeb  chore(ai): trigger hook test [feature:hook-installed]
+
+  Run 'git log --oneline -30' for the full list.
+
+---
+## 2026-09-21 — auto-generated snapshot
+
   Commits in view: 30
   Active providers: claude, chatgpt, gemini, deepseek
 

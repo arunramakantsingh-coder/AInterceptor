@@ -2,6 +2,17 @@
 
 Durable record of decisions, drifts, and options considered.
 
+## 2026-09-21 — Automation track done (asession + aprogress + sync_docs + hook)
+
+  Context: n/a
+  Options: n/a
+  Chosen:  asession/aprogress/sync_docs CLIs + post-commit hook installed
+  Why:     enforces R1/R6/R7 — commit tags now drive docs automatically
+  Drift:   none
+  Impact:  n/a
+
+---
+
 ## 2026-09-21 — Path A primary, Path B fallback
 Context: Needed a scalable routing story.
 Options: (a) Path B primary, (b) Path A primary + B fallback, (c) both always
