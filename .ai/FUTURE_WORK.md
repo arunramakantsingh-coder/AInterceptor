@@ -162,3 +162,4 @@ Fix options:
 
 Preferred: regenerate button. One click, old revokes, new appears once.
 - [x] hook-installed (added by 6296eeb on 2026-09-21)
+- [x] post-commit-hook (added by a5ecda0 on 2026-09-21)
