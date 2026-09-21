@@ -153,7 +153,7 @@ def main() -> int:
     pc.set_defaults(fn=cmd_connect)
 
     pl = sub.add_parser("login", help="Log into a provider and upload its session")
-    pl.add_argument("provider", choices=PROVIDERS)
+    pl.add_argument("provider", help="provider name (claude, chatgpt, gemini, deepseek, ...)")
     pl.add_argument("--server", default="")
     pl.add_argument("--token", default="")
     pl.set_defaults(fn=cmd_login)
