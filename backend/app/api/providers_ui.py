@@ -1,6 +1,7 @@
 """Dashboard: providers page — catalog, per-user status, admin toggle."""
 from __future__ import annotations
 import os
+import pathlib
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,8 +15,6 @@ from app.api import web_common as W
 router = APIRouter(prefix="/dashboard", tags=["dashboard-providers"])
 
 
-# Full 20-provider catalog with display info.
-# (label, brand color, category)
 CATALOG = {
     "claude":      ("Claude",       "#d97706", "Tier 1"),
     "chatgpt":     ("ChatGPT",      "#10a37f", "Tier 1"),
@@ -41,7 +40,6 @@ CATALOG = {
 
 
 def _repo_root() -> pathlib.Path:
-    """Walk up from this file to find repo root (.env or .git present)."""
     here = pathlib.Path(__file__).resolve()
     for parent in here.parents:
         if (parent / ".env").exists() or (parent / ".git").exists():
@@ -63,8 +61,44 @@ def _is_admin(user: User) -> bool:
     return (user.email or "").strip().lower() == _admin_email()
 
 
-def _provider_card(name: str, label: str, color: str,
-                   active_global: bool, session, is_admin: bool):
+def _edit_env(provider: str, add: bool) -> tuple[bool, str]:
+    """Read .env, modify AINTERCEPTOR_ACTIVE_PROVIDERS, write back."""
+    root = _repo_root()
+    env_file = root / ".env"
+    if not env_file.exists():
+        return False, f".env not found at {env_file}"
+
+    lines = env_file.read_text().splitlines()
+    out = []
+    found = False
+    for line in lines:
+        if line.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS="):
+            parts = [p.strip() for p in line.split("=", 1)[1].split(",") if p.strip()]
+            if add and provider not in parts:
+                parts.append(provider)
+            elif not add:
+                parts = [p for p in parts if p != provider]
+            out.append("AINTERCEPTOR_ACTIVE_PROVIDERS=" + ",".join(parts))
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append("AINTERCEPTOR_ACTIVE_PROVIDERS=" + (provider if add else ""))
+
+    try:
+        env_file.write_text("\n".join(out) + "\n")
+    except Exception as e:
+        return False, f"write failed: {e}"
+
+    new_val = next(
+        (l.split("=", 1)[1] for l in out
+         if l.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS=")), ""
+    )
+    os.environ["AINTERCEPTOR_ACTIVE_PROVIDERS"] = new_val
+    return True, new_val
+
+
+def _provider_card(name, label, color, active_global, session, is_admin):
     badge = (
         '<span style="color:#4ade80; font-weight:600;">&#9679; active</span>'
         if active_global else
@@ -77,7 +111,6 @@ def _provider_card(name: str, label: str, color: str,
         sess_badge = ('<span class="muted" style="font-size:12px;">'
                       'no session</span>')
 
-    # Actions
     if is_admin:
         if active_global:
             action = (
@@ -107,8 +140,7 @@ def _provider_card(name: str, label: str, color: str,
         '<div style="flex:1; min-width:0;">'
         '<div style="font-weight:600;">' + W.esc(label) + '</div>'
         '<div class="muted" style="font-size:12px; margin-top:2px;">'
-        + W.esc(name) + ' &middot; ' + sess_badge
-        + '</div></div>'
+        + W.esc(name) + ' &middot; ' + sess_badge + '</div></div>'
         '<div style="min-width:90px; font-size:12px;">' + badge + '</div>'
         '<div style="min-width:80px; text-align:right;">' + action + '</div>'
         '</div>'
@@ -125,9 +157,8 @@ def providers_page(user: User = Depends(current_user_web),
                 .all())
     sess_by_provider = {s.provider: s for s in sessions}
 
-    # group by tier
     tiers: dict[str, list[str]] = {}
-    for name, (label, color, tier) in CATALOG.items():
+    for name, (_label, _color, tier) in CATALOG.items():
         tiers.setdefault(tier, []).append(name)
 
     blocks = []
@@ -146,71 +177,30 @@ def providers_page(user: User = Depends(current_user_web),
             ))
         blocks.append(
             '<div class="card" style="margin-top:20px;">'
-            '<h3>' + tier + '</h3>'
-            + "".join(rows)
-            + '</div>'
+            '<h3>' + tier + '</h3>' + "".join(rows) + '</div>'
         )
 
-    hint = ""
-    if admin:
-        hint = ('<p class="muted" style="font-size:12px; margin-top:10px;">'
-                'As admin you can enable/disable providers globally. '
-                'Changes apply after <code>arestart</code>.</p>')
-    else:
-        hint = ('<p class="muted" style="font-size:12px; margin-top:10px;">'
-                'Only admins can toggle providers. Yours are used automatically '
-                'when you call <code>/v1/chat/completions</code>.</p>')
+    hint = (
+        '<p class="muted" style="font-size:12px; margin-top:10px;">'
+        + ('As admin you can enable/disable providers globally. '
+           'Changes take effect after <code>arestart</code>.'
+           if admin else
+           'Only admins can toggle providers. Active ones are used '
+           'automatically by <code>/v1/chat/completions</code>.')
+        + '</p>'
+    )
 
     body = (
         W.dashboard_nav("/dashboard/providers")
         + '<div class="container">'
         + '<h2>Providers</h2>'
         + '<p class="muted">Every provider AInterceptor knows about. '
-        + 'Active ones are live; inactive ones are dormant and cost nothing.</p>'
+        + 'Active = live, inactive = dormant.</p>'
         + "".join(blocks)
         + hint
         + '</div>'
     )
     return HTMLResponse(W.page("Providers", body, W.topbar(user.email)))
-
-
-def _edit_env(provider: str, add: bool) -> tuple[bool, str]:
-    """Read .env, modify AINTERCEPTOR_ACTIVE_PROVIDERS, write back.
-    Returns (ok, message)."""
-    ROOT = _repo_root()
-    env_file = ROOT / ".env"
-    if not env_file.exists():
-        return False, f".env not found at {env_file}"
-    lines = env_file.read_text().splitlines()
-    out = []
-    found = False
-    for line in lines:
-        if line.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS="):
-            parts = [p.strip() for p in line.split("=", 1)[1].split(",") if p.strip()]
-            if add and provider not in parts:
-                parts.append(provider)
-            elif not add:
-                parts = [p for p in parts if p != provider]
-            out.append("AINTERCEPTOR_ACTIVE_PROVIDERS=" + ",".join(parts))
-            found = True
-        else:
-            out.append(line)
-    if not found:
-        out.append("AINTERCEPTOR_ACTIVE_PROVIDERS=" + (provider if add else ""))
-    try:
-        env_file.write_text("
-".join(out) + "
-")
-    except Exception as e:
-        return False, f"write failed: {e}"
-
-    new_val = next(
-        (l.split("=", 1)[1] for l in out
-         if l.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS=")), ""
-    )
-    os.environ["AINTERCEPTOR_ACTIVE_PROVIDERS"] = new_val
-    return True, new_val
-
 
 
 @router.post("/providers/{name}/enable")
@@ -220,7 +210,7 @@ def providers_enable(name: str, user: User = Depends(current_user_web)):
     name = name.lower().strip()
     if name in CATALOG:
         ok, msg = _edit_env(name, add=True)
-        print(f'[providers] enable {name}: ok={ok} msg={msg}', flush=True)
+        print(f"[providers] enable {name}: ok={ok} msg={msg}", flush=True)
     return RedirectResponse(url="/dashboard/providers", status_code=303)
 
 
@@ -231,5 +221,5 @@ def providers_disable(name: str, user: User = Depends(current_user_web)):
     name = name.lower().strip()
     if name in CATALOG:
         ok, msg = _edit_env(name, add=False)
-        print(f'[providers] disable {name}: ok={ok} msg={msg}', flush=True)
+        print(f"[providers] disable {name}: ok={ok} msg={msg}", flush=True)
     return RedirectResponse(url="/dashboard/providers", status_code=303)
