@@ -132,3 +132,17 @@ Read-only wrappers around `tailscale` where safe. Write ops
 command if sudo fails.
 
 Parked until core product (/v1) is stable.
+
+
+## Dashboard: strategy / todo board
+
+In-product task list and strategic review board, so thinking lives in the
+product not just in markdown. Suggested views:
+  - TODO / WIP / DONE per area (CLI / accounts / providers / infra)
+  - "Strategy" section (see .ai/STRATEGY.md for the current one)
+  - Link a note to a phase or a commit
+
+Backed by a simple `todos` table (id, user_id nullable, area, title,
+body, status, created_at, done_at).
+
+Deferred — product basics first.
