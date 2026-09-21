@@ -206,3 +206,17 @@ When to revisit:
 Note: for pure consumption (CareerOS via /v1), tablets never need VNC
 onboarding. Accounts get set up once on a laptop, then tablets just use
 the API.
+- [x] tablet-support-plan (added by 3f062b4 on 2026-09-21)
+- [x] v1-nonstream (added by 1f21223 on 2026-09-21)
+- [x] session-handoff (added by ddd9619 on 2026-09-21)
+- [x] cli-reference (added by 6a932a4 on 2026-09-21)
+
+
+## aref — self-service command reference
+
+Wrapper is installed at ~/bin/aref, but backend/scripts/gen_ref.py does not
+exist yet. Move the generator logic (from the 2026-09-21 handoff script)
+into that file so `aref` regenerates docs/COMMANDS.md from live state.
+
+Benefits: never goes stale again. Also can introspect ~/bin/* to discover
+new commands automatically.
