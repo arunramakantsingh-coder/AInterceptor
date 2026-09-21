@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 
 from airouter_agent import config
+from airouter_agent import serve as _serve
 from airouter_agent.login import login_sync
 
 PROVIDERS = ["claude", "chatgpt", "gemini", "deepseek"]
@@ -141,6 +142,11 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    """Run the local helper so the web UI can trigger agent commands."""
+    return _serve.main(port=args.port)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="airouter-agent")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -162,6 +168,10 @@ def main() -> int:
     pconf.add_argument("--server", default="")
     pconf.add_argument("--token", default="")
     pconf.set_defaults(fn=cmd_config)
+
+    psrv = sub.add_parser("serve", help="Run local helper for web UI")
+    psrv.add_argument("--port", type=int, default=45231)
+    psrv.set_defaults(fn=cmd_serve)
 
     ps = sub.add_parser("status", help="Show agent configuration")
     ps.set_defaults(fn=cmd_status)
