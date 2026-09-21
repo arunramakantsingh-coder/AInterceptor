@@ -40,6 +40,15 @@ CATALOG = {
 }
 
 
+def _repo_root() -> pathlib.Path:
+    """Walk up from this file to find repo root (.env or .git present)."""
+    here = pathlib.Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / ".env").exists() or (parent / ".git").exists():
+            return parent
+    return pathlib.Path.cwd()
+
+
 def _active_set() -> set[str]:
     env = os.environ.get("AINTERCEPTOR_ACTIVE_PROVIDERS", "")
     return {p.strip().lower() for p in env.split(",") if p.strip()}
@@ -165,20 +174,19 @@ def providers_page(user: User = Depends(current_user_web),
     return HTMLResponse(W.page("Providers", body, W.topbar(user.email)))
 
 
-def _edit_env(provider: str, add: bool) -> None:
-    """Read .env, modify AINTERCEPTOR_ACTIVE_PROVIDERS, write back."""
-    import pathlib
-    ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+def _edit_env(provider: str, add: bool) -> tuple[bool, str]:
+    """Read .env, modify AINTERCEPTOR_ACTIVE_PROVIDERS, write back.
+    Returns (ok, message)."""
+    ROOT = _repo_root()
     env_file = ROOT / ".env"
     if not env_file.exists():
-        return
+        return False, f".env not found at {env_file}"
     lines = env_file.read_text().splitlines()
     out = []
     found = False
     for line in lines:
         if line.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS="):
-            current = line.split("=", 1)[1].strip()
-            parts = [p.strip() for p in current.split(",") if p.strip()]
+            parts = [p.strip() for p in line.split("=", 1)[1].split(",") if p.strip()]
             if add and provider not in parts:
                 parts.append(provider)
             elif not add:
@@ -189,16 +197,20 @@ def _edit_env(provider: str, add: bool) -> None:
             out.append(line)
     if not found:
         out.append("AINTERCEPTOR_ACTIVE_PROVIDERS=" + (provider if add else ""))
-    env_file.write_text("\n".join(out) + "\n")
+    try:
+        env_file.write_text("
+".join(out) + "
+")
+    except Exception as e:
+        return False, f"write failed: {e}"
 
-    # also update running os.environ so UI reflects it immediately
-    new_val = ",".join(
-        p.strip() for p in
-        next((l.split("=", 1)[1] for l in out
-              if l.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS=")), "").split(",")
-        if p.strip()
+    new_val = next(
+        (l.split("=", 1)[1] for l in out
+         if l.startswith("AINTERCEPTOR_ACTIVE_PROVIDERS=")), ""
     )
     os.environ["AINTERCEPTOR_ACTIVE_PROVIDERS"] = new_val
+    return True, new_val
+
 
 
 @router.post("/providers/{name}/enable")
@@ -207,7 +219,8 @@ def providers_enable(name: str, user: User = Depends(current_user_web)):
         return RedirectResponse(url="/dashboard/providers", status_code=303)
     name = name.lower().strip()
     if name in CATALOG:
-        _edit_env(name, add=True)
+        ok, msg = _edit_env(name, add=True)
+        print(f'[providers] enable {name}: ok={ok} msg={msg}', flush=True)
     return RedirectResponse(url="/dashboard/providers", status_code=303)
 
 
@@ -217,5 +230,6 @@ def providers_disable(name: str, user: User = Depends(current_user_web)):
         return RedirectResponse(url="/dashboard/providers", status_code=303)
     name = name.lower().strip()
     if name in CATALOG:
-        _edit_env(name, add=False)
+        ok, msg = _edit_env(name, add=False)
+        print(f'[providers] disable {name}: ok={ok} msg={msg}', flush=True)
     return RedirectResponse(url="/dashboard/providers", status_code=303)
