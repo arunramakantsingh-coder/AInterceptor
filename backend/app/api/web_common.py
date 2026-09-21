@@ -102,6 +102,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/sessions", "Sessions"),
         ("/dashboard/devices", "Devices"),
         ("/dashboard/providers", "Providers"),
+        ("/dashboard/usage", "Usage"),
         ("/dashboard/keys", "API keys"),
         ("/login", "Admin (VNC)"),
     ]
