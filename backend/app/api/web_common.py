@@ -98,11 +98,14 @@ def esc(s: str | None) -> str:
 def dashboard_nav(current: str = "") -> str:
     items = [
         ("/dashboard", "Overview"),
-        ("/dashboard/keys", "API keys"),
+        ("/dashboard/agents", "Agents"),
         ("/dashboard/sessions", "Sessions"),
         ("/dashboard/devices", "Devices"),
-        ("/dashboard/connect", "Connect device"),
-        ("/login", "Admin login (VNC)"),
+        ("/dashboard/providers", "Providers"),
+        ("/dashboard/usage", "Usage"),
+        ("/dashboard/keys", "API keys"),
+        ("/dashboard/settings", "Settings"),
+        ("/login", "Admin (VNC)"),
     ]
     parts = ['<div class="dashboard-nav">']
     for href, label in items:

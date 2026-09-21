@@ -8,6 +8,7 @@ from app.api import dashboard_routes
 from app.api import device_routes
 from app.api import device_ui
 from app.api import google_auth
+from app.api import agents_ui
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
 
@@ -38,6 +39,7 @@ app.include_router(dashboard_routes.router)
 app.include_router(device_routes.router)
 app.include_router(device_ui.router)
 app.include_router(google_auth.router)
+app.include_router(agents_ui.router)
 
 
 @app.get("/")
