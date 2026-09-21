@@ -146,3 +146,18 @@ Backed by a simple `todos` table (id, user_id nullable, area, title,
 body, status, created_at, done_at).
 
 Deferred — product basics first.
+
+
+## Regenerate API key (UX recovery)
+
+Problem: user creates a key, refreshes the page, plaintext is gone.
+Only the prefix remains. No way to view it again (correct — hash-only).
+
+Fix options:
+  - A "regenerate" button on each key row that produces a NEW token
+    with the SAME name, revoking the old one atomically
+  - A short-lived "pending reveal" store (already used for the create
+    flow) that expires after 5 minutes
+  - A prominent warning banner on the create-key page
+
+Preferred: regenerate button. One click, old revokes, new appears once.
