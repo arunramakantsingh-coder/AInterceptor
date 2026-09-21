@@ -65,3 +65,13 @@ try:
                   name="novnc")
 except Exception:
     pass
+
+# agents page static JS
+try:
+    from fastapi.staticfiles import StaticFiles as _SF
+    import pathlib as _pl2
+    _agents_static = _pl2.Path(__file__).parent / "api" / "static"
+    if _agents_static.exists():
+        app.mount("/agents-static", _SF(directory=str(_agents_static)), name="agents-static")
+except Exception:
+    pass
