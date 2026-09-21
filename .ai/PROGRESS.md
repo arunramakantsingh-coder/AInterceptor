@@ -4,6 +4,38 @@ Newest entry at top. Updated per R1.
 
 ---
 
+## 2026-09-21 — auto-generated snapshot
+
+  Commits in view: 30
+  Active providers: claude, chatgpt, gemini, deepseek
+
+  feat (14):
+    d8a9466  feat(cli): asession — append decision to .ai/SESSION_LOG.md
+    8f119d0  feat(dashboard): S4 — devices page with inline connect-code generator
+    53a0926  feat(dashboard): S3 — sessions page: kill, last-used, refresh link
+    7ec265c  feat(dashboard): S2 — agents page detects local helper; one-click provider login
+    24c80fe  feat(agent): serve subcommand — local helper for web UI (127.0.0.1:45231)
+    … and 9 more
+
+  fix (7):
+    d1b061c  fix(dashboard): S3 redo — sessions_ui.py separate module (was: broken patch)
+    3226159  fix(dashboard): nav shows only real pages; /dashboard/connect redirects to /agen
+    8cde758  fix(agent): allow any provider name; clear error instead of argparse rejection
+    05c0d9d  fix(auth): accept sk-dev-* device tokens in current_user_or_key
+    98ff58a  fix(connect): HTTP-safe clipboard + copy-full-command button
+    … and 2 more
+
+  docs (9):
+    019a560  docs(ai): S1-S4 in progress log + session notes
+    31815ed  docs: session log, automation design, web UI proposal, R6+R7
+    372ac23  docs: session log, automation design, web UI proposal, R6+R7
+    1c70866  docs: session log, automation design, web UI proposal, R6+R7
+    aea0d44  docs(ai): R1 progress-report rule; R2-R5 rules; initial PROGRESS.md
+    … and 4 more
+
+  Run 'git log --oneline -30' for the full list.
+
+---
 ## 2026-09-21 — UI build (S1–S4)
 
 Shipped:
