@@ -1,237 +1,186 @@
 # AInterceptor — Command Reference
 
-Living document. Updated with every feature. Source of truth for the
-future CLI user guide.
+Auto-generated summary. Source of truth for day-to-day use.
+Regenerate with:  aref
 
-## Host
+## CLI commands (on the VM)
 
-Debian 13 VM. User `arun`. Tailscale IP `100.82.62.82`.
-Repo at `~/ainterceptor`.
-
-## Daemon
+### Status & health
 
 | Command | Purpose |
 |---|---|
-| `cd ~/ainterceptor && ./run-linux.sh` | Start daemon (foreground) |
-| `Ctrl+C` | Stop daemon |
-| `pkill -f "app.runtime.daemon"` | Force-stop daemon |
-
-## Monitoring
-
-| Command | Purpose |
-|---|---|
-| `astatus` | System state (daemon, CDP, Xvfb, x11vnc, tabs) |
-| `aprobe` | Read-only health of all active providers |
-| `aprobe claude` | Read-only health of one provider |
-
-## Prober toggle
-
-| Command | Effect |
-|---|---|
-| `aprobe-off` | Disable background prober (default) |
-| `aprobe-on` | Enable (invasive — sends pings) |
-| `cd ~/ainterceptor && ./run-linux.sh` | Apply change (restart) |
-
-## Chat
-
-| Command | Purpose |
-|---|---|
-| `chatgpt` / `claude` / `deepseek` / `gemini` | Enter chat REPL |
-| `/exit` inside chat | Leave chat |
-
-## VNC (admin login flow)
-
-| Command | Purpose |
-|---|---|
-| `x11vnc -display :99 -forever -shared -rfbauth ~/.vnc/passwd -rfbport 5900 -bg -o ~/.vnc/x11vnc.log` | Start x11vnc |
-| `pkill -f x11vnc` | Stop |
-| (Windows) VNC viewer → `100.82.62.82:5900` | Connect |
-
-## Git
-
-| Command | Purpose |
-|---|---|
-| `git log --oneline -5` | Recent commits |
-| `git status --short` | Working tree state |
-| `git push origin fix/nonclaude-three-providers-20260917` | Push |
-
-## Planned (script 2)
-
-- `alogin <provider>` — bring Chrome on-screen, wait for login, save state
-- `alogout <provider>` — clear that provider's cookies
-- `atest <provider>` — send "hi", verify reply
-- `ashow` / `ahide` — window position toggle
-
-
----
-
-## Agent-based login (user-side)
-
-See docs/AGENT_INSTALL.md for the full guide.
-
-| Command | Purpose |
-|---|---|
-| akeys list | Show all API keys + status |
-| akeys create <name> --save | Mint a key, save locally |
-| akeys current | Show prefix of loaded key |
-| akeys revoke <id> | Revoke a key |
-
-Admin sends the token once privately. User runs airouter-agent config
-then airouter-agent login <provider>. Server CDP-injects the session.
-
-
----
-
-## Batch 1 admin commands (fully implemented)
-
-### Sessions (DB-backed)
-
-| Command | Purpose |
-|---|---|
-| `asessions` | List **your** (admin's) sessions |
-| `asessions --all` | **Admin view**: every session across all users, with owning email |
-| `asessions export <p> [path]` | Copy local export file for a provider |
-| `asessions delete <p>` | Delete a provider's session row from the DB |
-
-### Health / diagnostic
-
-| Command | Purpose |
-|---|---|
-| `ahealth` | Pretty-print `/health` (supervisor, exporter, prober, circuits) |
-| `aversion` | Show AInterceptor / Python / Playwright / Chrome / xdotool versions |
-| `alogs [daemon|chrome|x11vnc]` | Tail the named log (default: daemon) |
 | `astatus` | System state: daemon, CDP, Xvfb, x11vnc, active providers, tabs |
-| `aprobe [<provider>]` | Read-only probe of all active (or one) providers |
-| `atest <provider>` | Full round-trip: sends `[AINT TEST]`, verifies reply |
+| `ahealth` | Pretty-print /health (supervisor, exporter, prober) |
+| `aversion` | Versions of AInterceptor, Python, Chrome, xdotool |
+| `aprobe` | Read-only provider health; `aprobe <p>` for one |
+| `atest` | Round-trip test with a real message (pollutes chat) |
 
-### Lifecycle
+### Daemon lifecycle
 
 | Command | Purpose |
 |---|---|
-| `astart` | Start daemon in background if not running (idempotent) |
-| `astart --fg` | Start daemon in foreground (blocks, shows logs live) |
+| `astart` | Start daemon in background if not running |
+| `astart --fg` | Start in foreground (blocks, shows logs) |
 | `arestart` | Stop + start in background |
 | `arestart --fg` | Stop + start in foreground |
-| `astop` | Stop daemon + Chrome, wait for exit, clear Singleton locks |
-
-### Config
-
-| Command | Purpose |
-|---|---|
-| `aconfig show` | Print all `AINTERCEPTOR_*` keys with descriptions |
-| `aconfig list` | List known config keys |
-| `aconfig get <key>` | Print one key's value |
-| `aconfig set <key> <value>` | Write a key (restart daemon to apply) |
-| `aconfig-reset <key>` | Reset one key to its default |
-
-### Keys
-
-| Command | Purpose |
-|---|---|
-| `akeys list` | List all API keys with status (active/revoked) |
-| `akeys create <name> [--save]` | Mint a new key; `--save` writes to `~/.ainterceptor/admin_api_key.txt` |
-| `akeys current` | Show prefix + length of the loaded key (never the token) |
-| `akeys revoke <id>` | Revoke a key by ID |
-
-### Provider management
-
-| Command | Purpose |
-|---|---|
-| `aproviders` | List all 20 providers with ACTIVE / inactive state |
-| `aproviders enable <name>` | Add to `.env` active list (restart to apply) |
-| `aproviders disable <name>` | Remove from active list |
-| `aproviders info <name>` | Host, URL, login markers |
-| `aproviders test <name>` | Alias for `aprobe <name>` |
-
-### Session (VNC-based login)
-
-| Command | Purpose |
-|---|---|
-| `alogin <provider>` | Move Chrome on-screen (VNC), wait for login, save storage_state |
-| `alogout <provider>` | Clear that provider's cookies only (siblings untouched) |
-| `ashow` | Move Chrome windows on-screen (for VNC) |
-| `ahide` | Move Chrome windows off-screen |
-
-### Agent-based login (user-side)
-
-See `docs/AGENT_INSTALL.md`.
-
-| Command | Purpose |
-|---|---|
-| `airouter-agent config --server ... --token ...` | Point agent at VM |
-| `airouter-agent login <provider>` | Open Chrome on user's machine; upload state to VM |
-
-### Bootstrap / git
-
-| Command | Purpose |
-|---|---|
-| `abootstrap` | Create admin user + first API key (idempotent) |
-| `asave "message"` | `git add -A && git commit && git push origin <branch>` |
+| `astop` | Stop daemon + Chrome, wait, clear Singleton locks |
 
 ### Chat
 
 | Command | Purpose |
 |---|---|
-| `chatgpt` / `claude` / `deepseek` / `gemini` | Enter chat REPL (uses `chat_any`) |
-| `/exit` inside chat | Leave |
+| `chatgpt` | Enter ChatGPT CLI REPL |
+| `claude` | Enter Claude CLI REPL |
+| `deepseek` | Enter DeepSeek CLI REPL |
+| `gemini` | Enter Gemini CLI REPL |
 
-### Environment
-
-All commands assume:
-- Debian VM, user `arun`, repo at `~/ainterceptor`
-- venv at `~/ainterceptor/.venv`
-- `~/bin` on PATH
-- `x11vnc` on `:5900` (for VNC login)
-- Xvfb on `:99`
-
-
----
-
-## Provider wizard (Batch 2)
-
-### Diagnostic
+### Provider management
 
 | Command | Purpose |
 |---|---|
-| `aproviders status <name>` | Show 5-layer state: listed / registry / runtime file / active / session |
-| `aproviders validate <name>` | status + probe (tab reachable, login state) |
+| `aproviders` | List all 20 providers with ACTIVE / inactive |
+| `aproviders enable <n>` | Add to .env active list |
+| `aproviders disable <n>` | Remove from .env active list |
+| `aproviders info <n>` | Host, URL, login markers |
+| `aproviders status <n>` | 5-layer diagnostic: listed/registry/runtime/active/session |
+| `aproviders validate <n>` | status + live probe |
+| `aproviders add <n>` | Interactive wizard to add a new provider |
+| `aproviders remove <n>` | Deactivate (does not delete files) |
+| `aproviders test <n>` | Alias for `aprobe <n>` |
 
-`status` output shows exactly which layer is missing and prints the next
-command to fix it.
+### Sessions (VNC / agent)
 
-### Add a new provider
+| Command | Purpose |
+|---|---|
+| `alogin <p>` | Agent-first login; prints agent command, waits |
+| `alogin <p> --vnc` | VNC fallback (admin) |
+| `alogout <p>` | Clear that provider's cookies only |
+| `ashow` | Move Chrome windows on-screen (VNC) |
+| `ahide` | Move Chrome windows off-screen |
+| `asessions` | List your DB-stored sessions |
+| `asessions --all` | Admin view: all users' sessions |
+| `asessions export <p> [path]` | Copy local storage_state file |
+| `asessions delete <p>` | Remove a session row from DB |
 
-Interactive (prompts for URL, tab prefix, login markers, selectors, activation):
+### Configuration
 
-    aproviders add <name>
+| Command | Purpose |
+|---|---|
+| `aconfig show` | Print AINTERCEPTOR_* keys with descriptions |
+| `aconfig list` | List known config keys |
+| `aconfig get <key>` | Print one value |
+| `aconfig set <k> <v>` | Write a value (restart to apply) |
+| `aconfig-reset <key>` | Reset one key to default |
 
-Non-interactive (for scripts/agents):
+### API keys
 
-    aproviders add <name> \
-      --url https://<name>.example/ \
-      --tab-prefix <name>.example \
-      --login-markers /login,/signin \
-      --composer-selectors 'div[contenteditable="true"],textarea' \
-      --no-activate \
-      --yes
+| Command | Purpose |
+|---|---|
+| `akeys list` | All keys with status |
+| `akeys create <n>` | Mint a key |
+| `akeys create <n> --save` | Mint + write to ~/.ainterceptor/admin_api_key.txt |
+| `akeys current` | Show prefix of loaded key (never the token) |
+| `akeys revoke <id>` | Revoke by ID |
 
-`add` performs three edits:
-1. Append `<name>` to `backend/app/providers_list.py` (ALL_PROVIDERS)
-2. Insert a `ProviderEntry` into `backend/app/interception/registry.py`
-3. Scaffold `backend/app/interception/<name>.py` with a working skeleton
-   and `# TODO` markers
+### Logs & evidence
 
-It does NOT delete or overwrite anything. If the file exists, it skips.
+| Command | Purpose |
+|---|---|
+| `alogs [daemon|chrome|x11vnc]` | Tail the named log (default: daemon) |
+| `aevidence` | List recent validation logs |
+| `aevidence show <name>` | Show one |
+| `aevidence clear [days]` | Prune logs older than N days |
 
-After add:
+### Bootstrap & git
 
-    arestart                  # apply new registry
-    alogin <name>             # log in via VNC
-    aproviders validate <name>
+| Command | Purpose |
+|---|---|
+| `abootstrap` | Create admin user + first API key |
+| `asave "message"` | git add -A && commit && push origin <branch> |
 
-### Remove a provider
+### Automation (R1/R6/R7)
 
-    aproviders remove <name>
+| Command | Purpose |
+|---|---|
+| `asession` | Interactive: append a decision to .ai/SESSION_LOG.md |
+| `asession --quick "title" "chosen" "why"` | Non-interactive append |
+| `aprogress` | Regenerate .ai/PROGRESS.md from git log |
+| `aprogress --show` | Print only (no write) |
+| `aprogress --commits N` | Look at last N commits |
+| `sync_docs --last-commit [--dry]` | Parse commit tags, update docs |
+| `sync_docs --commit <sha>` | Process a specific commit |
 
-Deactivates only (removes from `AINTERCEPTOR_ACTIVE_PROVIDERS`). Does NOT
-delete files. Manual cleanup commands printed at the end.
+### Agent (user's laptop)
+
+| Command | Purpose |
+|---|---|
+| `airouter-agent connect --server URL --code XXXX-XXXX` | Exchange a device code for a persistent token |
+| `airouter-agent login <provider>` | Open real Chrome, log in, upload session |
+| `airouter-agent serve [--port 45231]` | Local helper the web UI calls to run commands |
+| `airouter-agent status` | Show server, token prefix, hostname |
+| `airouter-agent config --server URL --token TOK` | Store server + token manually |
+
+## Web pages
+
+| URL | Purpose |
+|---|---|
+| `/auth/login` | Email+password, Google button |
+| `/auth/signup` | Sign up |
+| `/login` | VNC admin landing |
+| `/login/<provider>` | VNC per-provider (admin) |
+| `/dashboard` | Overview: cards, recent activity, quick start |
+| `/dashboard/agents` | One-click provider login via local helper |
+| `/dashboard/sessions` | Kill / refresh / last-used |
+| `/dashboard/devices` | List, revoke, inline connect-code generator |
+| `/dashboard/providers` | 20-provider catalog, admin enable/disable |
+| `/dashboard/usage` | Call history + summary cards |
+| `/dashboard/keys` | Create / list / revoke API keys |
+| `/dashboard/settings` | Account, password, danger zone |
+
+## API endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /v1/chat/completions` | OpenAI-compatible; `stream=true` (SSE) or `stream=false` (JSON); auth: sk-aint-* |
+| `POST /api/keys` | Mint an API key (auth: JWT or sk-aint-*) |
+| `GET  /api/keys` | List keys |
+| `DELETE /api/keys/{id}` | Revoke a key |
+| `POST /api/sessions/upload` | Agent upload (auth: sk-dev-* or sk-aint-*) |
+| `GET  /api/sessions` | List sessions for the caller |
+| `DELETE /api/sessions/{id}` | Delete a session |
+| `POST /api/devices/exchange` | Exchange a device code → sk-dev-* token |
+| `GET  /auth/google` | Start Google OAuth |
+| `GET  /auth/google/callback` | OAuth callback |
+| `GET  /health` | Supervisor, exporter, prober, circuits snapshot |
+
+## Environment (.env on VM)
+
+| Key | Purpose |
+|---|---|
+| `AINTERCEPTOR_ACTIVE_PROVIDERS` | Comma-separated list of live providers |
+| `AINTERCEPTOR_PROBER_ENABLED` | 0/1 — background prober (invasive; default 0) |
+| `AINTERCEPTOR_ADMIN_EMAIL` | Which user may enable/disable providers, CDP-inject |
+| `AINTERCEPTOR_WEB_LOGIN_PASSWORD` | Admin password for `/login/<provider>` |
+| `AINTERCEPTOR_WEB_COOKIE_SECRET` | HMAC secret for the VNC session cookie |
+| `AINTERCEPTOR_VNC_PASSWORD` | x11vnc password (embedded in iframe) |
+| `AINTERCEPTOR_GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `AINTERCEPTOR_GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `AINTERCEPTOR_PUBLIC_URL` | Public HTTPS origin (Funnel) |
+| `AINTERCEPTOR_HOST` | uvicorn bind address (0.0.0.0) |
+
+## Docs index
+
+| Doc | Purpose |
+|---|---|
+| `docs/COMMANDS.md` | this file |
+| `docs/AGENT_INSTALL.md` | user-side agent install guide |
+| `PROJECT/CLI_COMMAND_REFERENCE.md` | future Cisco-style interactive CLI spec |
+| `.ai/RULES.md` | project rules R1-R7 |
+| `.ai/SESSION_LOG.md` | decision log |
+| `.ai/PROGRESS.md` | milestone progress |
+| `.ai/FUTURE_WORK.md` | parking lot |
+| `.ai/STRATEGY.md` | scaling + OpenRouter comparison |
+| `PROJECT/AUTOMATION.md` | automation design (hooks, sync_docs) |
+| `PROJECT/WEB_UI.md` | web UI design |
+| `PROJECT/ARCHITECTURE_VNC_LOGIN.md` | VNC login architecture |
+| `PROJECT/ARCHITECTURE_ACCOUNTS.md` | accounts + device flow |
