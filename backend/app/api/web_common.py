@@ -104,6 +104,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/providers", "Providers"),
         ("/dashboard/usage", "Usage"),
         ("/dashboard/keys", "API keys"),
+        ("/dashboard/settings", "Settings"),
         ("/login", "Admin (VNC)"),
     ]
     parts = ['<div class="dashboard-nav">']
