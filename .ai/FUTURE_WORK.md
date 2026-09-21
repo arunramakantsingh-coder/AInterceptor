@@ -164,3 +164,45 @@ Preferred: regenerate button. One click, old revokes, new appears once.
 - [x] hook-installed (added by 6296eeb on 2026-09-21)
 - [x] post-commit-hook (added by a5ecda0 on 2026-09-21)
 - [x] automation-complete (added by e6d93c2 on 2026-09-21)
+- [x] ui-s5-providers (added by b327aac on 2026-09-21)
+- [x] ui-s6-usage (added by 70a3782 on 2026-09-21)
+- [x] ui-s7-settings (added by 65059b4 on 2026-09-21)
+
+
+## Tablet / iPad / Android support
+
+Hard limits:
+  - Agent cannot run on iPad or Android (no Python, no Playwright, no
+    subprocess, no persistent Chrome profile).
+  - This is a permanent constraint — no workaround.
+
+What tablets CAN do:
+  - View the dashboard (needs responsive CSS)
+  - Call /v1/chat/completions (any HTTP client)
+  - Use VNC onboarding (works from any browser)
+  - View session/device/key lists
+
+What needs to be built:
+  A) User-scoped VNC (Option A from design discussion):
+     - /login/<provider> available to any logged-in user, not just admin
+     - Route spawns Chrome with --user-data-dir=~/.ainterceptor/profiles/<user_id>
+     - Session captured on login → stored in user_sessions for that user
+     - Chrome closes cleanly
+     - Requires ~150 lines; 5 concurrent users ≈ 1.5GB RAM
+  B) Dashboard responsive CSS:
+     - @media (max-width:768px): stack cards, scroll tables, larger taps
+     - ~50 lines CSS, no JS changes
+  C) Tablet onboarding page (/dashboard/onboard):
+     - Big buttons: "pick provider, tap Login, tap through VNC"
+     - Uses existing /login/<provider> under the hood
+
+  D) VNC serialization/queueing if concurrent users >10
+     (Option B: one VNC session at a time — poor UX but lighter)
+
+When to revisit:
+  - When CareerOS has tablet users
+  - When /v1 is stable and self-serve
+
+Note: for pure consumption (CareerOS via /v1), tablets never need VNC
+onboarding. Accounts get set up once on a laptop, then tablets just use
+the API.
