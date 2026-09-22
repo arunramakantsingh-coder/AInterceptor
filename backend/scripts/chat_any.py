@@ -32,61 +32,38 @@ def cdp_ready() -> bool:
         return False
 
 
-def find_chrome():
-    for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"):
-        if pathlib.Path(c).exists(): return c
-    return None
+def cdp_alive(port=None):
+    """True if Chrome's CDP is speaking on 127.0.0.1:<port>."""
+    import urllib.request
+    if port is None:
+        port = SHARED_PORT
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1.5) as r:
+            return b"Browser" in r.read()
+    except Exception:
+        return False
 
 
-def launch_chrome(off_screen=True):
-    chrome = find_chrome()
-    if not chrome:
-        print("[FAIL] chrome.exe not found"); return False
-    SHARED_PROFILE.mkdir(parents=True, exist_ok=True)
-    pos = "-32000,-32000" if off_screen else "80,80"
-    args = [chrome,
-            f"--remote-debugging-port={SHARED_PORT}",
-            f"--user-data-dir={SHARED_PROFILE}",
-            "--no-first-run", "--no-default-browser-check",
-            "--disable-features=ChromeWhatsNewUI",
-            f"--window-position={pos}", "--window-size=1400,900"]
-    args.extend(URLS.values())
-    subprocess.Popen(args)
-    for _ in range(40):
-        time.sleep(0.5)
-        if cdp_ready(): return True
+def require_cdp():
+    """Fail fast with a useful hint if the daemon isn't up."""
+    if cdp_alive():
+        return True
+    print()
+    print("=" * 60)
+    print(f" VM Chrome is not running (CDP :{SHARED_PORT})")
+    print("=" * 60)
+    print("  Start the daemon:")
+    print("     arestart")
+    print()
+    print("  Check state:")
+    print("     astatus")
+    print("=" * 60)
     return False
 
 
-def kill_chrome():
-    subprocess.run(["powershell","-NoProfile","-Command",
-        f"Get-NetTCPConnection -LocalPort {SHARED_PORT} -State Listen -EA SilentlyContinue | "
-        "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"],
-        capture_output=True, shell=True)
-
-
-def load_runtime(provider):
-    module = importlib.import_module(f"app.interception.{provider}")
-    target = provider.replace("-", "").lower()
-    for name, obj in vars(module).items():
-        if isinstance(obj, type) and obj.__module__ == module.__name__ \
-           and name.lower() == f"{target}runtime":
-            return obj
-    for name, obj in vars(module).items():
-        if isinstance(obj, type) and obj.__module__ == module.__name__ \
-           and name.endswith("Runtime"):
-            return obj
-    raise RuntimeError(f"no Runtime class for {provider}")
-
-
 async def do_chat(provider):
-    if not cdp_ready():
-        print(f"[..] launching shared Chrome off-screen on {SHARED_PORT}")
-        if not launch_chrome(off_screen=True):
-            print("[FAIL] Chrome did not become CDP-ready in 20s")
-            print("       Try:  aid restart")
-            return 2
+    if not require_cdp():
+        return 2
     try:
         cls = load_runtime(provider)
     except Exception as e:
@@ -96,7 +73,7 @@ async def do_chat(provider):
         await asyncio.wait_for(rt.start(), timeout=20)
     except asyncio.TimeoutError:
         print(f"[FAIL] timeout attaching to Chrome on {SHARED_PORT}")
-        print("       Try:  aid restart")
+        print("       Try:  arestart")
         return 4
     except Exception as e:
         print(f"[FAIL] attach: {e}")
