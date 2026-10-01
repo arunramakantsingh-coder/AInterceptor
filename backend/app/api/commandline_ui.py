@@ -262,7 +262,7 @@ def commandline_page(user: User = Depends(current_user_web)):
         "chips.appendChild(all);"
         "sections.forEach(function(sec){"
         "var t=sec.querySelector('.cmd-cat-title');if(!t)return;"
-        "var nm=t.textContent.replace(/\(\d+\)/,'').trim();"
+        r"var nm=t.textContent.replace(/\(\d+\)/,'').trim();"
         "var b=document.createElement('button');"
         "b.className='cmd-chip';b.textContent=nm;b.setAttribute('data-cat',sec.id);"
         "b.addEventListener('click',function(){setCat(sec.id);});chips.appendChild(b);});}"
