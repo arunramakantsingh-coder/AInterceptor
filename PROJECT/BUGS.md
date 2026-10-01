@@ -3,6 +3,9 @@
 ## Open
 | ID | Severity | Phase | Title | Status |
 |---|---|---|---|---|
+| B008 | (auto) | (auto) | opened by 3540f02 | Open |
+| B006 | (auto) | (auto) | opened by 69fbb8f | Open |
+| B001 | Medium | chatgpt | 1 | `atest chatgpt` connects but no reply — session OK, reply extraction failed | Open |
 
 ## Resolved
 | ID | Severity | Phase | Title | Resolution |
@@ -14,5 +17,3 @@
 ## Regression
 | ID | Title | Test That Should Catch |
 |---|---|---|
-
-| B001 | Medium | chatgpt | 1 | `atest chatgpt` connects but no reply — session OK, reply extraction failed | Open |

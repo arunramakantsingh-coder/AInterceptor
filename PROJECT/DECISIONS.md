@@ -10,6 +10,7 @@
 | 0006 | Transport/event interception is the authoritative provider extraction boundary | Accepted | 2026-09-16 |
 | 0007 | Provider runtime boundary is separate from the legacy adapter facade | Accepted | 2026-09-16 |
 | 0008 | Claude streaming uses Chromium CDP Network streamResourceContent | Accepted | 2026-09-16 |
+| 0009 | Reconcile the ProviderAdapter method count with governance | Accepted | 2026-10-01 |
 
 ## ADR-0006 — Transport/event interception is the authoritative provider extraction boundary
 
@@ -106,3 +107,47 @@ submission. It does not extract the provider response from the DOM.
 - No DOM response scraping.
 - No live provider request during M1.3 implementation validation.
 - No routing or fallback logic.
+
+
+## ADR-0009 Ã¢â‚¬â€ Reconcile the ProviderAdapter method count with governance
+
+### Context
+`PROJECT/GOVERNANCE.md` froze a "5 method" adapter interface while
+`backend/app/providers/base.py` declares four callable methods:
+
+1. `authenticate()`
+2. `send_prompt(messages)`
+3. `supports_tools()`
+4. `get_model_mapping()`
+
+`FakeProvider` and `ClaudeProvider` each implement exactly those four.
+No fifth method exists in the source, and `ProviderAdapter` is not
+referenced by any runtime execution path: the authoritative orchestration
+boundary is `ProviderRuntime` (`start` / `execute` / `close`), introduced
+by ADR-0007. ADR-0007 explicitly deferred this reconciliation to a
+separate ADR; this is that ADR.
+
+### Decision
+The governance method count is corrected to **4**, matching the code that
+is actually frozen. The count was a documentation error, not a missing
+implementation, so no method is invented.
+
+`ProviderAdapter` is retained as an explicitly legacy compatibility
+facade. The authoritative provider execution boundary remains
+`ProviderRuntime`, whose contract is:
+
+1. `start()` Ã¢â‚¬â€ establishes or validates the provider runtime/session;
+2. `execute(request)` Ã¢â‚¬â€ consumes a `ProviderExecutionRequest` and yields
+   normalized `StreamEvent` values;
+3. `close()` Ã¢â‚¬â€ releases provider-local resources.
+
+### Consequences
+- Governance and source now agree; the four-method freeze is enforceable.
+- No public interface changes, so no adapter needs modification.
+- New provider integrations target `ProviderRuntime`, not `ProviderAdapter`.
+- The legacy facade may be removed by a future ADR once nothing imports it.
+
+### Non-goals
+- Not a change to the provider transport boundary (ADR-0006).
+- Not a routing, fallback, or capability change.
+- No new provider inference API.

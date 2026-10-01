@@ -38,6 +38,7 @@ COMMAND_TREE: dict[str, dict] = {
         "built": True,
     },
     "aprobe": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
         "category": "Status & Health",
         "desc": "Read-only provider health. Sends NO messages.",
         "syntax": "aprobe [provider ...]",
@@ -45,6 +46,7 @@ COMMAND_TREE: dict[str, dict] = {
         "built": True,
     },
     "atest": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
         "category": "Status & Health",
         "desc": "Round-trip test — sends a real message and waits for reply. Pollutes chat history.",
         "syntax": "atest <provider>",
@@ -96,18 +98,23 @@ COMMAND_TREE: dict[str, dict] = {
                          "syntax": "aproviders list",
                          "examples": ["aproviders"], "built": True},
             "enable":   {"desc": "Add provider to .env active list (applies on arestart)",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders enable <name>",
                          "examples": ["aproviders enable mistral"], "built": True},
             "disable":  {"desc": "Remove provider from active list",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders disable <name>",
                          "examples": ["aproviders disable mistral"], "built": True},
             "info":     {"desc": "Host, home URL, login markers",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders info <name>",
                          "examples": ["aproviders info claude"], "built": True},
             "status":   {"desc": "5-layer diagnostic: listed / registry / runtime file / active / session",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders status <name>",
                          "examples": ["aproviders status perplexity"], "built": True},
             "validate": {"desc": "status + live probe (opens tab, checks DOM)",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders validate <name>",
                          "examples": ["aproviders validate claude"], "built": True},
             "add":      {"desc": "Interactive wizard to add a new provider",
@@ -116,9 +123,11 @@ COMMAND_TREE: dict[str, dict] = {
                                       "aproviders add np --url https://np.com/chat --host np.com --yes"],
                          "built": True},
             "remove":   {"desc": "Deactivate (does not delete runtime files)",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders remove <name>",
                          "examples": ["aproviders remove newprovider"], "built": True},
             "test":     {"desc": "Alias for aprobe <name>",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                          "syntax": "aproviders test <name>",
                          "examples": ["aproviders test deepseek"], "built": True},
         },
@@ -126,6 +135,7 @@ COMMAND_TREE: dict[str, dict] = {
 
     # ── Sessions ─────────────────────────────────────────────────
     "alogin": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
         "category": "Sessions",
         "desc": "Agent-first login. Prints agent command, waits for upload.",
         "syntax": "alogin <provider> [--vnc]",
@@ -133,6 +143,7 @@ COMMAND_TREE: dict[str, dict] = {
         "built": True,
     },
     "alogout": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
         "category": "Sessions",
         "desc": "Clear that provider's cookies from VM Chrome (siblings untouched)",
         "syntax": "alogout <provider>",
@@ -144,6 +155,7 @@ COMMAND_TREE: dict[str, dict] = {
     "ahide": {"category": "Sessions", "desc": "Move all Chrome windows off-screen",
               "syntax": "ahide", "examples": ["ahide"], "built": True},
     "asessions": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
         "category": "Sessions",
         "desc": "Manage DB-stored provider sessions",
         "syntax": "asessions <subcommand>",
@@ -192,6 +204,7 @@ COMMAND_TREE: dict[str, dict] = {
 
     # ── API Keys ─────────────────────────────────────────────────
     "akeys": {
+        "args": {"sub": {"type": "choice", "choices": ["list", "create", "current", "revoke", "rotate"], "desc": "subcommand"}},
         "category": "API Keys",
         "desc": "Manage user API keys (sk-aint-*)",
         "syntax": "akeys <subcommand>",
@@ -273,6 +286,7 @@ COMMAND_TREE: dict[str, dict] = {
 
     # ── Logs & Evidence ──────────────────────────────────────────
     "alogs": {
+        "args": {"name": {"type": "choice", "choices": ["daemon", "chrome", "x11vnc"], "desc": "log name"}},
         "category": "Logs & Evidence",
         "desc": "Tail a named log file",
         "syntax": "alogs [daemon|chrome|x11vnc]",
@@ -353,6 +367,7 @@ COMMAND_TREE: dict[str, dict] = {
                         "syntax": "airouter-agent serve [--port 45231]",
                         "examples": ["airouter-agent serve"], "built": True},
             "status":  {"desc": "Show server, token prefix, hostname, reachability",
+                "args": { "provider": {"type": "provider", "desc": "provider name"} },
                         "syntax": "airouter-agent status",
                         "examples": ["airouter-agent status"], "built": True},
             "config":  {"desc": "Store server + token manually",
@@ -377,3 +392,28 @@ def categories() -> dict[str, list[str]]:
     for name, node in COMMAND_TREE.items():
         out.setdefault(node.get("category", "Other"), []).append(name)
     return {k: sorted(v) for k, v in sorted(out.items())}
+
+
+def args_for(cmd: str, sub: str | None = None) -> dict:
+    """Argument metadata for a command (or command+subcommand)."""
+    node = COMMAND_TREE.get(cmd) or {}
+    if sub and isinstance(node.get("subcommands"), dict):
+        node = node["subcommands"].get(sub) or node
+    return node.get("args") or {}
+
+
+def suggestions_for(cmd: str, sub: str | None, partial: str) -> list[str]:
+    """Candidate values for the next token, filtered by `partial`."""
+    out: list[str] = []
+    node = COMMAND_TREE.get(cmd) or {}
+    if sub is None and node.get("subcommands"):
+        out = list(node["subcommands"])
+    args = args_for(cmd, sub)
+    for spec in args.values():
+        if spec.get("type") == "choice":
+            out += list(spec.get("choices") or [])
+    return sorted({v for v in out if v.startswith(partial)})
+
+
+
+SUBCMD_PROVIDER_ARGS = ['enable', 'disable', 'info', 'status', 'validate', 'remove', 'test', 'status']

@@ -1,20 +1,25 @@
-"""Canonical provider list. Single source of truth."""
+"""Canonical provider list.
+
+ALL_PROVIDERS is derived from the single catalog in
+app.control_plane.state.ALL_KNOWN so the dispatcher gate and the UI
+catalog can never disagree again. (They previously did: the gate listed
+10 providers while the UI advertised 20, so requests to the other 10
+failed with a misleading "unknown provider".)
+"""
 from __future__ import annotations
 
-ALL_PROVIDERS: list[str] = [
-    "claude",
-    "chatgpt",
-    "gemini",
-    "deepseek",
-    "mistral",
-    "qwen",
-    "huggingchat",
-    "perplexity",
-    "grok",
-    "poe",
-]
+from app.control_plane.state import ALL_KNOWN
 
-# Providers with a direct-HTTP streamer implemented
+# Every catalog provider is dispatchable. A provider whose interception
+# module is absent raises a precise error at dispatch time rather than
+# being silently rejected here.
+ALL_PROVIDERS: list[str] = list(ALL_KNOWN)
+
+# Providers whose interception module is not implemented yet. Kept
+# explicit so the CLI can report "no runtime" honestly.
+NO_RUNTIME_MODULE: list[str] = ["perplexity"]
+
+# Providers with a direct-HTTP streamer implemented (Path A)
 PATH_A_SUPPORTED: list[str] = [
     "deepseek",
     "claude",

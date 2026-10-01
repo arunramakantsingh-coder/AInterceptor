@@ -220,3 +220,8 @@ into that file so `aref` regenerates docs/COMMANDS.md from live state.
 
 Benefits: never goes stale again. Also can introspect ~/bin/* to discover
 new commands automatically.
+- [x] aref-stub (added by 3e29a4d on 2026-09-21)
+- [x] docs-web-ui (added by abbda68 on 2026-09-21)
+- [x] commandline-page (added by 2b08b53 on 2026-09-21)
+- [x] ashell (added by bfac330 on 2026-09-21)
+- [x] commandline-interactive (added by e6d29f8 on 2026-09-21)

@@ -14,7 +14,14 @@ from app.runtime import path_a
 from app.runtime import path_b as path_b_mod
 from app.runtime import supervisor_registry
 from app.runtime.circuit_breaker import CircuitRegistry, CircuitState
-from app.providers_list import ALL_PROVIDERS, PATH_A_SUPPORTED
+from app.providers_list import ALL_PROVIDERS, PATH_A_SUPPORTED, NO_RUNTIME_MODULE
+
+
+def _has_runtime_module(provider: str) -> bool:
+    """True if backend/app/interception/<provider>.py exists."""
+    import pathlib as _pl
+    return (_pl.Path(__file__).resolve().parents[1] / "interception"
+            / f"{provider}.py").exists()
 
 
 def _env_force_path():
@@ -128,6 +135,12 @@ async def stream_reply(
     """
     if provider not in ALL_PROVIDERS:
         raise ProviderUnavailable(f"unknown provider: {provider}")
+
+    if provider in NO_RUNTIME_MODULE or not _has_runtime_module(provider):
+        raise ProviderUnavailable(
+            f"{provider}: no interception runtime module "
+            f"(expected backend/app/interception/{provider}.py)"
+        )
 
     effective = (force_path or _env_force_path() or "").upper() or None
     circuits = supervisor_registry.get_circuits() or CircuitRegistry()

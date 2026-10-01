@@ -82,31 +82,16 @@ def _close_bug(bug_id: str, sha: str, dry: bool) -> str:
     if not BUGS.exists():
         return f"[skip] {BUGS.name} not found"
     txt = BUGS.read_text(encoding="utf-8")
-    # Very light touch — find the bug id, add a Resolved marker line
     marker = f"| {bug_id} |"
     if marker not in txt:
         return f"[skip] BUGS: {bug_id} not found"
-    line = next((l for l in txt.splitlines() if l.startswith(marker)), "")
+    row = [bug_id, "(auto)", "(auto)",
+           f"closed by {sha} on {date.today().isoformat()}", "Resolved"]
     if dry:
-        return f"[dry]  BUGS {bug_id} → resolved @ {sha}\n  original: {line.strip()}"
-    # Append a new resolved entry under a "## Resolved" section
-    if "## Resolved" in txt:
-        # insert after that header
-        parts = txt.split("## Resolved", 1)
-        head, tail = parts[0], parts[1]
-        new_line = (
-            f"\n\n| {bug_id} | (auto) | (auto) | closed by {sha} "
-            f"on {date.today().isoformat()} | Resolved | {sha} |"
-        )
-        # insert after the first blank line following "## Resolved"
-        tail_lines = tail.split("\n", 1)
-        tail_body = tail_lines[1] if len(tail_lines) > 1 else ""
-        txt = head + "## Resolved" + tail_lines[0] + new_line + "\n" + tail_body
-    else:
-        txt = txt.rstrip() + f"\n\n## Resolved\n\n| ID | Title | Commit |\n"
-        txt += f"| {bug_id} | (auto) | {sha} |\n"
+        return f"[dry]  BUGS {bug_id} -> Resolved row {row}"
+    txt, how = _append_row(txt, "## Resolved", row)
     BUGS.write_text(txt, encoding="utf-8")
-    return f"[ok]   BUGS: {bug_id} → Resolved @ {sha}"
+    return f"[ok]   BUGS: {bug_id} -> Resolved @ {sha} ({how})"
 
 
 def _add_bug(bug_id: str, sha: str, msg: str, dry: bool) -> str:
@@ -115,20 +100,12 @@ def _add_bug(bug_id: str, sha: str, msg: str, dry: bool) -> str:
     txt = BUGS.read_text(encoding="utf-8")
     if f"| {bug_id} |" in txt:
         return f"[skip] BUGS: {bug_id} already present"
-    line = f"| {bug_id} | (auto) | (auto) | opened by {sha} | Open |"
+    row = [bug_id, "(auto)", "(auto)", f"opened by {sha}", "Open"]
     if dry:
-        return f"[dry]  BUGS += {line}"
-    if "## Open" in txt:
-        parts = txt.split("## Open", 1)
-        head, tail = parts[0], parts[1]
-        tail_lines = tail.split("\n", 1)
-        body = tail_lines[1] if len(tail_lines) > 1 else ""
-        txt = head + "## Open" + tail_lines[0] + "\n" + line + "\n" + body
-    else:
-        txt = txt.rstrip() + f"\n\n## Open\n\n| ID | Summary | Commit |\n"
-        txt += line + "\n"
+        return f"[dry]  BUGS += {row}"
+    txt, how = _append_row(txt, "## Open", row)
     BUGS.write_text(txt, encoding="utf-8")
-    return f"[ok]   BUGS += {bug_id}"
+    return f"[ok]   BUGS += {bug_id} ({how})"
 
 
 def _add_feature(name: str, sha: str, dry: bool) -> str:
@@ -140,8 +117,21 @@ def _add_feature(name: str, sha: str, dry: bool) -> str:
     line = f"- [x] {name} (added by {sha} on {date.today().isoformat()})"
     if dry:
         return f"[dry]  FUTURE += {line}"
-    txt = txt.rstrip() + f"\n{line}\n"
-    FUTURE.write_text(txt, encoding="utf-8")
+    # Append to the FIRST bullet list in the file, not the end of the file
+    # (the file has later "## ..." sections that are not the feature list).
+    lines = txt.splitlines()
+    last_bullet = None
+    for i, l in enumerate(lines):
+        if l.startswith("- "):
+            last_bullet = i
+        elif l.startswith("## ") and last_bullet is not None:
+            break
+    if last_bullet is None:
+        out = txt.rstrip("\n") + f"\n\n## Features\n\n{line}\n"
+    else:
+        lines.insert(last_bullet + 1, line)
+        out = "\n".join(lines) + "\n"
+    FUTURE.write_text(out, encoding="utf-8")
     return f"[ok]   FUTURE += {name}"
 
 
@@ -170,6 +160,58 @@ def _release(version: str, sha: str, dry: bool) -> str:
 
 
 # ── main ─────────────────────────────────────────────────────────────
+
+# Ã¢â€â‚¬Ã¢â€â‚¬ markdown table helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+def _is_sep(line: str) -> bool:
+    s = line.strip()
+    return bool(s.startswith("|") and set(s) <= set("|-: ") and "-" in s)
+
+
+def _table_rows(txt: str, heading: str) -> tuple[int, int] | None:
+    """Locate the markdown table under `heading`.
+
+    Returns (ncols, insert_line_index) or None.
+    """
+    lines = txt.splitlines()
+    try:
+        start = next(i for i, l in enumerate(lines) if l.strip() == heading)
+    except StopIteration:
+        return None
+    for i in range(start + 1, len(lines)):
+        if lines[i].strip().startswith("|"):
+            if i + 1 < len(lines) and _is_sep(lines[i + 1]):
+                ncols = len(lines[i].strip().strip("|").split("|"))
+                j = i + 2
+                while j < len(lines) and lines[j].strip().startswith("|"):
+                    j += 1
+                return ncols, j
+            return None
+    return None
+
+
+def _append_row(txt: str, heading: str, row: list[str]) -> tuple[str, str]:
+    """Append a table row under `heading`, creating the table if absent."""
+    info = _table_rows(txt, heading)
+    lines = txt.splitlines()
+    if info is None:
+        # create heading + table at end of file
+        n = len(row)
+        header = "| " + " | ".join(["ID"] + ["(auto)"] * (n - 1)) + " |"
+        sep = "|" + "---|" * n
+        out = txt.rstrip("\n") + f"\n\n{heading}\n{header}\n{sep}\n"
+        out += "| " + " | ".join(row) + " |\n"
+        return out, "created table"
+    ncols, idx = info
+    if len(row) > ncols:
+        # Merge the overflow into the final column rather than truncating
+        # (truncating silently discarded real data, e.g. a Status cell).
+        row = row[:ncols - 1] + [" ".join(row[ncols - 1:])]
+    elif len(row) < ncols:
+        row = row + ["(auto)"] * (ncols - len(row))
+    lines.insert(idx, "| " + " | ".join(row) + " |")
+    return "\n".join(lines) + "\n", "appended row"
+
 
 def process(ref: str, dry: bool) -> int:
     sha, msg = _commit_message(ref)

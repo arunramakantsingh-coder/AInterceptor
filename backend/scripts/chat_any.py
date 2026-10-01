@@ -61,6 +61,24 @@ def require_cdp():
     return False
 
 
+def load_runtime(provider):
+    """Resolve the *Runtime class for a provider module.
+
+    Restored from c149dd8; it was deleted by 69fbb8f while its call
+    site in do_chat() remained, which broke every CLI chat command.
+    """
+    module = importlib.import_module(f"app.interception.{provider}")
+    target = provider.replace("-", "").lower()
+    for name, obj in vars(module).items():
+        if isinstance(obj, type) and obj.__module__ == module.__name__:
+            if name.lower() == f"{target}runtime":
+                return obj
+    for name, obj in vars(module).items():
+        if isinstance(obj, type) and obj.__module__ == module.__name__ and name.endswith("Runtime"):
+            return obj
+    raise RuntimeError(f"no Runtime class for {provider}")
+
+
 async def do_chat(provider):
     if not require_cdp():
         return 2
@@ -118,31 +136,76 @@ async def do_chat(provider):
     return 0
 
 
-def move_windows(x, y):
+def _chrome_windows():
+    """Window ids of the real Chrome browser window(s) on :99.
+
+    Filters out Chrome's own 10x10 helper window (the class-owner window
+    has no WM_CLASS and a tiny geometry), which a naive
+    `xdotool search --class google-chrome` would match.
+    """
+    ids = []
     try:
-        import ctypes
-        from ctypes import wintypes
-        u = ctypes.windll.user32
-        CB = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-        def cb(hwnd, lp):
-            n = u.GetWindowTextLengthW(hwnd)
-            if n:
-                buf = ctypes.create_unicode_buffer(n+1)
-                u.GetWindowTextW(hwnd, buf, n+1)
-                if "Chrome" in buf.value:
-                    u.MoveWindow(hwnd, x, y, 1400, 900, True)
-            return True
-        u.EnumWindows(CB(cb), 0)
-    except Exception as e:
-        print(f"[WARN] {e}")
+        out = subprocess.run(["xdotool", "search", "--name", "Chrome"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except Exception:
+        return ids
+    for wid in out.split():
+        try:
+            geo = subprocess.run(["xdotool", "getwindowgeometry", wid],
+                                 capture_output=True, text=True, timeout=5).stdout
+        except Exception:
+            continue
+        dims = [ln.split(":")[1].strip() for ln in geo.splitlines()
+                if "Geometry" in ln]
+        if not dims:
+            continue
+        try:
+            w, h = (int(v) for v in dims[0].lower().split("x"))
+        except Exception:
+            continue
+        if w >= 400 and h >= 300:
+            ids.append(wid)
+    return ids
+
+
+def move_windows(x, y):
+    """Move the Chrome window(s) to (x, y).
+
+    Linux/xdotool implementation. The previous ctypes.windll.user32
+    version was Windows-only and could never work in the VM.
+    """
+    ids = _chrome_windows()
+    if not ids:
+        print("[WARN] no Chrome window found (is the daemon up? try: astart)")
+        return
+    for wid in ids:
+        try:
+            subprocess.run(["xdotool", "windowmove", wid, str(x), str(y)],
+                           capture_output=True, timeout=5)
+            subprocess.run(["xdotool", "windowactivate", wid],
+                           capture_output=True, timeout=5)
+        except Exception as e:
+            print(f"[WARN] move {wid} failed: {e}")
 
 
 def do_login(provider):
+    """Bring the daemon's Chrome on-screen so the user can log in."""
     if not cdp_ready():
-        if not launch_chrome(off_screen=False):
-            print("[FAIL] launch failed"); return 2
+        print("[..] daemon/Chrome not running Ã¢â‚¬â€ starting it")
+        try:
+            from scripts import ops_sys as S
+            if S.astart() != 0:
+                print("[FAIL] could not start the daemon")
+                return 2
+        except Exception as e:
+            print(f"[FAIL] start: {e}")
+            return 2
     move_windows(80, 80)
-    print(f"Chrome is on-screen. Log into {provider}, then run:  hide")
+    print()
+    print(f"Log in to {provider} in the Chrome window on :99.")
+    print(f"  If you are on the VM desktop, it is now visible.")
+    print(f"  Otherwise use VNC:  x11vnc -display :99 -rfbport 5900")
+    print(f"Then run:  hide")
     return 0
 
 
@@ -159,11 +222,20 @@ def do_status():
 
 
 def do_restart():
-    kill_chrome()
-    time.sleep(2)
-    ok = launch_chrome(off_screen=True)
-    print("restarted" if ok else "failed")
-    return 0 if ok else 1
+    """Restart the daemon (which owns Chrome).
+
+    kill_chrome()/launch_chrome() were removed by 69fbb8f when browser
+    ownership moved to the daemon. Delegate to the daemon's own control
+    path instead of launching Chrome from the client.
+    """
+    from scripts import ops_sys as S
+    return S.arestart()
+
+
+def do_kill():
+    """Stop the daemon and the Chrome it owns."""
+    from scripts import ops_sys as S
+    return S.astop()
 
 
 def main():
@@ -176,7 +248,7 @@ def main():
     if a0 == "hide":    return do_hide()
     if a0 == "restart": return do_restart()
     if a0 == "kill":
-        kill_chrome(); print("killed"); return 0
+        return do_kill()
     if a0 == "login":
         if len(args) < 2: print("usage: login <provider>"); return 1
         return do_login(args[1].lower())
