@@ -179,6 +179,25 @@ def commandline_page(user: User = Depends(current_user_web)):
         + str(total) + ' commands across ' + str(len(order)) + ' categories &middot; '
         + str(built) + ' built, ' + str(total - built) + ' planned &mdash; '
         'same tree as <code>ashell</code>.</div>'
+        '        \'<link rel="stylesheet" href="/dashboard/commandline.css">\''
+        '        \'<div class="cmd-console">\''
+        '        \'<div class="cmd-console-bar">\''
+        '        \'<span class="cmd-console-prompt">AIRouter&gt;</span>\''
+        '        \'<input id="cmd-input" class="cmd-console-input" autocomplete="off" \''
+        '        \'spellcheck="false" placeholder="type a command, Tab to complete, ? for syntax">\''
+        '        \'</div>\''
+        '        \'<pre id="cmd-out" class="cmd-console-out"></pre>\''
+        '        \'<div class="cmd-console-hint">\''
+        '        \'<kbd>Tab</kbd> completes commands, subcommands and values &middot; \''
+        '        \'<kbd>?</kbd> shows the valid next tokens &middot; \''
+        '        \'<kbd>Enter</kbd> filters the cards below &middot; \''
+        '        \'<kbd>Esc</kbd> clears\''
+        '        \'</div>\''
+        '        \'</div>\''
+        '        \'<div class="cmd-chips" id="cmd-chips"></div>\''
+        '        \'<script id="cmd-tree" type="application/json">{"astatus":{"desc":"Daemon PID, CDP port, Xvfb, x11vnc, active providers, open tabs","syntax":"astatus"},"ahealth":{"desc":"Pretty-print of /health \\u2014 supervisor, exporter, prober, circuits","syntax":"ahealth"},"aversion":{"desc":"Versions of AInterceptor, Python, Chrome, xdotool, current .env flags","syntax":"aversion"},"aprobe":{"desc":"Read-only provider health. Sends NO messages.","syntax":"aprobe [provider ...]","args":{"provider":{"type":"provider","desc":"provider name"}}},"atest":{"desc":"Round-trip test \\u2014 sends a real message and waits for reply. Pollutes chat history.","syntax":"atest <provider>","args":{"provider":{"type":"provider","desc":"provider name"}}},"astart":{"desc":"Start daemon if not running. Idempotent.","syntax":"astart [--fg]"},"arestart":{"desc":"Stop + start. Use after .env or code changes.","syntax":"arestart [--fg]"},"astop":{"desc":"Stop daemon + Chrome, clear Singleton locks","syntax":"astop"},"chatgpt":{"desc":"Enter ChatGPT REPL (/exit to leave)","syntax":"chatgpt"},"claude":{"desc":"Enter Claude REPL","syntax":"claude"},"deepseek":{"desc":"Enter DeepSeek REPL","syntax":"deepseek"},"gemini":{"desc":"Enter Gemini REPL","syntax":"gemini"},"aproviders":{"desc":"Manage the 20 configured providers","syntax":"aproviders <subcommand>","subcommands":{"list":{"desc":"List all 20 providers with status"},"enable":{"desc":"Add provider to .env active list (applies on arestart)","args":{"provider":{"type":"provider","desc":"provider name"}}},"disable":{"desc":"Remove provider from active list","args":{"provider":{"type":"provider","desc":"provider name"}}},"info":{"desc":"Host, home URL, login markers","args":{"provider":{"type":"provider","desc":"provider name"}}},"status":{"desc":"5-layer diagnostic: listed / registry / runtime file / active / session","args":{"provider":{"type":"provider","desc":"provider name"}}},"validate":{"desc":"status + live probe (opens tab, checks DOM)","args":{"provider":{"type":"provider","desc":"provider name"}}},"add":{"desc":"Interactive wizard to add a new provider"},"remove":{"desc":"Deactivate (does not delete runtime files)","args":{"provider":{"type":"provider","desc":"provider name"}}},"test":{"desc":"Alias for aprobe <name>","args":{"provider":{"type":"provider","desc":"provider name"}}}}},"alogin":{"desc":"Agent-first login. Prints agent command, waits for upload.","syntax":"alogin <provider> [--vnc]","args":{"provider":{"type":"provider","desc":"provider name"}}},"alogout":{"desc":"Clear that provider\'s cookies from VM Chrome (siblings untouched)","syntax":"alogout <provider>","args":{"provider":{"type":"provider","desc":"provider name"}}},"ashow":{"desc":"Move all Chrome windows on-screen (for VNC)","syntax":"ashow"},"ahide":{"desc":"Move all Chrome windows off-screen","syntax":"ahide"},"asessions":{"desc":"Manage DB-stored provider sessions","syntax":"asessions <subcommand>","args":{"provider":{"type":"provider","desc":"provider name"}},"subcommands":{"list":{"desc":"List YOUR (admin\'s) sessions"},"all":{"desc":"Admin view \\u2014 every user\'s sessions with owning email"},"export":{"desc":"Copy local storage_state file for a provider"},"delete":{"desc":"Remove a session row from the DB"}}},"aconfig":{"desc":"Read/write .env keys","syntax":"aconfig <subcommand>","subcommands":{"show":{"desc":"Print every AINTERCEPTOR_* key with description"},"list":{"desc":"List known config keys"},"get":{"desc":"Print one value"},"set":{"desc":"Write a value. Restart daemon to apply."}}},"aconfig-reset":{"desc":"Restore a config key to its default value","syntax":"aconfig-reset <key>"},"akeys":{"desc":"Manage user API keys (sk-aint-*)","syntax":"akeys <subcommand>","args":{"sub":{"type":"choice","choices":["list","create","current","revoke","rotate"],"desc":"subcommand"}},"subcommands":{"list":{"desc":"All keys with status, prefix, name"},"create":{"desc":"Mint a new key. --save writes to ~/.ainterceptor/admin_api_key.txt"},"current":{"desc":"Show prefix of the loaded key (never the token)"},"revoke":{"desc":"Revoke by ID"},"rotate":{"desc":"Issue replacement, revoke old after grace period"},"reveal":{"desc":"Show plaintext (one-time)"}}},"atoken":{"desc":"Short-lived bearer tokens for scripts and CI jobs","syntax":"atoken <subcommand>","subcommands":{"create":{"desc":"Mint a token with TTL"},"list":{"desc":"Active tokens"},"revoke":{"desc":"Revoke a token"}}},"aroute":{"desc":"Per-capability routing table (needs routing engine)","syntax":"aroute <subcommand>","subcommands":{"show":{"desc":"Show current routing table"},"set":{"desc":"Set primary/secondary/tertiary per capability"},"fallback":{"desc":"Provider-level fallback chain"}}},"arate":{"desc":"Per-provider rate limits and cooldowns","syntax":"arate <subcommand>","subcommands":{"show":{"desc":"Current limits per provider"},"set":{"desc":"Set requests per second"},"cooldown":{"desc":"Set 429 cooldown in seconds"}}},"alogs":{"desc":"Tail a named log file","syntax":"alogs [daemon|chrome|x11vnc]","args":{"name":{"type":"choice","choices":["daemon","chrome","x11vnc"],"desc":"log name"}}},"aevidence":{"desc":"Browse validation evidence logs","syntax":"aevidence <subcommand>","subcommands":{"list":{"desc":"List recent validation logs"},"show":{"desc":"Show one log"},"clear":{"desc":"Prune logs older than N days"}}},"abootstrap":{"desc":"Create admin user + first API key (idempotent)","syntax":"abootstrap"},"asave":{"desc":"git add -A && commit && push","syntax":"asave \\"<message>\\""},"asession":{"desc":"Append a decision to .ai/SESSION_LOG.md (R6)","syntax":"asession [--quick \\"title\\" \\"chosen\\" \\"why\\"]"},"aprogress":{"desc":"Regenerate .ai/PROGRESS.md from git log (R1)","syntax":"aprogress [--show] [--commits N]"},"sync_docs":{"desc":"Parse commit tags, update ROADMAP / BUGS / FUTURE / CHANGELOG","syntax":"sync_docs --last-commit [--dry] | --commit <sha>"},"airouter-agent":{"desc":"User-side agent \\u2014 runs on the user\'s laptop, not the VM","syntax":"airouter-agent <subcommand>","subcommands":{"connect":{"desc":"Exchange a device code for a persistent token"},"login":{"desc":"Open real Chrome, wait for user login, upload storage_state"},"serve":{"desc":"Local helper (port 45231) the dashboard calls for one-click logins"},"status":{"desc":"Show server, token prefix, hostname, reachability","args":{"provider":{"type":"provider","desc":"provider name"}}},"config":{"desc":"Store server + token manually"}}},"ashell":{"desc":"Interactive Cisco-style shell with ? help and Tab completion","syntax":"ashell"}}</script>\''
+        '        \'<script id="cmd-providers" type="application/json">["character","chatgpt","claude","copilot","deepseek","doubao","gemini","glm","grok","huggingchat","kimi","lechat","meta","mistral","perplexity","phind","poe","qwen","yi","you"]</script>\''
+        '        \'<script src="/dashboard/commandline.js" defer></script>\''
         '<div class="cmd-search-wrap">'
         '<input id="cmd-search" class="cmd-search" type="text" '
         'placeholder="Search commands, examples, subcommands… (try aproviders, login, key)" '
@@ -197,22 +216,56 @@ def commandline_page(user: User = Depends(current_user_web)):
         "var count=document.getElementById('cmd-count');"
         "var empty=document.getElementById('cmd-empty');"
         "var sections=document.querySelectorAll('.cmd-section');"
-        "var cards=document.querySelectorAll('.cmd-card');"
-        "function blob(c){return (c.getAttribute('data-search')||'')+' '+(c.getAttribute('data-name')||'');}"
+        "var cards=Array.prototype.slice.call(document.querySelectorAll('.cmd-card'));"
+        "var chips=document.getElementById('cmd-chips');"
+        "var activeCat=null;"
+        "cards.forEach(function(c){"
+        "c._name=(c.getAttribute('data-name')||'').toLowerCase();"
+        "c._blob=(c.getAttribute('data-search')||'').toLowerCase();"
+        "var s=c.closest('.cmd-section');c._cat=s?s.id:'';});"
+        "function score(c,q){"
+        "if(c._name===q)return 100;"
+        "if(c._name.indexOf(q)===0)return 80;"
+        "if(c._name.indexOf(q)!==-1)return 60;"
+        "var i=c._blob.indexOf(q);"
+        "return i===-1?-1:20+Math.max(0,10-Math.floor(i/40));}"
+        "function setCat(cat){activeCat=cat;"
+        "Array.prototype.slice.call(chips.querySelectorAll('.cmd-chip')).forEach(function(b){"
+        "b.classList.toggle('cmd-chip-on',(b.getAttribute('data-cat')||'')===(cat||''));});"
+        "filter();}"
         "function filter(){"
         "var q=(input.value||'').toLowerCase().trim();var vis=0;"
-        "sections.forEach(function(sec){var n=0;"
-        "sec.querySelectorAll('.cmd-card').forEach(function(c){"
-        "var m=!q||blob(c).indexOf(q)!==-1;"
-        "if(m){c.classList.remove('cmd-hidden');n++;"
-        "if(q&&c.getAttribute('data-name').toLowerCase().indexOf(q)!==-1){"
-        "c.classList.add('cmd-open');var b=c.querySelector('.cmd-body');if(b)b.hidden=false;}}"
-        "else{c.classList.add('cmd-hidden');}});"
-        "if(n===0)sec.classList.add('cmd-hidden');else sec.classList.remove('cmd-hidden');"
-        "vis+=n;});"
+        "var scored=cards.map(function(c){return [c,q?score(c,q):1];})"
+        ".filter(function(p){return p[1]>=0;});"
+        "scored.sort(function(a,b){return b[1]-a[1];});"
+        "cards.forEach(function(c){c.classList.add('cmd-hidden');});"
+        "sections.forEach(function(sec){sec.classList.add('cmd-hidden');});"
+        "var host=document.getElementById('cmd-sections');"
+        "scored.forEach(function(p){"
+        "var c=p[0];"
+        "if(activeCat&&c._cat!==activeCat)return;"
+        "c.classList.remove('cmd-hidden');vis++;"
+        "var sec=c.closest('.cmd-section');if(sec)sec.classList.remove('cmd-hidden');"
+        "if(q&&c._name.indexOf(q)!==-1){c.classList.add('cmd-open');"
+        "var b=c.querySelector('.cmd-body');if(b)b.hidden=false;}"
+        "if(q&&host&&sec)host.appendChild(sec);});"
         "empty.classList.toggle('cmd-hidden',vis!==0);"
-        "count.textContent=q?vis+' of '+cards.length+' commands match':cards.length+' commands · type to filter';}"
-        "input.addEventListener('input',filter);filter();"
+        "count.textContent=q?(vis+' of '+cards.length+' commands match (ranked)'"
+        "+(activeCat?' in '+activeCat:''))"
+        ":(cards.length+' commands \u00b7 type to filter; Tab-complete in the console above');}"
+        "input.addEventListener('input',filter);"
+        "if(chips){"
+        "var all=document.createElement('button');"
+        "all.className='cmd-chip cmd-chip-on';all.textContent='All';"
+        "all.setAttribute('data-cat','');"
+        "all.addEventListener('click',function(){setCat(null);});"
+        "chips.appendChild(all);"
+        "sections.forEach(function(sec){"
+        "var t=sec.querySelector('.cmd-cat-title');if(!t)return;"
+        "var nm=t.textContent.replace(/\(\d+\)/,'').trim();"
+        "var b=document.createElement('button');"
+        "b.className='cmd-chip';b.textContent=nm;b.setAttribute('data-cat',sec.id);"
+        "b.addEventListener('click',function(){setCat(sec.id);});chips.appendChild(b);});}"
         "document.addEventListener('click',function(ev){"
         "var t=ev.target;if(t&&t.classList.contains('cmd-copy')){"
         "var x=t.getAttribute('data-copy')||'';"
@@ -232,6 +285,7 @@ def commandline_page(user: User = Depends(current_user_web)):
         "document.addEventListener('keydown',function(ev){"
         "if(ev.key==='/'&&document.activeElement!==input){ev.preventDefault();"
         "input.focus();input.select();}});"
+        "filter();"
         "})();"
         "function cmdToggle(card){card.classList.toggle('cmd-open');"
         "var b=card.querySelector('.cmd-body');"
@@ -245,3 +299,23 @@ def commandline_page(user: User = Depends(current_user_web)):
         + "<script>" + JS + "</script>"
     )
     return HTMLResponse(W.page("Command Line", full, W.topbar(user.email)))
+
+
+# ── static assets for the interactive console ───────────────────────
+
+import pathlib as _pl
+from fastapi.responses import PlainTextResponse as _PTR
+
+_ASSET_DIR = _pl.Path(__file__).resolve().parent / "static"
+
+
+@router.get("/commandline.css")
+def _cli_css():
+    return _PTR((_ASSET_DIR / "cli_console.css").read_text(encoding="utf-8"),
+                media_type="text/css")
+
+
+@router.get("/commandline.js")
+def _cli_js():
+    return _PTR((_ASSET_DIR / "cli_console.js").read_text(encoding="utf-8"),
+                media_type="application/javascript")
