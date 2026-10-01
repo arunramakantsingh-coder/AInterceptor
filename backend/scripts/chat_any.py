@@ -188,6 +188,50 @@ def move_windows(x, y):
             print(f"[WARN] move {wid} failed: {e}")
 
 
+PROVIDER_HOSTS = {
+    "claude": "claude.ai",
+    "chatgpt": "chatgpt.com",
+    "gemini": "gemini.google.com",
+    "deepseek": "chat.deepseek.com",
+}
+
+
+def activate_provider_tab(provider):
+    """Bring `provider`'s Chrome tab to the front over CDP.
+
+    do_login used to move the window without selecting a tab, so whichever
+    tab happened to be active came forward (observed: Grok when logging in
+    to Claude). Returns the activated tab title, or None.
+    """
+    needle = PROVIDER_HOSTS.get(provider.lower(), provider.lower())
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{SHARED_PORT}/json/list", timeout=5) as r:
+            tabs = json.loads(r.read().decode())
+    except Exception as e:
+        print(f"[WARN] could not list tabs: {e}")
+        return None
+
+    target = None
+    for t in tabs:
+        if t.get("type") != "page":
+            continue
+        if needle in (t.get("url") or ""):
+            target = t
+            break
+    if target is None:
+        print(f"[WARN] no open tab matching {needle} — open it first, or run: astart")
+        return None
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{SHARED_PORT}/json/activate/{target['id']}",
+                timeout=5) as r:
+            r.read()
+    except Exception:
+        pass  # CDP returns an empty body; a read error here is not fatal
+    return target.get("title") or needle
+
+
 def do_login(provider):
     """Bring the daemon's Chrome on-screen so the user can log in."""
     if not cdp_ready():
@@ -201,11 +245,15 @@ def do_login(provider):
             print(f"[FAIL] start: {e}")
             return 2
     move_windows(80, 80)
+    title = activate_provider_tab(provider)
     print()
-    print(f"Log in to {provider} in the Chrome window on :99.")
-    print(f"  If you are on the VM desktop, it is now visible.")
-    print(f"  Otherwise use VNC:  x11vnc -display :99 -rfbport 5900")
-    print(f"Then run:  hide")
+    if title:
+        print(f"Chrome is on-screen showing: {title}")
+    else:
+        print("Chrome is on-screen. Select the tab yourself.")
+    print(f"Log in to {provider}, then run:  hide")
+    print(f"  VNC if you cannot see the desktop:"
+          f"  x11vnc -display :99 -rfbport 5900")
     return 0
 
 
