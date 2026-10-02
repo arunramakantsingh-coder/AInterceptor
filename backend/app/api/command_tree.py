@@ -54,6 +54,43 @@ COMMAND_TREE: dict[str, dict] = {
         "built": True,
     },
 
+    "amonitor": {
+        "category": "Status & Health",
+        "desc": "Live dispatcher probe board. Refreshes in place. Only shows ACTIVE providers.",
+        "syntax": "amonitor [--real] [--interval N] [--once] [--email X]",
+        "examples": [
+            "amonitor",
+            "amonitor --once",
+            "amonitor --real",
+            "amonitor --interval 3",
+        ],
+        "built": True,
+    },
+    "adispatch": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
+        "category": "Status & Health",
+        "desc": "Force a dispatcher path and trace it step by step (same code path as /v1).",
+        "syntax": "adispatch <provider> \"<prompt>\" [--path auto|a|b|claude] [--email X] [--json]",
+        "examples": [
+            "adispatch deepseek \"say PONG\"",
+            "adispatch deepseek \"say PONG\" --path b",
+            "adispatch claude \"say PONG\" --json",
+        ],
+        "built": True,
+    },
+    "atrace": {
+        "category": "Status & Health",
+        "desc": "Read-only view of recent dispatcher path attempts (ring buffer).",
+        "syntax": "atrace [provider] [--path a|b|claude] [--n N] [--since 30m] [--clear]",
+        "examples": [
+            "atrace",
+            "atrace deepseek",
+            "atrace deepseek --path a --n 50",
+            "atrace --since 1h",
+        ],
+        "built": True,
+    },
+
     # ── Daemon Lifecycle ─────────────────────────────────────────
     "astart": {
         "category": "Daemon Lifecycle",
