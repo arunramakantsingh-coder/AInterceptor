@@ -62,8 +62,8 @@ def main():
         print(f"unknown: {sub}")
         return 1
 
-    if cmd == "astart":         return S.astart()
-    if cmd == "arestart":       return S.arestart()
+    if cmd == "astart":         return S.astart(fg=("--fg" in rest or "-f" in rest))
+    if cmd == "arestart":       return S.arestart(fg=("--fg" in rest or "-f" in rest))
     if cmd == "astop":          return S.astop()
     if cmd == "abootstrap":     return S.abootstrap()
     if cmd == "asave":          return S.asave(" ".join(rest))

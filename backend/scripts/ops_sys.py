@@ -172,11 +172,22 @@ def _spawn_daemon():
     )
 
 
-def _poll_up(timeout_s=60):
+def _poll_up(timeout_s=300, quiet=False):
+    """Poll for daemon readiness. Chrome cold boot can take 90-290s.
+    Prints a dot every 5s so the user sees progress."""
     t0 = time.time()
+    last_dot = t0
     while time.time() - t0 < timeout_s:
         if _daemon_up_in_log() and _port_8000_listening():
+            if not quiet:
+                sys.stdout.write(" ok\n")
+                sys.stdout.flush()
             return True
+        now = time.time()
+        if not quiet and now - last_dot >= 5:
+            sys.stdout.write(".")
+            sys.stdout.flush()
+            last_dot = now
         time.sleep(1.0)
     return False
 
@@ -184,23 +195,25 @@ def _poll_up(timeout_s=60):
 def astart(fg=False):
     if not fg and _daemon_pid() and _port_8000_listening():
         print(f"[i] daemon already running (pid {_daemon_pid()}, port 8000)")
-        print("     arestart    restart (background)")
-        print("     astop       stop")
+        print("     arestart        restart (background)")
+        print("     arestart --fg   restart (foreground, Ctrl+C stops)")
+        print("     astop           stop")
         return 0
     if fg:
         print("[..] starting in FOREGROUND (Ctrl+C to stop)")
-        return subprocess.call(["bash", "-lc", "cd ~/ainterceptor && ./run-linux.sh"])
+        sys.stdout.flush()
+        return subprocess.call(["bash", "-lc", "cd ~/ainterceptor && exec ./run-linux.sh"])
     if _daemon_pid() and not _port_8000_listening():
         print(f"[warn] stale pid {_daemon_pid()} without port 8000 — stopping")
         astop()
-    print("[..] starting (background)")
+    print("[..] starting (background) — watching for readiness")
     _spawn_daemon()
-    if _poll_up(60):
+    if _poll_up(300):
         print(f"[OK] daemon up (pid {_daemon_pid()}, port 8000)")
-        print("     alogs daemon")
         return 0
-    print("[FAIL] daemon did not come up within 60s")
-    print("       alogs daemon")
+    print()
+    print("[FAIL] daemon did not come up within 300s")
+    print("       alogs daemon | tail -40")
     return 1
 
 
