@@ -19,17 +19,22 @@ DOC_ROOTS = [REPO / "PROJECT", REPO / ".ai", REPO / "docs"]
 
 
 def _safe_resolve(rel: str) -> pathlib.Path:
+    """Resolve `rel` (repo-relative path, e.g. 'PROJECT/FOO.md') to a
+    file inside one of DOC_ROOTS. Rejects traversal and non-md."""
     rel = rel.strip("/").replace("\\", "/")
+    if not rel or ".." in rel.split("/"):
+        raise HTTPException(404, "doc not found")
+    candidate = (REPO / rel).resolve()
     for root in DOC_ROOTS:
         if not root.exists():
             continue
-        candidate = (root / rel).resolve()
         try:
             candidate.relative_to(root.resolve())
         except ValueError:
             continue
         if candidate.is_file() and candidate.suffix.lower() == ".md":
             return candidate
+        raise HTTPException(404, "doc not found")
     raise HTTPException(404, "doc not found")
 
 
