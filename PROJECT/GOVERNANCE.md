@@ -4,7 +4,7 @@ Project-specific rules (never weaker than baseline).
 
 1. Provider isolation — no cross-imports between adapters.
 2. Session files never committed.
-3. Adapter interface freeze (5 methods). Changes require ADR.
+3. Adapter interface freeze (4 methods: `authenticate`, `send_prompt`, `supports_tools`, `get_model_mapping`). The authoritative runtime boundary is `ProviderRuntime` (see ADR-0009). Changes require ADR.
 4. Rate-limit floor: 1 req / 2 sec / provider account (Phase 1-3).
 5. Legal notice header in every adapter file.
 6. Bootstrap scripts use Python (ADR-0005).

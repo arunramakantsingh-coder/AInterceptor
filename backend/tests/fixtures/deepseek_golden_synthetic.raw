@@ -1,0 +1,5 @@
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":"hi "}
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":"how "}
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":"are "}
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":"you"}
+data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"hi how are you"}]}}}

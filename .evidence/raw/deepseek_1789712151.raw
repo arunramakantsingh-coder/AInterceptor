@@ -1,0 +1,432 @@
+event: ready
+data: {"request_message_id":23,"response_message_id":24,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789712151.468334}
+
+data: {"v":{"response":{"message_id":24,"parent_id":23,"model":"","role":"ASSISTANT","thinking_enabled":true,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":743,"feedback":null,"inserted_at":1789712151.458112,"search_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"We","elapsed_secs":null,"references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}
+
+data: {"v":" answer"}
+
+data: {"v":"."}
+
+data: {"v":" User"}
+
+data: {"v":" repeated"}
+
+data: {"v":"."}
+
+data: {"v":" Need"}
+
+data: {"v":" likely"}
+
+data: {"v":" concise"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" can"}
+
+data: {"v":" mention"}
+
+data: {"v":" capabilities"}
+
+data: {"v":"."}
+
+data: {"v":" Already"}
+
+data: {"v":" did"}
+
+data: {"v":"."}
+
+data: {"v":" Need"}
+
+data: {"v":" answer"}
+
+data: {"v":" maybe"}
+
+data: {"v":" more"}
+
+data: {"v":" specific"}
+
+data: {"v":"?"}
+
+data: {"v":" They"}
+
+data: {"v":" asked"}
+
+data: {"v":" what"}
+
+data: {"v":" can"}
+
+data: {"v":" you"}
+
+data: {"v":" do"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" can"}
+
+data: {"v":" give"}
+
+data: {"v":" list"}
+
+data: {"v":"."}
+
+data: {"v":" Could"}
+
+data: {"v":" mention"}
+
+data: {"v":" coding"}
+
+data: {"v":","}
+
+data: {"v":" writing"}
+
+data: {"v":","}
+
+data: {"v":" learning"}
+
+data: {"v":","}
+
+data: {"v":" problem"}
+
+data: {"v":"-solving"}
+
+data: {"v":"."}
+
+data: {"v":" Keep"}
+
+data: {"v":" helpful"}
+
+data: {"v":"."}
+
+data: {"v":" Maybe"}
+
+data: {"v":" ask"}
+
+data: {"v":" what"}
+
+data: {"v":" they"}
+
+data: {"v":" need"}
+
+data: {"v":"."}
+
+data: {"v":" Ensure"}
+
+data: {"v":" no"}
+
+data: {"v":" issue"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" can"}
+
+data: {"v":" respond"}
+
+data: {"v":"."}
+
+data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":0.680242809}
+
+data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"I","references":[],"stage_id":1}]}
+
+data: {"p":"response/fragments/-1/content","v":" can"}
+
+data: {"v":" help"}
+
+data: {"v":" you"}
+
+data: {"v":" with"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"**"}
+
+data: {"v":"C"}
+
+data: {"v":"oding"}
+
+data: {"v":" &"}
+
+data: {"v":" Tech"}
+
+data: {"v":"**\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Write"}
+
+data: {"v":" and"}
+
+data: {"v":" debug"}
+
+data: {"v":" code"}
+
+data: {"v":" ("}
+
+data: {"v":"Python"}
+
+data: {"v":","}
+
+data: {"v":" JavaScript"}
+
+data: {"v":","}
+
+data: {"v":" Java"}
+
+data: {"v":","}
+
+data: {"v":" C"}
+
+data: {"v":"++,"}
+
+data: {"v":" etc"}
+
+data: {"v":".)\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Explain"}
+
+data: {"v":" programming"}
+
+data: {"v":" concepts"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Build"}
+
+data: {"v":" scripts"}
+
+data: {"v":","}
+
+data: {"v":" web"}
+
+data: {"v":" apps"}
+
+data: {"v":","}
+
+data: {"v":" APIs"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" automation"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Review"}
+
+data: {"v":" and"}
+
+data: {"v":" improve"}
+
+data: {"v":" existing"}
+
+data: {"v":" code"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"**"}
+
+data: {"v":"Writing"}
+
+data: {"v":" &"}
+
+data: {"v":" Communication"}
+
+data: {"v":"**\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Write"}
+
+data: {"v":","}
+
+data: {"v":" edit"}
+
+data: {"v":","}
+
+data: {"v":" or"}
+
+data: {"v":" summarize"}
+
+data: {"v":" text"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Draft"}
+
+data: {"v":" emails"}
+
+data: {"v":","}
+
+data: {"v":" essays"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" reports"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Brain"}
+
+data: {"v":"storm"}
+
+data: {"v":" ideas"}
+
+data: {"v":" and"}
+
+data: {"v":" outlines"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"**"}
+
+data: {"v":"Learning"}
+
+data: {"v":" &"}
+
+data: {"v":" Problem"}
+
+data: {"v":" Solving"}
+
+data: {"v":"**\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Explain"}
+
+data: {"v":" topics"}
+
+data: {"v":" step"}
+
+data: {"v":" by"}
+
+data: {"v":" step"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Help"}
+
+data: {"v":" with"}
+
+data: {"v":" math"}
+
+data: {"v":","}
+
+data: {"v":" science"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" logic"}
+
+data: {"v":" problems"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Plan"}
+
+data: {"v":" projects"}
+
+data: {"v":" and"}
+
+data: {"v":" break"}
+
+data: {"v":" down"}
+
+data: {"v":" tasks"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"**"}
+
+data: {"v":"General"}
+
+data: {"v":" Assistance"}
+
+data: {"v":"**\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Answer"}
+
+data: {"v":" questions"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Translate"}
+
+data: {"v":" or"}
+
+data: {"v":" re"}
+
+data: {"v":"phrase"}
+
+data: {"v":" text"}
+
+data: {"v":"\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Give"}
+
+data: {"v":" suggestions"}
+
+data: {"v":" and"}
+
+data: {"v":" advice"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"What"}
+
+data: {"v":" would"}
+
+data: {"v":" you"}
+
+data: {"v":" like"}
+
+data: {"v":" help"}
+
+data: {"v":" with"}
+
+data: {"v":"?"}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":908},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789712152.58948}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

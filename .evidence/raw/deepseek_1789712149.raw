@@ -1,0 +1,379 @@
+event: update_session
+data: {"updated_at":1789712149.2533898}
+
+data: {"v":{"response":{"message_id":22,"parent_id":21,"model":"","role":"ASSISTANT","thinking_enabled":true,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":664,"feedback":null,"inserted_at":1789712149.243434,"search_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"We","elapsed_secs":null,"references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}
+
+data: {"v":" answer"}
+
+data: {"v":"."}
+
+data: {"v":" User"}
+
+data: {"v":" repeated"}
+
+data: {"v":" \""}
+
+data: {"v":"hi"}
+
+data: {"v":" who"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"\"."}
+
+data: {"v":" Need"}
+
+data: {"v":" respond"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" are"}
+
+data: {"v":" AI"}
+
+data: {"v":" assistant"}
+
+data: {"v":"."}
+
+data: {"v":" Keep"}
+
+data: {"v":" concise"}
+
+data: {"v":"."}
+
+data: {"v":" Maybe"}
+
+data: {"v":" mention"}
+
+data: {"v":" no"}
+
+data: {"v":" identity"}
+
+data: {"v":"?"}
+
+data: {"v":" We"}
+
+data: {"v":" are"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"?"}
+
+data: {"v":" System"}
+
+data: {"v":" says"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" AI"}
+
+data: {"v":" assistant"}
+
+data: {"v":" accessed"}
+
+data: {"v":" via"}
+
+data: {"v":" API"}
+
+data: {"v":"."}
+
+data: {"v":" Could"}
+
+data: {"v":" say"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" an"}
+
+data: {"v":" AI"}
+
+data: {"v":" assistant"}
+
+data: {"v":"."}
+
+data: {"v":" We"}
+
+data: {"v":" shouldn"}
+
+data: {"v":"'t"}
+
+data: {"v":" claim"}
+
+data: {"v":" human"}
+
+data: {"v":"."}
+
+data: {"v":" Could"}
+
+data: {"v":" mention"}
+
+data: {"v":" created"}
+
+data: {"v":" by"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"?"}
+
+data: {"v":" The"}
+
+data: {"v":" model"}
+
+data: {"v":" is"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"?"}
+
+data: {"v":" Probably"}
+
+data: {"v":" yes"}
+
+data: {"v":"."}
+
+data: {"v":" But"}
+
+data: {"v":" instructions"}
+
+data: {"v":" don"}
+
+data: {"v":"'t"}
+
+data: {"v":" specify"}
+
+data: {"v":"."}
+
+data: {"v":" I"}
+
+data: {"v":" can"}
+
+data: {"v":" say"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" an"}
+
+data: {"v":" AI"}
+
+data: {"v":" assistant"}
+
+data: {"v":","}
+
+data: {"v":" here"}
+
+data: {"v":" to"}
+
+data: {"v":" help"}
+
+data: {"v":"."}
+
+data: {"v":" Also"}
+
+data: {"v":" maybe"}
+
+data: {"v":" note"}
+
+data: {"v":" \""}
+
+data: {"v":"I"}
+
+data: {"v":" don"}
+
+data: {"v":"'t"}
+
+data: {"v":" have"}
+
+data: {"v":" a"}
+
+data: {"v":" personal"}
+
+data: {"v":" identity"}
+
+data: {"v":".\""}
+
+data: {"v":" Keep"}
+
+data: {"v":" short"}
+
+data: {"v":"."}
+
+data: {"v":" Also"}
+
+data: {"v":" previous"}
+
+data: {"v":" pattern"}
+
+data: {"v":" test"}
+
+data: {"v":" "}
+
+data: {"v":"42"}
+
+data: {"v":" etc"}
+
+data: {"v":"."}
+
+data: {"v":" Just"}
+
+data: {"v":" answer"}
+
+data: {"v":"."}
+
+data: {"v":" Ensure"}
+
+data: {"v":" not"}
+
+data: {"v":" over"}
+
+data: {"v":"do"}
+
+data: {"v":"."}
+
+data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":0.884360856}
+
+data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"Hi","references":[],"stage_id":1}]}
+
+data: {"p":"response/fragments/-1/content","v":"!"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" an"}
+
+data: {"v":" AI"}
+
+data: {"v":" assistant"}
+
+data: {"v":" —"}
+
+data: {"v":" a"}
+
+data: {"v":" program"}
+
+data: {"v":" designed"}
+
+data: {"v":" to"}
+
+data: {"v":" help"}
+
+data: {"v":" answer"}
+
+data: {"v":" questions"}
+
+data: {"v":","}
+
+data: {"v":" explain"}
+
+data: {"v":" things"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" assist"}
+
+data: {"v":" with"}
+
+data: {"v":" tasks"}
+
+data: {"v":" like"}
+
+data: {"v":" coding"}
+
+data: {"v":","}
+
+data: {"v":" writing"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" problem"}
+
+data: {"v":"-solving"}
+
+data: {"v":"."}
+
+data: {"v":" I"}
+
+data: {"v":" don"}
+
+data: {"v":"'t"}
+
+data: {"v":" have"}
+
+data: {"v":" a"}
+
+data: {"v":" personal"}
+
+data: {"v":" identity"}
+
+data: {"v":" or"}
+
+data: {"v":" feelings"}
+
+data: {"v":";"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" just"}
+
+data: {"v":" here"}
+
+data: {"v":" to"}
+
+data: {"v":" help"}
+
+data: {"v":"."}
+
+data: {"v":" What"}
+
+data: {"v":" would"}
+
+data: {"v":" you"}
+
+data: {"v":" like"}
+
+data: {"v":" to"}
+
+data: {"v":" do"}
+
+data: {"v":"?"}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":743},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789712150.1874568}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+
