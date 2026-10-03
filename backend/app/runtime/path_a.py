@@ -21,8 +21,44 @@ class PathAError(Exception):
 
 # ── helpers ──────────────────────────────────────────────────────────
 
-def _cookies(state: dict) -> dict:
-    return {c["name"]: c["value"] for c in state.get("cookies", [])}
+def _host_matches(host: str, cookie_domain: str) -> bool:
+    """RFC-6265 domain match between a request host and a cookie domain."""
+    host = (host or "").lower().lstrip(".")
+    dom = (cookie_domain or "").lower().lstrip(".")
+    if not host or not dom:
+        return False
+    if host == dom:
+        return True
+    # a domain cookie (".example.com") also matches sub.example.com, but only
+    # on a dot boundary â€” "notexample.com" must not match "example.com"
+    return host.endswith("." + dom)
+
+
+def _cookies(state: dict, host: str | None = None) -> dict:
+    """Cookies to send for `host`.
+
+    Every provider shares one Chrome profile, so a captured storage_state
+    contains the cookies of ALL providers (~258 cookies / ~35 KB). Sending the
+    whole jar makes providers reject the request with
+    "Request Header Or Cookie Too Large".
+
+    With `host` given we keep only cookies that belong to it. Without `host`
+    we preserve the previous behaviour so no credential is silently dropped.
+    """
+    raw = state.get("cookies") or []
+    if not host:
+        return {c["name"]: c["value"] for c in raw}
+    out: dict = {}
+    for c in raw:
+        name = c.get("name")
+        if not name:
+            continue
+        dom = c.get("domain")
+        # no domain recorded -> keep it (older exports); the provider ignores
+        # cookies for unrelated domains anyway.
+        if not dom or _host_matches(host, dom):
+            out[name] = c.get("value")
+    return out
 
 
 def _looks_like_jwt(v) -> bool:
@@ -71,12 +107,27 @@ def _token_from_state(state: dict, candidates: tuple[str, ...] = ()) -> str | No
             if _looks_like_jwt(value):
                 return value
 
-    # 3. Scan the captured IndexedDB blob for any JWT
-    idb = state.get("_ainterceptor_idb")
+    # 3. Scan the captured IndexedDB blob for any JWT.
+    #    The exporter writes this under "indexeddb"; older/agent captures used
+    #    "_ainterceptor_idb". Accept both, otherwise a captured token is never
+    #    found. (This was silently reverted once by restoring a stale backup.)
+    idb = state.get("indexeddb") or state.get("_ainterceptor_idb")
     if idb:
         found = _scan_jwt(idb)
         if found:
             return found
+
+    # 4. Last resort: a named candidate long enough to be a session token even
+    #    when it is not JWT-shaped (e.g. deepseek's settingsJwt, 412 chars).
+    for origin in state.get("origins", []) or []:
+        for entry in (origin.get("localStorage") or []):
+            name = (entry.get("name") or "")
+            value = entry.get("value") or ""
+            if not isinstance(value, str) or len(value) < 80:
+                continue
+            lname = name.lower()
+            if any(c in lname for c in candidates) or "jwt" in lname or "token" in lname:
+                return value
 
     return None
 
@@ -100,7 +151,7 @@ def _headers_from_state(state: dict, extra: dict | None = None) -> dict:
 
 async def _stream_deepseek(state: dict, prompt: str) -> AsyncIterator[str]:
     """DeepSeek web: SSE with 3 shapes — initial fragments, APPEND, bare strings."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "chat.deepseek.com")
     headers = _headers_from_state(state, {
         "Accept": "text/event-stream",
         "Referer": "https://chat.deepseek.com/",
@@ -208,7 +259,7 @@ def _coerce_text(content) -> str:
 
 async def _stream_claude(state: dict, prompt: str) -> AsyncIterator[str]:
     """Claude web: native Anthropic SSE (content_block_delta) at chat_conversations."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "claude.ai")
     headers = _headers_from_state(state, {
         "Accept": "text/event-stream",
         "Referer": "https://claude.ai/",
@@ -278,7 +329,7 @@ async def _stream_gemini(state: dict, prompt: str) -> AsyncIterator[str]:
 
 async def _stream_mistral(state: dict, prompt: str) -> AsyncIterator[str]:
     """Mistral web: OpenAI-compatible SSE."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "chatgpt.com")
     headers = _headers_from_state(state, {
         "Accept": "text/event-stream",
         "Referer": "https://chat.mistral.ai/",
@@ -317,7 +368,7 @@ async def _stream_mistral(state: dict, prompt: str) -> AsyncIterator[str]:
 
 async def _stream_qwen(state: dict, prompt: str) -> AsyncIterator[str]:
     """Qwen chat: v2 API — new chat then completions stream."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "chat.qwen.ai")
     headers = _headers_from_state(state, {
         "Accept": "text/event-stream",
         "Referer": "https://chat.qwen.ai/",
@@ -371,7 +422,7 @@ async def _stream_qwen(state: dict, prompt: str) -> AsyncIterator[str]:
 
 async def _stream_huggingchat(state: dict, prompt: str) -> AsyncIterator[str]:
     """HuggingChat web: routes via router.huggingface.co/v1 (OpenAI-compatible)."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "huggingface.co")
     headers = _headers_from_state(state, {
         "Accept": "text/event-stream",
         "Referer": "https://huggingface.co/chat/",
@@ -465,7 +516,7 @@ async def _stream_perplexity(state: dict, prompt: str) -> AsyncIterator[str]:
 
 async def _stream_grok(state: dict, prompt: str) -> AsyncIterator[str]:
     """Grok web: NDJSON stream at /rest/app-chat/conversations/new."""
-    cookies = _cookies(state)
+    cookies = _cookies(state, "grok.com")
     sso = cookies.get("sso") or cookies.get("sso-rw") or ""
     if sso.startswith("sso="):
         sso = sso[4:]

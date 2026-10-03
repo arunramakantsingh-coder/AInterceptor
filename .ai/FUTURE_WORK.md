@@ -10,6 +10,7 @@ Parking lot. Not committed to a phase.
 - `akeys rotate <id>` — mint replacement with grace period
 - `alogs` more sources (uvicorn access, chrome console, patchright)
 - `astart --fg` foreground mode — verify behavior on Linux VM
+- [x] cli-monitor (added by 4461820 on 2026-10-02)
 
 ## API
 - `POST /v1/chat/completions` — OpenAI-compatible endpoint for CareerOS and external apps

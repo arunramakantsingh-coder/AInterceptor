@@ -87,10 +87,19 @@ async def do_chat(provider):
     except Exception as e:
         print(f"[FAIL] {e}"); return 3
     rt = cls()
+    # 20s was too short to be meaningful. A raw Playwright connect_over_cdp to
+    # this browser succeeds in well under a second, so this budget is not about
+    # the transport: each provider runtime's start() must locate its tab, drive
+    # it and wait for load state, which legitimately takes longer - especially
+    # just after `arestart` when the tabs are still settling. Measured overruns
+    # sat in the 24-40s range, so allow real headroom while keeping a distinct
+    # message for a genuinely unreachable browser.
+    START_TIMEOUT_S = float(os.environ.get("AINTERCEPTOR_CLI_START_TIMEOUT", "120"))
     try:
-        await asyncio.wait_for(rt.start(), timeout=20)
+        await asyncio.wait_for(rt.start(), timeout=START_TIMEOUT_S)
     except asyncio.TimeoutError:
-        print(f"[FAIL] timeout attaching to Chrome on {SHARED_PORT}")
+        print(f"[FAIL] timeout attaching to Chrome on {SHARED_PORT} "
+              f"(runtime start exceeded {START_TIMEOUT_S:.0f}s)")
         print("       Try:  arestart")
         return 4
     except Exception as e:

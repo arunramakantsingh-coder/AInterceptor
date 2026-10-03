@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json, time, uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -39,6 +39,62 @@ def _openai_chunk(model: str, delta: str, finish: str | None = None) -> str:
         }],
     }
     return f"data: {json.dumps(payload)}\n\n"
+
+
+def optional_key_user(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> tuple[User, ApiKey] | None:
+    """Like `key_user`, but tolerates a missing Authorization header.
+
+    Model listing is metadata: it must not require the caller to hold a key, or
+    discovery fails and the client cannot even present a model picker. When a
+    header IS supplied it is validated exactly as `key_user` does, so an invalid
+    credential is still rejected rather than silently ignored.
+    """
+    if not authorization:
+        return None
+    return key_user(authorization=authorization, db=db)
+
+
+@router.get("/models")
+def list_models(
+    auth: tuple[User, ApiKey] | None = Depends(optional_key_user),
+) -> dict:
+    """OpenAI-compatible model listing.
+
+    Each model id IS a provider name: AInterceptor routes on the request's
+    `model` field. This exists so OpenAI-compatible clients (the DeepSeek
+    Harness among them) can discover providers dynamically instead of having
+    every provider hand-listed in their configuration. Without it, discovery
+    does a GET on this path and gets a 404.
+
+    Active providers are listed first. Inactive ones are included, suffixed
+    "(inactive)", so the catalogue is visible; calling one returns
+    AInterceptor's own "no active session" error instead of a discovery failure.
+    """
+    # The control plane exposes a module-level singleton factory, not module
+    # level list_* helpers - mirror health_routes here.
+    from app.control_plane.state import get_state as _get_state
+
+    _st = _get_state()
+    try:
+        active = list(_st.list_active())
+        inactive = list(_st.list_inactive())
+    except Exception:
+        active, inactive = [], list(_st.list_all())
+
+    created = int(time.time())
+    data = [
+        {"id": p, "object": "model", "created": created, "owned_by": "ainterceptor"}
+        for p in active
+    ] + [
+        {"id": p, "object": "model", "created": created, "owned_by": "ainterceptor",
+         "ainterceptor": {"status": "inactive"},
+         "name": f"{p} (inactive)"}
+        for p in inactive
+    ]
+    return {"object": "list", "data": data}
 
 
 @router.post("/chat/completions")

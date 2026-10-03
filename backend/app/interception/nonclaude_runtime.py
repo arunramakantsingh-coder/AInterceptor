@@ -343,6 +343,8 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "dom-stream"})
             seq += 1
 
+            # Invalidate cache so this message scans fresh.
+            self._cached_node = None
             before_text = await self._read_last_assistant_text()
 
             try:
@@ -453,57 +455,109 @@ class NonClaudeWebRuntime(ProviderRuntime):
         return 0
 
     async def _read_last_assistant_text(self) -> str:
-        """Read the newest assistant reply, EXCLUDING thinking containers.
+        """Read the newest non-think assistant reply.
 
-        DeepSeek renders THINK and RESPONSE as separate markdown containers
-        under different parents. We walk up each candidate and reject any
-        that lives inside a think/reason/analysis subtree, then pick the
-        LAST surviving one (the newest reply bubble).
+        DeepSeek's DOM changed: the top-level message container no longer
+        carries `.ds-markdown`. Instead, each paragraph inside a message is
+        `.ds-markdown-paragraph`, and there is no single wrapper element.
+        So we identify the message bubble by its parent wrapper and join
+        every paragraph inside it.
+
+        We treat `[class*="ds-markdown"]` as the reliable anchor now; the
+        paragraph nodes it matches are grouped by their nearest shared
+        parent, and the last group (newest message) is read in full.
         """
-        js = r"""
+        cached = getattr(self, "_cached_node", None)
+        if cached is not None:
+            try:
+                txt = await cached.evaluate(
+                    "n => (n.isConnected ? (n.innerText || '').trim() : null)"
+                )
+                if txt is not None:
+                    return txt
+            except Exception:
+                pass
+            self._cached_node = None
+
+        # Find the newest assistant message bubble's *container* and return
+        # it as a JSHandle so we can cache it.
+        js_find_container = r"""
             () => {
-                const selectors = [
-                    '.ds-markdown',
-                    '.ds-markdown--block',
-                    '[class*="ds-markdown"]',
-                    '[data-message-author-role="assistant"]',
-                    '.model-response-text',
-                    'message-content',
-                ];
                 const thinkingRe = /think|reason|analysis|cot|chain-of-thought/i;
 
-                for (const sel of selectors) {
-                    const nodes = document.querySelectorAll(sel);
-                    if (!nodes.length) continue;
-                    const good = [];
-                    for (const n of nodes) {
-                        if (!n.offsetParent && getComputedStyle(n).display === 'none') continue;
-                        let p = n.parentElement;
-                        let isThink = false;
-                        while (p && p !== document.body) {
-                            const cls = (typeof p.className === 'string'
-                                         ? p.className
-                                         : (p.className && p.className.baseVal) || '');
-                            if (thinkingRe.test(cls)) { isThink = true; break; }
-                            p = p.parentElement;
+                // DeepSeek renders each message inside a wrapper that holds
+                // user or assistant content. The most reliable anchor today
+                // is a group of `.ds-markdown-paragraph` (or similar) nodes
+                // under a common parent.
+                //
+                // Strategy: collect candidate container elements in DOM order,
+                // then reject any inside a think/reason/analysis subtree.
+                const candidates = new Set();
+
+                // Direct paragraphs → walk up to the nearest meaningful wrapper
+                for (const p of document.querySelectorAll('.ds-markdown-paragraph, .ds-markdown')) {
+                    let el = p;
+                    // walk up at most 6 levels to find a container that holds
+                    // several sibling paragraphs (or a lone one)
+                    for (let i = 0; i < 6 && el.parentElement; i++) {
+                        el = el.parentElement;
+                        const cls = (typeof el.className === 'string'
+                                     ? el.className
+                                     : (el.className && el.className.baseVal) || '');
+                        if (/message|assistant|markdown-content|chat-message/i.test(cls)) {
+                            candidates.add(el);
+                            break;
                         }
-                        if (!isThink) good.push(n);
                     }
-                    const pool = good.length ? good : nodes;
-                    // newest bubble = last in DOM
-                    const last = pool[pool.length - 1];
-                    const txt = (last.innerText || '').trim();
-                    if (txt) return txt;
                 }
-                return '';
+
+                // Also consider role-tagged elements (ChatGPT-style)
+                for (const el of document.querySelectorAll(
+                        '[data-message-author-role="assistant"], .model-response-text')) {
+                    candidates.add(el);
+                }
+
+                if (!candidates.size) return null;
+
+                // Order by DOM position, filter out think blocks, pick last.
+                const list = Array.from(candidates);
+                list.sort((a, b) => {
+                    const pos = a.compareDocumentPosition(b);
+                    if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+                    if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+                    return 0;
+                });
+
+                for (let i = list.length - 1; i >= 0; i--) {
+                    const el = list[i];
+                    if (!el.offsetParent && getComputedStyle(el).display === 'none') continue;
+                    let p = el.parentElement;
+                    let isThink = false;
+                    while (p && p !== document.body) {
+                        const cls = (typeof p.className === 'string'
+                                     ? p.className
+                                     : (p.className && p.className.baseVal) || '');
+                        if (thinkingRe.test(cls)) { isThink = true; break; }
+                        p = p.parentElement;
+                    }
+                    if (isThink) continue;
+                    return el;
+                }
+                return null;
             }
         """
-        try:
-            txt = await self._page.evaluate(js)
-            return (txt or "").strip()
-        except Exception:
-            return ""
 
+        try:
+            handle = await self._page.evaluate_handle(js_find_container)
+            el = handle.as_element()
+            if el is None:
+                return ""
+            self._cached_node = el
+            txt = await el.evaluate("n => (n.innerText || '').trim()")
+            return txt or ""
+        except Exception:
+            self._cached_node = None
+            return ""
 
     async def close(self) -> None:
         self._started = False

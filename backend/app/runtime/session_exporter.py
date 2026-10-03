@@ -198,3 +198,25 @@ def list_exports(export_dir: pathlib.Path) -> list[str]:
     if not d.exists():
         return []
     return sorted(p.stem for p in d.glob("*.json") if not p.name.endswith(".tmp"))
+
+
+def _filter_cookies_for(state: dict, host: str) -> dict:
+    """Return a copy of `state` carrying only `host`'s cookies.
+
+    The profile is shared, so a raw capture holds every provider's cookies.
+    Writing them all into each provider's file produced ~35 KB cookie headers
+    and upstream 400s ("Request Header Or Cookie Too Large").
+    """
+    def matches(cdom: str, host: str) -> bool:
+        host = (host or "").lower().lstrip(".")
+        dom = (cdom or "").lower().lstrip(".")
+        if not host or not dom:
+            return False
+        return host == dom or host.endswith("." + dom)
+
+    out = dict(state)
+    out["cookies"] = [
+        c for c in (state.get("cookies") or [])
+        if not c.get("domain") or matches(c.get("domain", ""), host)
+    ]
+    return out
