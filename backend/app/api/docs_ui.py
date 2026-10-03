@@ -1,153 +1,154 @@
-"""Dashboard: docs browser — render project markdown as HTML."""
-from __future__ import annotations
-import pathlib
+"""Serve .md docs from PROJECT/ and .ai/ as HTML on the admin dashboard.
 
+Read-only, admin-only. No file writes. Minimal in-repo markdown renderer
+that handles headers, lists, code fences, inline code, and paragraphs.
+"""
+from __future__ import annotations
+import html, pathlib, re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
-import markdown as md
 
 from app.db.models import User
 from app.deps import current_user_web
 from app.api import web_common as W
 
-router = APIRouter(prefix="/docs", tags=["docs"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard-docs"])
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-
-# Whitelisted directories relative to repo root
-ALLOWED_DIRS = ("docs", "PROJECT", ".ai")
-ALLOWED_ROOT_FILES = ("README.md",)
-
-# Curated display order + friendly names
-DISPLAY = [
-    # (relative path,               category,          title)
-    ("docs/COMMANDS.md",             "Reference",       "Command Reference"),
-    ("docs/AGENT_INSTALL.md",        "Reference",       "Agent Install Guide"),
-
-    ("PROJECT/ARCHITECTURE_VNC_LOGIN.md",  "Architecture", "VNC Login"),
-    ("PROJECT/ARCHITECTURE_ACCOUNTS.md",   "Architecture", "Accounts & Devices"),
-    ("PROJECT/AUTOMATION.md",        "Architecture",    "Automation Design"),
-    ("PROJECT/WEB_UI.md",            "Architecture",    "Web UI Design"),
-    ("PROJECT/CLI_COMMAND_REFERENCE.md",   "Architecture", "CLI Spec (future)"),
-
-    (".ai/RULES.md",                 "Operations",      "Rules"),
-    (".ai/PROGRESS.md",              "Operations",      "Progress"),
-    (".ai/SESSION_LOG.md",           "Operations",      "Session Log"),
-    (".ai/KNOWN_ISSUES.md",          "Operations",      "Known Issues"),
-    (".ai/FUTURE_WORK.md",           "Operations",      "Future Work"),
-    (".ai/STRATEGY.md",              "Operations",      "Strategy"),
-    (".ai/HANDOFF.md",               "Operations",      "Session Handoff"),
-
-    ("README.md",                    "Overview",        "Readme"),
-]
+REPO = pathlib.Path(__file__).resolve().parents[3]
+DOC_ROOTS = [REPO / "PROJECT", REPO / ".ai", REPO / "docs"]
 
 
-def _resolve(rel: str) -> pathlib.Path:
-    """Safe path resolution — no traversal outside whitelisted dirs."""
-    p = (ROOT / rel).resolve()
-    # must be under ROOT
-    try:
-        p.relative_to(ROOT)
-    except ValueError:
-        raise HTTPException(400, "invalid path")
-    # must match whitelist
-    rel_posix = p.relative_to(ROOT).as_posix()
-    if rel_posix in ALLOWED_ROOT_FILES:
-        return p
-    parent = rel_posix.split("/", 1)[0]
-    if parent not in ALLOWED_DIRS:
-        raise HTTPException(403, "not allowed")
-    if p.suffix.lower() != ".md":
-        raise HTTPException(403, "not a markdown file")
-    if not p.exists() or not p.is_file():
-        raise HTTPException(404, "not found")
-    return p
+def _safe_resolve(rel: str) -> pathlib.Path:
+    rel = rel.strip("/").replace("\\", "/")
+    for root in DOC_ROOTS:
+        if not root.exists():
+            continue
+        candidate = (root / rel).resolve()
+        try:
+            candidate.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if candidate.is_file() and candidate.suffix.lower() == ".md":
+            return candidate
+    raise HTTPException(404, "doc not found")
 
 
-def _render_markdown(text: str) -> str:
-    # 'fenced_code' for triple-backtick blocks, 'tables' for github tables
-    return md.markdown(text, extensions=["fenced_code", "tables", "sane_lists"])
+def _list_docs() -> dict[str, list[tuple[str, str]]]:
+    out: dict[str, list[tuple[str, str]]] = {}
+    for root in DOC_ROOTS:
+        if not root.exists():
+            continue
+        for p in sorted(root.rglob("*.md")):
+            rel = str(p.relative_to(REPO)).replace("\\", "/")
+            title = p.stem.replace("_", " ")
+            out.setdefault(root.name, []).append((rel, title))
+    return out
 
 
-# ── index ──────────────────────────────────────────────────────────
+def _md_to_html(md: str) -> str:
+    lines = md.splitlines()
+    out: list[str] = []
+    in_code = False
+    in_ul = False
+    para: list[str] = []
 
-@router.get("", response_class=HTMLResponse)
+    def flush_para():
+        nonlocal para
+        if para:
+            text = " ".join(para).strip()
+            if text:
+                text = re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text))
+                text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+                out.append(f"<p>{text}</p>")
+            para = []
+
+    def close_ul():
+        nonlocal in_ul
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+    for raw in lines:
+        line = raw.rstrip()
+        if line.startswith("```"):
+            flush_para(); close_ul()
+            out.append("</pre>" if in_code else "<pre>")
+            in_code = not in_code
+            continue
+        if in_code:
+            out.append(html.escape(line))
+            continue
+        if not line.strip():
+            flush_para(); close_ul(); continue
+        m = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if m:
+            flush_para(); close_ul()
+            lvl = len(m.group(1))
+            out.append(f"<h{lvl}>{html.escape(m.group(2))}</h{lvl}>")
+            continue
+        if re.match(r"^\s*[-*]\s+", line):
+            flush_para()
+            if not in_ul:
+                out.append("<ul>"); in_ul = True
+            text = re.sub(r"^\s*[-*]\s+", "", line)
+            text = re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text))
+            out.append(f"<li>{text}</li>")
+            continue
+        para.append(line)
+
+    flush_para(); close_ul()
+    if in_code:
+        out.append("</pre>")
+    return "\n".join(out)
+
+
+@router.get("/docs", response_class=HTMLResponse)
 def docs_index(user: User = Depends(current_user_web)):
-    # Group by category
-    by_cat: dict[str, list[tuple[str, str]]] = {}
-    for rel, cat, title in DISPLAY:
-        path = ROOT / rel
-        if not path.exists():
-            continue
-        by_cat.setdefault(cat, []).append((rel, title))
-
-    blocks = []
-    for cat in ("Reference", "Architecture", "Operations", "Overview"):
-        items = by_cat.get(cat, [])
-        if not items:
-            continue
-        rows = []
+    grouped = _list_docs()
+    rows = []
+    for folder, items in grouped.items():
+        rows.append(f'<h3 style="margin-top:24px;color:#e5e5e5;">{html.escape(folder)}</h3><ul>')
         for rel, title in items:
-            path = ROOT / rel
-            size = path.stat().st_size
             rows.append(
-                '<a href="/docs/' + rel + '" '
-                'style="display:flex; align-items:center; gap:12px; '
-                'padding:12px 0; border-bottom:1px solid #1f1f1f; '
-                'text-decoration:none; color:#e6e6e6;">'
-                '<span style="flex:1;">' + W.esc(title) + '</span>'
-                '<span class="muted" style="font-size:12px; font-family:monospace;">'
-                + W.esc(rel) + '</span>'
-                '<span class="muted" style="font-size:11px; min-width:70px; text-align:right;">'
-                + f'{size//1024} KB' if size >= 1024 else f'{size} B'
-                + '</span>'
-                '<span style="color:#60a5fa;">&rarr;</span>'
-                '</a>'
+                f'<li><a href="/dashboard/docs/{rel}" style="color:#60a5fa;">{html.escape(title)}</a>'
+                f' <span style="color:#666;font-size:11px;">{html.escape(rel)}</span></li>'
             )
-        blocks.append(
-            '<div class="card" style="margin-top:20px;">'
-            '<h3>' + W.esc(cat) + '</h3>'
-            + "".join(rows)
-            + '</div>'
-        )
-
+        rows.append('</ul>')
     body = (
-        W.dashboard_nav("/docs")
-        + '<div class="container">'
-        + '<h2>Documentation</h2>'
-        + '<p class="muted">Live copy of every project doc. Updated on every commit via the post-commit hook.</p>'
-        + "".join(blocks)
+        W.dashboard_nav("/dashboard/docs")
+        + '<div class="container" style="max-width:900px;">'
+        + '<h2>Project Docs</h2>'
+        + '<p class="muted">Rendered from PROJECT/, .ai/, and docs/ in the repo. '
+        + 'Edit the .md, commit, refresh — no restart needed.</p>'
+        + "".join(rows)
         + '</div>'
     )
     return HTMLResponse(W.page("Docs", body, W.topbar(user.email)))
 
 
-# ── individual doc ─────────────────────────────────────────────────
-
-@router.get("/{doc_path:path}", response_class=HTMLResponse)
-def docs_view(doc_path: str, user: User = Depends(current_user_web)):
-    p = _resolve(doc_path)
-    try:
-        text = p.read_text(encoding="utf-8")
-    except Exception as e:
-        raise HTTPException(500, f"read failed: {e}")
-
-    html_body = _render_markdown(text)
-    rel = p.relative_to(ROOT).as_posix()
-    mtime = p.stat().st_mtime
-    from datetime import datetime, timezone
-    stamp = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
+@router.get("/docs/{path:path}", response_class=HTMLResponse)
+def docs_view(path: str, user: User = Depends(current_user_web)):
+    f = _safe_resolve(path)
+    md = f.read_text(encoding="utf-8", errors="replace")
+    rendered = _md_to_html(md)
+    rel = str(f.relative_to(REPO)).replace("\\", "/")
     body = (
-        W.dashboard_nav("/docs")
-        + '<div class="container docs-page">'
-        + '<div class="row" style="justify-content:space-between; margin-bottom:18px;">'
-        + '<div><h2 style="margin:0;">' + W.esc(p.name) + '</h2>'
-        + '<p class="muted" style="margin-top:4px; font-size:12px;">'
-        + W.esc(rel) + ' &middot; ' + stamp + '</p></div>'
-        + '<a class="btn btn-secondary" href="/docs">&larr; all docs</a>'
+        W.dashboard_nav("/dashboard/docs")
+        + '<div class="container" style="max-width:900px;">'
+        + f'<p><a href="/dashboard/docs" style="color:#60a5fa;">&larr; Docs</a>'
+        + f' &nbsp; <span class="muted" style="font-size:12px;">{html.escape(rel)}</span></p>'
+        + f'<div class="doc-body" style="line-height:1.6;color:#d4d4d4;">{rendered}</div>'
         + '</div>'
-        + '<div class="card docs-content">' + html_body + '</div>'
-        + '</div>'
+        + '<style>'
+        + '.doc-body h1,.doc-body h2,.doc-body h3,.doc-body h4{color:#e5e5e5;margin-top:22px;margin-bottom:8px;}'
+        + '.doc-body pre{background:#111;border:1px solid #222;border-radius:8px;'
+        + 'padding:12px;overflow-x:auto;font-size:12px;line-height:1.5;color:#d4d4d4;}'
+        + '.doc-body code{background:#1a1a1a;padding:1px 5px;border-radius:4px;font-size:12px;color:#f0abfc;}'
+        + '.doc-body a{color:#60a5fa;text-decoration:none;}'
+        + '.doc-body a:hover{text-decoration:underline;}'
+        + '.doc-body ul{padding-left:22px;}'
+        + '.doc-body li{margin:3px 0;}'
+        + '.doc-body p{margin:10px 0;}'
+        + '</style>'
     )
-    return HTMLResponse(W.page(p.name, body, W.topbar(user.email)))
+    return HTMLResponse(W.page(f.stem, body, W.topbar(user.email)))
