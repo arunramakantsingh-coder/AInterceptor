@@ -61,3 +61,24 @@ On failure:
 The VM is canonical for AInterceptor work. The Windows clone is a
 stale backup — do not commit from it. airouter-agent will eventually
 run as a Windows service, not from a repo clone.
+
+## Snapshot vs daemon mode (LOCKED 2026-10-03)
+
+NEVER take a VirtualBox snapshot while the daemon is running in the
+foreground of an SSH session.
+
+Why: VBox briefly pauses guest disk I/O to freeze state. The pause is
+long enough to trip SSH keepalive; the SSH session drops; the
+foreground daemon receives SIGHUP and dies.
+
+Rule:
+  - Daily operation: `arestart` (background). Survives SSH drops.
+  - Debugging: `arestart --fg` — you see logs, but do NOT drop SSH and
+    do NOT take a snapshot while it's running.
+  - Before any snapshot: confirm the daemon is in background
+    (`astatus` should show a daemon PID not tied to your terminal).
+  - After a snapshot blip: SSH back in, run `astatus`. If daemon is
+    dead but Chrome still runs, run `astop` then `arestart`.
+
+Snapshots do not corrupt anything. They just kill the SSH session that
+happens to be hosting a foreground process.
