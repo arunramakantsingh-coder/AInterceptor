@@ -15,6 +15,7 @@ from app.api import providers_ui
 from app.api import usage_ui
 from app.api import settings_ui
 from app.api import docs_ui
+from app.api import internal_routes
 from app.api import commandline_ui
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
@@ -53,6 +54,7 @@ app.include_router(providers_ui.router)
 app.include_router(usage_ui.router)
 app.include_router(settings_ui.router)
 app.include_router(docs_ui.router)
+app.include_router(internal_routes.router)
 app.include_router(commandline_ui.router)
 
 

@@ -20,12 +20,53 @@ Interface is unchanged from the caller's view:
 is not used — the runtime attaches to Chrome itself via cdp_url.
 """
 from __future__ import annotations
+import asyncio
 import importlib
 import time
 from typing import Any, AsyncIterator
 
 
 CDP_URL = "http://127.0.0.1:9222"
+
+
+# ── per-provider runtime cache ─────────────────────────────────────
+# Playwright's connect_over_cdp to a busy Chrome takes 8-18 s because it
+# enumerates every context and page. We do it once per provider and reuse
+# the runtime across requests. Memory cost: ~5 MB per cached runtime.
+_RUNTIME_CACHE: dict[str, Any] = {}
+_RUNTIME_LOCK = asyncio.Lock()
+
+
+async def _get_runtime(provider: str):
+    """Return a cached *Runtime for this provider, or build + cache one.
+
+    Health check: if the cached runtime's page is gone (tab closed by
+    Chrome, browser restarted), we drop the cache and rebuild.
+    """
+    async with _RUNTIME_LOCK:
+        rt = _RUNTIME_CACHE.get(provider)
+        if rt is not None:
+            try:
+                page = getattr(rt, "_page", None)
+                if page is not None and not page.is_closed():
+                    return rt
+            except Exception:
+                pass
+            # stale — drop it
+            _RUNTIME_CACHE.pop(provider, None)
+            try:
+                await rt.close()
+            except Exception:
+                pass
+
+        runtime_cls = _find_runtime_class(provider)
+        try:
+            rt = runtime_cls(cdp_url=CDP_URL)
+        except TypeError:
+            rt = runtime_cls()
+        await rt.start()
+        _RUNTIME_CACHE[provider] = rt
+        return rt
 
 
 class PathBError(Exception):
@@ -57,20 +98,13 @@ def _find_runtime_class(provider: str):
 
 
 async def stream_b(provider: str, page: Any, prompt: str) -> AsyncIterator[str]:
-    """Submit prompt via the provider's runtime; yield text deltas."""
-    runtime_cls = _find_runtime_class(provider)
+    """Submit prompt via the provider's runtime; yield text deltas.
 
-    # Try to attach to the daemon-owned Chrome; fall back if the class
-    # constructor does not accept cdp_url.
-    try:
-        rt = runtime_cls(cdp_url=CDP_URL)
-    except TypeError:
-        try:
-            rt = runtime_cls()
-        except Exception as e:
-            raise PathBError(f"{provider}: cannot instantiate {runtime_cls.__name__}: {e}")
-
-    await rt.start()
+    The runtime is cached per provider — Playwright/CDP attach happens
+    once, not on every request. On execute failure the cache is cleared
+    so the next call rebuilds fresh.
+    """
+    rt = await _get_runtime(provider)
     try:
         from app.interception.contracts import ProviderExecutionRequest
         request = ProviderExecutionRequest(
@@ -82,8 +116,8 @@ async def stream_b(provider: str, page: Any, prompt: str) -> AsyncIterator[str]:
             delta = getattr(event, "delta", None)
             if delta:
                 yield delta
-    finally:
-        try:
-            await rt.close()
-        except Exception:
-            pass
+    except Exception:
+        # Drop the cache so the next call rebuilds. Do not close the
+        # runtime here — teardown races with the next request's lock.
+        _RUNTIME_CACHE.pop(provider, None)
+        raise
