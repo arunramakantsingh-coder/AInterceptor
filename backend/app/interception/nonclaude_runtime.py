@@ -6,6 +6,7 @@ unchanged as the known-good streaming reference.
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import base64
 import pathlib
@@ -66,13 +67,11 @@ class NonClaudeNetworkCapture:
         asyncio.create_task(self._start_stream(request_id))
 
     async def _start_stream(self, request_id: str) -> None:
-        try:
-            result = await self._cdp.send("Network.streamResourceContent", {"requestId": request_id})
-            buffered = result.get("bufferedData") or ""
-            if buffered:
-                self._queue.put_nowait(("data", base64.b64decode(buffered)))
-        except Exception as exc:
-            self._queue.put_nowait(("failed", f"provider response streaming failed: {exc}"))
+        # Intentionally a no-op. Network.streamResourceContent starves the
+        # Network.dataReceived channel — using it made the whole capture
+        # return zero bytes. The body is fetched via getResponseBody when
+        # Network.loadingFinished fires (see _fetch_body below).
+        return
 
     def _on_data(self, event: dict[str, Any]) -> None:
         if str(event.get("requestId") or "") != self._active_id:
@@ -95,6 +94,23 @@ class NonClaudeNetworkCapture:
 
     def _on_finished(self, event: dict[str, Any]) -> None:
         if str(event.get("requestId") or "") == self._active_id:
+            asyncio.create_task(self._fetch_body())
+
+    async def _fetch_body(self) -> None:
+        try:
+            result = await self._cdp.send(
+                "Network.getResponseBody", {"requestId": self._active_id}
+            )
+            body = result.get("body", "") or ""
+            if result.get("base64Encoded"):
+                data = base64.b64decode(body)
+            else:
+                data = body.encode("utf-8", errors="replace")
+            if data:
+                self._queue.put_nowait(("data", data))
+        except Exception as e:
+            self._queue.put_nowait(("failed", f"getResponseBody: {e}"))
+        finally:
             self._queue.put_nowait(("finished", None))
 
     def _on_failed(self, event: dict[str, Any]) -> None:
@@ -318,11 +334,12 @@ class NonClaudeWebRuntime(ProviderRuntime):
         raise WebProviderSessionError(f"{self.provider} composer textbox is not available")
 
     async def execute(self, request: ProviderExecutionRequest):
-        """Submit prompt; stream DOM text growth as STREAM_DELTA events.
+        """Submit prompt, capture the provider's response at the CDP
+        Network layer, parse it, and emit the full text as a delta.
 
-        Polls the last assistant bubble every ~250ms. Whenever the text
-        strictly extends what we already emitted, we emit the new suffix.
-        Finalizes when the text stops changing for STABLE_FOR seconds.
+        No DOM polling. The response body is captured by
+        NonClaudeNetworkCapture (already defined above) which uses
+        Network.streamResourceContent + Network.dataReceived.
         """
         if request.provider != self.provider:
             raise ValueError(f"runtime provider mismatch: {request.provider}")
@@ -330,113 +347,84 @@ class NonClaudeWebRuntime(ProviderRuntime):
 
         prompt = next(
             (m.get("content", "") for m in reversed(request.messages)
-             if m.get("role") == "user"), ""
+             if m.get("role") == "user"), "",
         )
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("execution requires a non-empty user message")
 
         async with self._lock:
-            import time as _time
             seq = 0
             yield StreamEvent(self.provider, request.request_id,
                               EventType.REQUEST_INTERCEPTED, seq,
-                              metadata={"transport": "dom-stream"})
+                              metadata={"transport": "cdp-network"})
             seq += 1
 
-            # Invalidate cache so this message scans fresh.
-            self._cached_node = None
-            before_text = await self._read_last_assistant_text()
-
-            try:
-                await self._page.bring_to_front()
-                box = await self._prompt_textbox()
-                await box.fill(prompt)
-                await box.press("Enter")
-            except Exception as exc:
-                yield StreamEvent(self.provider, request.request_id,
-                                  EventType.STREAM_FAILED, seq,
-                                  metadata={"reason": f"submit_failed: {exc}"})
-                return
-
-            yield StreamEvent(self.provider, request.request_id,
-                              EventType.STREAM_STARTED, seq,
-                              metadata={"transport": "dom-stream"})
-            seq += 1
-
-            DEADLINE = 120.0
-            STABLE_FOR = 2.0
-            POLL = 0.25
-            t0 = _time.monotonic()
-            last_change = t0
-            emitted = ""              # what we've already sent
-            seen_full = ""            # latest full text from DOM
-            started = False           # have we seen the new bubble yet?
-
-            while _time.monotonic() - t0 < DEADLINE:
-                await asyncio.sleep(POLL)
-                current = await self._read_last_assistant_text()
-                if not current:
-                    continue
-                if not started:
-                    # skip until we see a change from the pre-send snapshot
-                    if current == before_text:
-                        continue
-                    started = True
-
-                # If DOM produced a longer text extending what we emitted,
-                # stream the delta.
-                if current.startswith(emitted) and len(current) > len(emitted):
-                    delta = current[len(emitted):]
-                    emitted = current
-                    seen_full = current
-                    last_change = _time.monotonic()
+            async with NonClaudeNetworkCapture(self._page, self.spec) as cap:
+                try:
+                    await self._page.bring_to_front()
+                    box = await self._prompt_textbox()
+                    await box.fill(prompt)
+                    await box.press("Enter")
+                except Exception as exc:
                     yield StreamEvent(self.provider, request.request_id,
-                                      EventType.STREAM_DELTA, seq, delta=delta)
-                    seq += 1
-                    continue
+                                      EventType.STREAM_FAILED, seq,
+                                      metadata={"reason": f"submit_failed: {exc}"})
+                    return
 
-                # Occasionally the provider rewrites the tail (markdown
-                # re-render). Handle by treating the common prefix as stable
-                # and only emitting a corrected suffix if it grew.
-                if current != seen_full:
-                    seen_full = current
-                    last_change = _time.monotonic()
-                    # If current is longer but not a strict prefix-extension,
-                    # emit the tail beyond the longest common prefix.
-                    if len(current) > len(emitted):
-                        cp = 0
-                        for a, b in zip(current, emitted):
-                            if a != b: break
-                            cp += 1
-                        if cp >= max(0, len(emitted) - 4):
-                            delta = current[cp:]
-                            emitted = current
-                            yield StreamEvent(self.provider, request.request_id,
-                                              EventType.STREAM_DELTA, seq, delta=delta)
-                            seq += 1
-                            continue
-
-                # Finalize when stable
-                if started and (_time.monotonic() - last_change) >= STABLE_FOR:
-                    break
-
-            # Final emit: any tail that hasn't been sent yet
-            if seen_full and seen_full.startswith(emitted) and len(seen_full) > len(emitted):
-                delta = seen_full[len(emitted):]
                 yield StreamEvent(self.provider, request.request_id,
-                                  EventType.STREAM_DELTA, seq, delta=delta)
+                                  EventType.STREAM_STARTED, seq,
+                                  metadata={"transport": "cdp-network"})
                 seq += 1
 
-            if not emitted and not seen_full:
-                yield StreamEvent(self.provider, request.request_id,
-                                  EventType.STREAM_FAILED, seq,
-                                  metadata={"reason": "no assistant reply observed"})
-                return
+                body = bytearray()
+                status_code = 0
+                async for kind, payload in cap.events(timeout=120.0):
+                    if kind == "response_started":
+                        try:
+                            status_code = int(payload[0] or 0)
+                        except Exception:
+                            status_code = 0
+                    elif kind == "data":
+                        body.extend(payload)
+                    elif kind == "failed":
+                        yield StreamEvent(self.provider, request.request_id,
+                                          EventType.STREAM_FAILED, seq,
+                                          metadata={"reason": str(payload)[:200]})
+                        return
+                    elif kind == "finished":
+                        break
 
-            yield StreamEvent(self.provider, request.request_id,
-                              EventType.STREAM_COMPLETED, seq,
-                              finish_reason="stop")
-            return
+                if status_code in (401, 403):
+                    yield StreamEvent(self.provider, request.request_id,
+                                      EventType.SESSION_EXPIRED, seq,
+                                      metadata={"status": status_code})
+                    seq += 1
+                    yield StreamEvent(self.provider, request.request_id,
+                                      EventType.SESSION_RECOVERY_REQUIRED, seq,
+                                      metadata={"reason": "auth_failed"})
+                    return
+
+                if status_code >= 400:
+                    yield StreamEvent(self.provider, request.request_id,
+                                      EventType.STREAM_FAILED, seq,
+                                      metadata={"status": status_code})
+                    return
+
+                text = ""
+                if body:
+                    text = self.parser(body.decode("utf-8", errors="replace"))
+                if not text:
+                    yield StreamEvent(self.provider, request.request_id,
+                                      EventType.STREAM_FAILED, seq,
+                                      metadata={"reason": "parser_returned_empty"})
+                    return
+
+                yield StreamEvent(self.provider, request.request_id,
+                                  EventType.STREAM_DELTA, seq, delta=text)
+                seq += 1
+                yield StreamEvent(self.provider, request.request_id,
+                                  EventType.STREAM_COMPLETED, seq,
+                                  finish_reason="stop")
 
 
     async def _assistant_count(self) -> int:
