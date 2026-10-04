@@ -9,6 +9,7 @@
 | B009 | (auto) | (auto) | opened by 9d15018 | Open |
 | B010 | (auto) | (auto) | opened by 142a6df | Open |
 | B011 | (auto) | (auto) | opened by 5cb0731 | Open |
+| B012 | (auto) | (auto) | opened by 9a9e737 | Open |
 
 ## Resolved
 | ID | Severity | Phase | Title | Resolution |
