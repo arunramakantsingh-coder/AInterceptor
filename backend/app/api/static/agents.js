@@ -3,6 +3,20 @@
 (function () {
   const AGENT = "http://127.0.0.1:45231";
 
+// Track whether the local agent responded to the last health check.
+// If a user clicks Login without the agent running, we show the
+// install command instead of failing silently.
+let AGENT_ALIVE = false;
+const AGENT_NOT_RUNNING_MSG =
+  'The local agent is not running on this machine. ' +
+  'Install it with:  pip install "git+https://github.com/arunramakantsingh-coder/AInterceptor.git#subdirectory=agent"  ' +
+  'then start it with:  airouter-agent serve';
+
+window.agentNotRunning = function () {
+  alert(AGENT_NOT_RUNNING_MSG);
+  return false;
+};
+
   function el(id) { return document.getElementById(id); }
 
   function setDot(ok, titleText, detailText) {
@@ -61,6 +75,7 @@
       if (out) { out.style.display = "block"; out.textContent = "Starting…"; }
       btn.disabled = true;
       try {
+        if (!AGENT_ALIVE) { window.agentNotRunning(); return; }
         const r = await fetch(AGENT + "/login/" + provider, { method: "POST" });
         const d = await r.json();
         if (!d.job_id) throw new Error(d.error || "no job id");

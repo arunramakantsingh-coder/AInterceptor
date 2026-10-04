@@ -421,6 +421,25 @@ COMMAND_TREE: dict[str, dict] = {
         "examples": ["ashell"],
         "built": True,
     },
+    # ── Diagnostics ─────────────────────────────────────────────
+    "arawdump": {
+        "category": "Diagnostics",
+        "desc": "Capture and summarize the raw response body from a provider",
+        "syntax": 'arawdump <provider> "<prompt>"',
+        "examples": [
+            'arawdump deepseek "say PING"',
+            'arawdump gemini "hello"',
+        ],
+        "built": True,
+    },
+    "arawstatus": {
+        "category": "Monitoring",
+        "desc": "Per-provider monitor: last capture, protocol, latency, bytes",
+        "syntax": "arawstatus",
+        "examples": ["arawstatus"],
+        "built": True,
+    },
+
 }
 
 

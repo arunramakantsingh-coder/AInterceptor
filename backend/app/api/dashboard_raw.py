@@ -9,7 +9,7 @@ from app.deps import current_user_web
 from app.api import web_common as W
 from app.api.raw_routes import run_capture
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard-raw"])
+router = APIRouter(prefix="/dashboard/monitoring", tags=["dashboard-monitoring"])
 INDEX = pathlib.Path.home() / ".ainterceptor" / "raw" / "index.jsonl"
 
 
@@ -73,7 +73,7 @@ def raw_page(user: User = Depends(current_user_web), err: str = "", ok: str = ""
                 f'<td style="padding:6px 10px;">{bytes_} B</td>'
                 f'<td style="padding:6px 10px;">{status}</td>'
                 f'<td style="padding:6px 10px;">'
-                f'<form method="post" action="/dashboard/raw/capture/{p}" style="display:inline;">'
+                f'<form method="post" action="/dashboard/monitoring/raw/capture/{p}" style="display:inline;">'
                 f'<button type="submit" style="padding:3px 10px;cursor:pointer;">Capture</button>'
                 f'</form></td>'
                 f'</tr>'
@@ -86,7 +86,7 @@ def raw_page(user: User = Depends(current_user_web), err: str = "", ok: str = ""
                 f'<td></td><td></td><td></td>'
                 f'<td style="padding:6px 10px;">⚪</td>'
                 f'<td style="padding:6px 10px;">'
-                f'<form method="post" action="/dashboard/raw/capture/{p}" style="display:inline;">'
+                f'<form method="post" action="/dashboard/monitoring/raw/capture/{p}" style="display:inline;">'
                 f'<button type="submit" style="padding:3px 10px;cursor:pointer;">Capture</button>'
                 f'</form></td>'
                 f'</tr>'
@@ -107,7 +107,7 @@ def raw_page(user: User = Depends(current_user_web), err: str = "", ok: str = ""
         )
 
     body = (
-        W.dashboard_nav("/dashboard/raw")
+        W.dashboard_nav("/dashboard/monitoring/raw")
         + '<div class="container" style="max-width:1100px;">'
         + '<h2>Raw Capture Monitor</h2>'
         + '<p class="muted">Last capture per provider. Click Capture to fire a fresh probe. '
@@ -148,7 +148,7 @@ async def raw_capture(provider: str, prompt: str = Form("say PING"),
                       user: User = Depends(current_user_web)):
     try:
         await run_capture(provider, prompt)
-        return RedirectResponse("/dashboard/raw?ok=captured", status_code=303)
+        return RedirectResponse("/dashboard/monitoring/raw?ok=captured", status_code=303)
     except Exception as e:
         msg = f"{type(e).__name__}: {e}"
-        return RedirectResponse(f"/dashboard/raw?err={msg[:200]}", status_code=303)
+        return RedirectResponse(f"/dashboard/monitoring/raw?err={msg[:200]}", status_code=303)

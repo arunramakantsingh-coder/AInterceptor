@@ -118,6 +118,24 @@ async def _run() -> None:
     host = os.environ.get("AINTERCEPTOR_HOST", "127.0.0.1")
     port = int(os.environ.get("AINTERCEPTOR_PORT", "8000"))
 
+    # ── dev hot-reload ────────────────────────────────────────
+    # AINTERCEPTOR_DEV_RELOAD=1 swaps the Config/Server path for a
+    # string-based uvicorn.run(..., reload=True). Uvicorn watches
+    # backend/app/**/*.py and reloads the worker on save. Chrome and
+    # the daemon process stay up; only the app worker restarts.
+    import os as _os_dev
+    if _os_dev.getenv("AINTERCEPTOR_DEV_RELOAD") == "1":
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            log_level="info",
+            reload=True,
+            reload_dirs=["backend/app"],
+            reload_includes=["*.py"],
+        )
+        return
+
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
 
