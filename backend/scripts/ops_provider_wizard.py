@@ -98,9 +98,9 @@ def _scaffold_runtime(name):
     tmpl = (
         '"""' + name + ' runtime (scaffold - fill in TODO markers)."""\n'
         'from __future__ import annotations\n\n'
-        'from app.interception.nonclaude_runtime import NonClaudeWebRuntime\n'
+        'from app.interception.web_runtime_base import WebRuntimeBase\n'
         'from app.interception.web_runtime import WebProviderSpec\n\n\n'
-        'class ' + cls_name + '(NonClaudeWebRuntime):\n'
+        'class ' + cls_name + '(WebRuntimeBase):\n'
         '    provider = "' + name + '"\n\n'
         '    spec = WebProviderSpec(\n'
         '        name="' + name + '",\n'

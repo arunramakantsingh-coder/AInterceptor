@@ -18,10 +18,13 @@ from app.providers_list import ALL_PROVIDERS, PATH_A_SUPPORTED, NO_RUNTIME_MODUL
 
 
 def _has_runtime_module(provider: str) -> bool:
-    """True if backend/app/interception/<provider>.py exists."""
+    """True if backend/app/interception/<provider>.py
+    OR backend/app/interception/<provider>/__init__.py exists."""
     import pathlib as _pl
-    return (_pl.Path(__file__).resolve().parents[1] / "interception"
-            / f"{provider}.py").exists()
+    base = _pl.Path(__file__).resolve().parents[1] / "interception"
+    return (base / f"{provider}.py").exists() or (
+        base / provider / "__init__.py"
+    ).exists()
 
 
 def _env_force_path():
@@ -112,10 +115,13 @@ async def _with_breaker(
     except ProviderUnavailable:
         raise
     except Exception as e:
+        # Always include the type: asyncio.TimeoutError() has an empty
+        # str(), and an empty error message is exactly the failure-hiding
+        # pattern R-Provider-Isolation forbids.
         latency_ms = int((time.monotonic() - t0) * 1000)
         circuit.record_failure(latency_ms)
         path_trace.append(provider, path, False, latency_ms, str(e)[:200])
-        raise ProviderUnavailable(f"{provider}:{path} {e}") from e
+        raise ProviderUnavailable(f"{provider}:{path} {type(e).__name__}: {e}") from e
 
 
 # ── public entry ───────────────────────────────────────────────────

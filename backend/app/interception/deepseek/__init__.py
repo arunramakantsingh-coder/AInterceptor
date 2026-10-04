@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
-from app.interception.nonclaude_runtime import NonClaudeWebRuntime
+from app.interception.web_runtime_base import WebRuntimeBase
 from app.interception.web_runtime import WebProviderSpec
 
 
@@ -297,7 +297,7 @@ def parse_deepseek_web(body: str) -> str:
     return parser.finish()
 
 
-class DeepSeekRuntime(NonClaudeWebRuntime):
+class DeepSeekRuntime(WebRuntimeBase):
     provider = "deepseek"
 
     def __init__(

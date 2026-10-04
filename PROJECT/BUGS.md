@@ -7,6 +7,8 @@
 | B006 | (auto) | (auto) | opened by 69fbb8f | Open |
 | B001 | Medium | chatgpt | 1 | `atest chatgpt` connects but no reply — session OK, reply extraction failed | Open |
 | B009 | (auto) | (auto) | opened by 9d15018 | Open |
+| B010 | (auto) | (auto) | opened by 142a6df | Open |
+| B011 | (auto) | (auto) | opened by 5cb0731 | Open |
 
 ## Resolved
 | ID | Severity | Phase | Title | Resolution |

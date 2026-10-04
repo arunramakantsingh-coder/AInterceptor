@@ -1,10 +1,10 @@
 """WebSocket-based runtime for providers that stream over WS.
 
 Used by Microsoft Copilot (SignalR-over-WebSocket) and Character.AI.
-Same interface as NonClaudeWebRuntime but captures WebSocket frames
+Same interface as WebRuntimeBase but captures WebSocket frames
 via CDP instead of HTTP responses.
 
-Existing NonClaudeWebRuntime is untouched — this is a separate class.
+Existing WebRuntimeBase is untouched — this is a separate class.
 """
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class NonClaudeWebSocketCapture:
 
 
 class NonClaudeWebSocketRuntime(ProviderRuntime):
-    """Runtime for WS-based providers. Same interface as NonClaudeWebRuntime."""
+    """Runtime for WS-based providers. Same interface as WebRuntimeBase."""
 
     def __init__(self, spec: WebProviderSpec, session_path: str | None,
                  cdp_url: str | None, headless: bool,

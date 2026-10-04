@@ -24,7 +24,7 @@ except ImportError:
     async_playwright = None
 
 
-class NonClaudeNetworkCapture:
+class NetworkCapture:
     """CDP response capture using the same Network streaming path as Claude."""
 
     def __init__(self, page: Any, spec: WebProviderSpec) -> None:
@@ -125,7 +125,7 @@ class NonClaudeNetworkCapture:
         p.mkdir(parents=True, exist_ok=True)
         return str(p / f"{self.spec.provider}_{int(__import__('time').time())}.raw")
 
-    async def __aenter__(self) -> "NonClaudeNetworkCapture":
+    async def __aenter__(self) -> "NetworkCapture":
         self._cdp = await self.page.context.new_cdp_session(self.page)
         try:
             await self._cdp.send("Network.enable", {
@@ -169,7 +169,7 @@ class NonClaudeNetworkCapture:
                 pass
             self._cdp = None
 
-class NonClaudeWebRuntime(ProviderRuntime):
+class WebRuntimeBase(ProviderRuntime):
     """Reusable runtime boundary for the three non-Claude web providers."""
 
     def __init__(self, spec: WebProviderSpec, session_path: str | None, cdp_url: str | None, headless: bool, parser: Callable[[str], str]) -> None:
@@ -250,9 +250,14 @@ class NonClaudeWebRuntime(ProviderRuntime):
             self._record_port_attachment()
 
         if self.cdp_url:
+            # CDP attach on a busy Chrome (4 tabs + Xvfb + exporter)
+            # can take 15-50s on the VM. The prior 15s ceiling fired
+            # under contention and surfaced as an empty
+            # asyncio.TimeoutError. 45s gives headroom without hanging
+            # forever.
             self._browser = await asyncio.wait_for(
                 self._pw.chromium.connect_over_cdp(self.cdp_url),
-                timeout=15,
+                timeout=45,
             )
             contexts = self._browser.contexts
             if not contexts:
@@ -338,7 +343,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
         Network layer, parse it, and emit the full text as a delta.
 
         No DOM polling. The response body is captured by
-        NonClaudeNetworkCapture (already defined above) which uses
+        NetworkCapture (already defined above) which uses
         Network.streamResourceContent + Network.dataReceived.
         """
         if request.provider != self.provider:
@@ -359,7 +364,7 @@ class NonClaudeWebRuntime(ProviderRuntime):
                               metadata={"transport": "cdp-network"})
             seq += 1
 
-            async with NonClaudeNetworkCapture(self._page, self.spec) as cap:
+            async with NetworkCapture(self._page, self.spec) as cap:
                 try:
                     await self._page.bring_to_front()
                     box = await self._prompt_textbox()

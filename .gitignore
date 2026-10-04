@@ -44,3 +44,23 @@ body.json
 .env.windows
 .venv-windows/
 nohup.out
+
+# Editor / iteration backups — never commit
+*.pre_*
+*.pre-*
+*.pre_fastpoll
+*.pre_getbody
+*.pre_netcapture
+*.pre_paragraph_fix
+*.pre_pathfix
+*.pre_cache
+*.pre_fgfix
+*.pre_decryptfix
+*.pre_m21
+*.pre-starttimeout
+*.pre_newcmds
+*.pre_models_route
+*.pre_models_statefix
+*.save
+.backup_*/
+.env.backup*

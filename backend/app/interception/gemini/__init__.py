@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.interception.chrome_auth import ensure_chrome_cdp, existing_chrome_cdp
-from app.interception.nonclaude_runtime import NonClaudeWebRuntime
+from app.interception.web_runtime_base import WebRuntimeBase
 from app.interception.web_runtime import WebProviderSpec
 
 
@@ -94,7 +94,7 @@ def parse_gemini_web(body: str) -> str:
     return ""
 
 
-class GeminiRuntime(NonClaudeWebRuntime):
+class GeminiRuntime(WebRuntimeBase):
     provider = "gemini"
 
     def __init__(self, session_path: str | None = None, headless: bool = False, cdp_url: str | None = None):
