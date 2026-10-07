@@ -1,7 +1,22 @@
 
 // AInterceptor — agents page helper detection + one-click login
 (function () {
-  const AGENT = "http://127.0.0.1:45231";
+  // The agent picks the first bindable port in this range (Windows often
+// reserves 45231 for Hyper-V/WSL/Docker). We probe them until one answers.
+const AGENT_PORTS = [];
+for (let p = 45231; p <= 45241; p++) AGENT_PORTS.push(p);
+let AGENT = null;  // set by findAgent() once a port responds
+
+async function findAgent() {
+  for (const port of AGENT_PORTS) {
+    const url = "http://127.0.0.1:" + port;
+    try {
+      const r = await fetch(url + "/status", { cache: "no-store" });
+      if (r.ok) { AGENT = url; return url; }
+    } catch (e) { /* try next */ }
+  }
+  return null;
+}
 
 // Track whether the local agent responded to the last health check.
 // If a user clicks Login without the agent running, we show the

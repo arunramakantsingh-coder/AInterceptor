@@ -148,7 +148,7 @@ def _install_card():
         'style="padding:8px 16px; font-size:13px;">Download installer (.bat)</a>'
         '<span class="muted" style="font-size:12px;">Double-click to run. Installs + starts the agent.</span>'
         '</div>'
-        '<p class="muted" style="margin-top:10px; font-size:12px;">On first run, Windows may prompt for admin rights once &mdash; that reserves port 45231 so the dashboard button can reach the agent. It is a one-time UAC.</p>'
+        '<p class="muted" style="margin-top:10px; font-size:12px;">The agent will pick the first free port between 45231 and 45241. No admin rights needed &mdash; Windows reserves some ports for Hyper-V / WSL / Docker, so the agent skips past those automatically.</p>'
         '<p class="muted" style="margin-top:14px; font-size:12px;">Full guide: <a href="/dashboard/docs/docs/AGENT_INSTALL.md">AGENT_INSTALL.md</a></p>'
         '</div>'
     )

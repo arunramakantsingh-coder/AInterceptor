@@ -21,6 +21,14 @@ from airouter_agent import config
 DEFAULT_PORT = 45231
 DEFAULT_HOST = "127.0.0.1"
 
+# Windows reserves dynamic ranges for Hyper-V/WSL/Docker, and 45231
+# often falls inside one. Rather than fight Windows with netsh (which
+# marks the port as reserved for EVERYONE, making it worse), we try
+# a short list and bind the first free one. The dashboard JS probes
+# the same list and finds us.
+PORT_CANDIDATES = list(range(45231, 45242))  # 45231..45241
+
+
 # Only these origins may call us from a browser
 ALLOWED_ORIGINS = {
     "https://ainterceptor.taila2310c.ts.net",
@@ -158,76 +166,17 @@ def _try_bind(port: int) -> bool:
             pass
 
 
-def _ensure_port_bindable(port: int) -> bool:
-    """Make sure we can bind `port`. On Windows, if Windows has reserved
-    it (Hyper-V/WSL/Docker grab dynamic port ranges), ask the user once
-    to let us reserve it via netsh — elevated. Idempotent: if the port
-    is already reserved from a previous run, the elevation is skipped.
-    """
-    if _try_bind(port):
-        return True
-
-    if platform.system() != "Windows":
-        print(f"[agent] port {port} is in use. Close whatever is using it and retry.")
-        return False
-
-    print()
-    print("=" * 64)
-    print(f"[agent] Port {port} is blocked by Windows.")
-    print("[agent] This usually means Hyper-V, WSL, or Docker reserved it")
-    print("[agent] inside their dynamic port range. We can fix it once,")
-    print("[agent] for good, with admin rights.")
-    print("=" * 64)
-    print()
-    print("[agent] A UAC prompt will appear. Click Yes to reserve the port.")
-    print()
-
-    # Single elevated PowerShell invocation: stop winnat, add the exclusion,
-    # restart winnat. The '&' chains commands so the whole sequence runs in
-    # one elevated shell, avoiding multiple UAC prompts.
-    inner = (
-        f"net stop winnat & "
-        f"netsh int ipv4 add excludedportrange protocol=tcp "
-        f"startport={port} numberofports=1 & "
-        f"net start winnat"
-    )
-    ps_cmd = (
-        "Start-Process powershell -Verb RunAs -Wait "
-        "-ArgumentList '-NoProfile','-Command','" + inner + "'"
-    )
-
-    try:
-        rc = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
-            capture_output=True, text=True, timeout=60,
-        )
-        if rc.returncode != 0:
-            print(f"[agent] elevation returned {rc.returncode}")
-            if rc.stderr:
-                print(rc.stderr[:400])
-    except Exception as e:
-        print(f"[agent] elevation failed: {e}")
-        return False
-
-    # Retry bind
-    if _try_bind(port):
-        print(f"[agent] port {port} is now reserved and bindable. Setup complete.")
-        return True
-
-    print(f"[agent] port {port} still not bindable after netsh.")
-    print(f"[agent] Run this manually in an Admin PowerShell, then retry serve:")
-    print(f"    net stop winnat")
-    print(f"    netsh int ipv4 add excludedportrange protocol=tcp startport={port} numberofports=1")
-    print(f"    net start winnat")
-    return False
-
-
-def main(port: int = DEFAULT_PORT) -> int:
-    if not _ensure_port_bindable(port):
-        return 1
+def main(port: int | None = None) -> int:
+    if port is None:
+        try:
+            port = _pick_port()
+        except RuntimeError as e:
+            print(f"[agent] {e}")
+            return 1
     addr = (DEFAULT_HOST, port)
     httpd = ThreadingHTTPServer(addr, Handler)
     print(f"[agent-serve] listening on http://{DEFAULT_HOST}:{port}")
+    print(f"[agent-serve] (dashboard probes 45231-45241 and finds this)")
     print(f"[agent-serve] allowed origins: {sorted(ALLOWED_ORIGINS)}")
     print("[agent-serve] Ctrl+C to stop")
     try:
@@ -242,6 +191,6 @@ def main(port: int = DEFAULT_PORT) -> int:
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(prog="airouter-agent serve")
-    ap.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--port", type=int, default=None)
     args = ap.parse_args()
     sys.exit(main(args.port))
