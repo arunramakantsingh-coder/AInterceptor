@@ -35,15 +35,25 @@ class ChatIn(BaseModel):
     stream: bool = True
 
 
-def _openai_chunk(model: str, delta: str, finish: str | None = None) -> str:
+def _openai_chunk(model: str, delta, finish: str | None = None,
+                  cmpl_id: str | None = None) -> str:
+    """One SSE chunk. `delta` may be a str (content) or a dict (role/tool_calls).
+    `cmpl_id` must be the SAME for every chunk of a single completion —
+    OpenAI's contract, and dsh's pi-ai adapter enforces it."""
+    if isinstance(delta, str):
+        inner = {"content": delta} if delta else {}
+    elif isinstance(delta, dict):
+        inner = delta
+    else:
+        inner = {}
     payload = {
-        "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+        "id": cmpl_id or f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion.chunk",
         "created": int(time.time()),
         "model": model,
         "choices": [{
             "index": 0,
-            "delta": ({"content": delta} if delta else {}),
+            "delta": inner,
             "finish_reason": finish,
         }],
     }
@@ -303,11 +313,14 @@ async def chat(body: ChatIn,
                 yield f"data: {json.dumps(err)}\n\n"
                 yield "data: [DONE]\n\n"
             return
+        _cmpl_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         try:
+            # OpenAI contract: first chunk carries {"role": "assistant"}
+            yield _openai_chunk(body.model, {"role": "assistant"}, None, _cmpl_id)
             async for delta in stream_reply(provider, state, prompt):
                 captured["text"] += delta
                 delta_count += 1
-                yield _openai_chunk(body.model, delta)
+                yield _openai_chunk(body.model, delta, None, _cmpl_id)
             if delta_count == 0:
                 # Provider stream ended with no text — surface a diagnostic
                 err = {"error": {
@@ -319,7 +332,7 @@ async def chat(body: ChatIn,
                 captured["status"] = "empty_stream"
             else:
                 captured["status"] = "ok"
-            yield _openai_chunk(body.model, "", "stop")
+            yield _openai_chunk(body.model, "", "stop", _cmpl_id)
             yield "data: [DONE]\n\n"
         except ProviderUnavailable as e:
             captured["status"] = "provider_unavailable"

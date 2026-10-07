@@ -45,6 +45,7 @@ def list_targets() -> list[Target]:
 
 
 def _bootstrap() -> None:
+    import os
     # The VM itself. Always present, always local, no credentials.
     register(Target(
         id="vm",
@@ -53,6 +54,15 @@ def _bootstrap() -> None:
             "fs.read", "fs.write", "fs.glob",
             "shell", "http", "git", "docker",
         ],
+    ))
+    # Windows laptop — reached via the AInterceptor Helper, which
+    # shows a dialog on the user's desktop for every command.
+    register(Target(
+        id="win-laptop",
+        kind="winhelper",
+        address=os.getenv("AGENT_WIN_HELPER", "100.67.225.84:8765"),
+        user="Arun",
+        capabilities=["shell", "fs.read", "fs.write", "fs.glob"],
     ))
 
 
