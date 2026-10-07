@@ -49,32 +49,23 @@ class RawIn(BaseModel):
 async def run_capture(provider: str, prompt: str) -> dict:
     """Shared capture logic. Called by the loopback route and the
     dashboard trigger. Returns the summary dict written to the index."""
-    captured: list[bytes] = []
-    orig = NetworkCapture.events
-
-    async def _patched(self, timeout=120.0):
-        async for item in orig(self, timeout):
-            if item[0] == "data":
-                captured.append(item[1])
-            yield item
-
-    NetworkCapture.events = _patched
     t0 = time.monotonic()
-    try:
-        rt = await _get_runtime(provider)
-        from app.interception.contracts import ProviderExecutionRequest
-        req = ProviderExecutionRequest(
-            provider=provider,
-            request_id=f"raw-{uuid.uuid4().hex[:8]}",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        async for _ in rt.execute(req):
-            pass
-    finally:
-        NetworkCapture.events = orig
+    rt = await _get_runtime(provider)
+    from app.interception.contracts import ProviderExecutionRequest
+    req = ProviderExecutionRequest(
+        provider=provider,
+        request_id=f"raw-{uuid.uuid4().hex[:8]}",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    async for _ in rt.execute(req):
+        pass
 
     latency_ms = int((time.monotonic() - t0) * 1000)
-    raw = b"".join(captured)
+    # Each runtime records its own last raw body during execute().
+    # No monkey-patching, no cross-provider coupling — Claude uses
+    # ClaudeCDPTransport, WebRuntimeBase uses NetworkCapture, but both
+    # set self._last_raw_body. Read from the runtime.
+    raw = getattr(rt, "_last_raw_body", b"") or b""
     if not raw:
         raise HTTPException(503, f"{provider}: no body captured")
 

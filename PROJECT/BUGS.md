@@ -10,6 +10,10 @@
 | B010 | (auto) | (auto) | opened by 142a6df | Open |
 | B011 | (auto) | (auto) | opened by 5cb0731 | Open |
 | B012 | (auto) | (auto) | opened by 9a9e737 | Open |
+| B013 | (auto) | (auto) | opened by 75126ac | Open |
+| B014 | (auto) | (auto) | opened by 753efb3 | Open |
+| B015 | (auto) | (auto) | opened by 7d6851c | Open |
+| B016 | (auto) | (auto) | opened by 35a8604 | Open |
 
 ## Resolved
 | ID | Severity | Phase | Title | Resolution |

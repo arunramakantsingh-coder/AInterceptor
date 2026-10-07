@@ -59,6 +59,9 @@ class ClaudeRuntime(ProviderRuntime):
         self._page = None
         self._cdp = None
         self._transport: ClaudeCDPTransport | None = None
+        # Raw bytes from the last execute(), for arawdump. Filled by
+        # TransportSignal(kind='data') — payload is the decoded body.
+        self._last_raw_body: bytes = b""
         self._started = False
         self._owns_browser = False
         self._owns_context = False
@@ -186,6 +189,7 @@ class ClaudeRuntime(ProviderRuntime):
 
         prompt = self._last_user_prompt(request.messages)
         async with self._execute_lock:
+            self._last_raw_body = b""
             self._transport.prepare(request.request_id)
             try:
                 textbox = self._page.get_by_role("textbox").last
@@ -249,6 +253,11 @@ class ClaudeRuntime(ProviderRuntime):
 
             try:
                 async for signal in self._transport.signals(timeout=120.0):
+                    # Accumulate raw bytes for arawdump. payload on a
+                    # 'data' signal is the decoded SSE/JSON chunk.
+                    if signal.kind == "data" and isinstance(signal.payload, (bytes, bytearray)):
+                        self._last_raw_body += bytes(signal.payload)
+
                     if signal.kind == "request_intercepted":
                         yield StreamEvent(
                             provider=self.provider,
