@@ -200,7 +200,7 @@ def agents_page(user: User = Depends(current_user_web),
         + '</div>'
         + _install_card()
         + '</div>'
-        + '<script src="/agents-static/agents.js?v=bc6e96c" defer></script>'
+        + '<script src="/agents-static/agents.js?v=' + _agents_js_version() + '" defer></script>'
     )
     return HTMLResponse(W.page("Agents", body, W.topbar(user.email)))
 
