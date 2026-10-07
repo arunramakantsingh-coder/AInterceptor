@@ -118,6 +118,17 @@ async def chat(body: ChatIn,
     except NoProviderAvailable as e:
         raise HTTPException(503, str(e))
 
+    # Per-provider tool syntax (Rule 18: lives in the provider file).
+    # If the provider module doesn't expose these, shim falls back to
+    # generic <tool_call> handling.
+    import importlib as _importlib
+    try:
+        _provider_mod = _importlib.import_module(f"app.interception.{provider}")
+    except Exception:
+        _provider_mod = None
+    _tool_prompt_fn = getattr(_provider_mod, "tool_prompt", None) if _provider_mod else None
+    _extract_fn = getattr(_provider_mod, "extract_tool_calls", None) if _provider_mod else None
+
     # When the client sends OpenAI tools, build a text prompt
     # containing the tool catalog + full message history. Otherwise
     # keep the original "last user message" simplification.
@@ -133,7 +144,7 @@ async def chat(body: ChatIn,
             else:
                 _msgs.append({"role": getattr(_m, "role", ""),
                               "content": getattr(_m, "content", "")})
-        prompt = build_full_prompt(_msgs, body.tools or [])
+        prompt = build_full_prompt(_msgs, body.tools or [], _tool_prompt_fn)
     else:
         prompt = next((m.content for m in reversed(body.messages)
                        if m.role == "user"), "")
@@ -162,7 +173,7 @@ async def chat(body: ChatIn,
         full = "".join(chunks)
         if tools_active:
             from app.runtime.tool_shim import parse_tool_calls, shape_response
-            _clean, _calls = parse_tool_calls(full)
+            _clean, _calls = parse_tool_calls(full, _extract_fn)
             latency_ms = int((time.monotonic() - t0) * 1000)
             try:
                 db.add(UsageEvent(
@@ -223,7 +234,13 @@ async def chat(body: ChatIn,
                     _buf.append(delta)
                 _full_reply = "".join(_buf)
                 from app.runtime.tool_shim import parse_tool_calls, stream_chunks
-                _clean, _calls = parse_tool_calls(_full_reply)
+                _clean, _calls = parse_tool_calls(_full_reply, _extract_fn)
+                try:
+                    import pathlib as _pl, json as _j
+                    _pl.Path("/tmp/dsh_tool_debug/parsed_calls.json").write_text(
+                        _j.dumps(_calls, indent=2))
+                except Exception:
+                    pass
                 _cmpl_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
                 for _frame in stream_chunks(_clean, _calls, body.model, _cmpl_id):
                     yield _frame

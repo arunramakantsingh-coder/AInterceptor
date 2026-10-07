@@ -16,6 +16,7 @@ Parking lot. Not committed to a phase.
 - [x] raw-monitor (added by 9d7761d on 2026-10-04)
 - [x] dev-reload (added by 753f502 on 2026-10-04)
 - [x] monitoring-section (added by 753f502 on 2026-10-04)
+- [x] tool-shim-skeleton (added by 5450b3e on 2026-10-07)
 
 ## API
 - `POST /v1/chat/completions` — OpenAI-compatible endpoint for CareerOS and external apps

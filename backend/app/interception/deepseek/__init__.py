@@ -415,3 +415,82 @@ def decode_deepseek_final(raw: str) -> str:
                         latest_response_text = latest_response_text + val
 
     return latest_response_text
+
+# ─────────────────────────────────────────────────────────────────
+# Tool-calling syntax for DeepSeek web (Rule 18: lives in provider file)
+# ─────────────────────────────────────────────────────────────────
+
+def tool_prompt(tools: list[dict]) -> str:
+    """Render the tool catalog in DeepSeek's native <||DSML||> syntax."""
+    if not tools:
+        return ""
+    lines = [
+        "# Available tools",
+        "",
+        "You have access to the tools listed below. To call a tool, emit",
+        "EXACTLY this block in your reply and nothing else in that turn:",
+        "",
+        "<||DSML|| calls>",
+        '<||DSML|| invoke name="<tool_name>">',
+        '<||DSML|| parameter name="<arg_name>">value</||DSML|| parameter>',
+        "</||DSML|| invoke>",
+        "</||DSML|| calls>",
+        "",
+        "Emit one invoke block per tool call. You may emit multiple invoke",
+        "blocks inside a single calls block. After emitting the block(s), STOP —",
+        "do not narrate, explain, or continue the conversation. The harness",
+        "will run the tools and send the results back.",
+        "",
+        "## Tool list",
+    ]
+    for t in tools:
+        fn = t.get("function") or {}
+        name = fn.get("name") or "?"
+        desc = (fn.get("description") or "").strip()
+        params = fn.get("parameters") or {}
+        lines.append(f"- **{name}** — {desc}")
+        if params:
+            schema_str = json.dumps(params, separators=(",", ":"))
+            if len(schema_str) > 700:
+                schema_str = schema_str[:700] + "...(truncated)"
+            lines.append(f"    arguments schema: {schema_str}")
+    return "\n".join(lines)
+
+
+# DeepSeek web emits DSML-tagged tool calls. The pipe character is
+# U+FF5C (fullwidth vertical bar) in the live stream; normalize to ASCII.
+_DSML_CALLS_RE = re.compile(
+    r"<\|{2}DSML\|{2}\s*calls?>(.*?)</\|{2}DSML\|{2}\s*calls?>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_INVOKE_RE = re.compile(
+    r'<\|{2}DSML\|{2}\s*invoke\s+name="([^"]+)">(.*?)</\|{2}DSML\|{2}\s*invoke>',
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_PARAM_RE = re.compile(
+    r'<\|{2}DSML\|{2}\s*parameter\s+name="([^"]+)"[^>]*>(.*?)</\|{2}DSML\|{2}\s*parameter>',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def extract_tool_calls(text: str) -> tuple[str, list[tuple[str, dict]]]:
+    """Parse DeepSeek's native <||DSML||> tool-call blocks.
+
+    Returns (clean_text_without_blocks, [(tool_name, args_dict), ...]).
+    """
+    if not text:
+        return "", []
+    norm = text.replace("\uff5c", "|")
+    calls: list[tuple[str, dict]] = []
+    for block in _DSML_CALLS_RE.finditer(norm):
+        inner = block.group(1)
+        for inv in _DSML_INVOKE_RE.finditer(inner):
+            name = inv.group(1)
+            params_text = inv.group(2)
+            args: dict[str, str] = {}
+            for pm in _DSML_PARAM_RE.finditer(params_text):
+                args[pm.group(1)] = pm.group(2).strip()
+            calls.append((name, args))
+    clean = _DSML_CALLS_RE.sub("", norm).strip()
+    return clean, calls
+

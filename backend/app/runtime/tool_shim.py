@@ -75,7 +75,7 @@ def render_tool_definitions(tools: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_full_prompt(messages: list[dict], tools: list[dict]) -> str:
+def build_full_prompt(messages: list[dict], tools: list[dict], tool_prompt_fn=None) -> str:
     """Assemble a single text prompt from OpenAI messages + tools."""
     system_parts: list[str] = []
     convo_parts: list[str] = []
@@ -96,7 +96,8 @@ def build_full_prompt(messages: list[dict], tools: list[dict]) -> str:
             name = m.get("name") or m.get("tool_call_id") or "tool"
             convo_parts.append(f"TOOL RESULT ({name}): {text}")
 
-    tool_block = render_tool_definitions(tools)
+    tool_block = (tool_prompt_fn(tools) if tool_prompt_fn is not None
+                  else render_tool_definitions(tools))
 
     sections = []
     if system_parts:
@@ -108,10 +109,36 @@ def build_full_prompt(messages: list[dict], tools: list[dict]) -> str:
     return "\n\n".join(sections)
 
 
-def parse_tool_calls(text: str) -> tuple[str, list[dict]]:
-    """Return (clean_text_without_blocks, tool_calls_list)."""
+def parse_tool_calls(text: str, extractor_fn=None) -> tuple[str, list[dict]]:
+    """Return (clean_text_without_blocks, tool_calls_list).
+
+    If extractor_fn is provided (per-provider native parser), try it first.
+    Falls back to <tool_call>{...}</tool_call> JSON blocks.
+    """
     calls: list[dict] = []
-    for m in _TOOL_CALL_RE.finditer(text or ""):
+    remaining = text or ""
+
+    if extractor_fn is not None:
+        try:
+            clean_after, native_calls = extractor_fn(text or "")
+        except Exception:
+            native_calls = []
+        for name, args in (native_calls or []):
+            if not name:
+                continue
+            args_str = json.dumps(args) if isinstance(args, (dict, list)) else str(args)
+            calls.append({
+                "id": f"call_{uuid.uuid4().hex[:16]}",
+                "type": "function",
+                "function": {"name": name, "arguments": args_str},
+            })
+        if calls:
+            return clean_after, calls
+        # extractor found nothing — fall through to <tool_call> scan on
+        # the original text (provider may have emitted generic syntax).
+        remaining = text or ""
+
+    for m in _TOOL_CALL_RE.finditer(remaining):
         raw = m.group(1)
         try:
             obj = json.loads(raw)
@@ -130,7 +157,7 @@ def parse_tool_calls(text: str) -> tuple[str, list[dict]]:
             "type": "function",
             "function": {"name": name, "arguments": args_str},
         })
-    clean = _TOOL_CALL_RE.sub("", text or "").strip()
+    clean = _TOOL_CALL_RE.sub("", remaining).strip()
     return clean, calls
 
 
