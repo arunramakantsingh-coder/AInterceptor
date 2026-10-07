@@ -24,8 +24,8 @@ async function findAgent() {
 let AGENT_ALIVE = false;
 const AGENT_NOT_RUNNING_MSG =
   'The local agent is not running on this machine. ' +
-  'Install it with:  pip install "git+https://github.com/arunramakantsingh-coder/AInterceptor.git#subdirectory=agent"  ' +
-  'then start it with:  airouter-agent serve';
+  'Install it with: pip install --upgrade "git+https://github.com/arunramakantsingh-coder/AInterceptor.git@fix/cli-chat-provider-gate-cisco-shell#subdirectory=agent" ' +
+  'then start it with: airouter-agent serve';
 
 window.agentNotRunning = function () {
   alert(AGENT_NOT_RUNNING_MSG);
