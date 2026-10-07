@@ -358,6 +358,17 @@ class WebRuntimeBase(ProviderRuntime):
             raise ValueError("execution requires a non-empty user message")
 
         async with self._lock:
+            # Reset parser state. The runtime — and its parser — are
+            # cached per provider (see _get_runtime in path_b.py) so
+            # they survive across requests. Without this reset, the
+            # prior request's fragments leak into this one. Symptom:
+            #   prompt "say PONG" -> reply "PONG\n\nhi again"
+            # Calling __init__() re-runs the parser's own initializer,
+            # which is the parser's contract for "start clean".
+            try:
+                self.parser.__init__()
+            except Exception:
+                pass
             seq = 0
             yield StreamEvent(self.provider, request.request_id,
                               EventType.REQUEST_INTERCEPTED, seq,
@@ -418,6 +429,18 @@ class WebRuntimeBase(ProviderRuntime):
                 text = ""
                 if body:
                     text = self.parser(body.decode("utf-8", errors="replace"))
+                    # Finalize any partial line still buffered inside
+                    # the parser. The last SSE chunk often has no
+                    # trailing newline, so it stays in _pending until
+                    # finish() processes it. Symptom without this:
+                    #   "say ZZZ" -> reply "ZZ" (missing last char).
+                    if hasattr(self.parser, "finish"):
+                        try:
+                            finalized = self.parser.finish()
+                            if finalized and len(finalized) >= len(text or ""):
+                                text = finalized
+                        except Exception:
+                            pass
                 if not text:
                     yield StreamEvent(self.provider, request.request_id,
                                       EventType.STREAM_FAILED, seq,
