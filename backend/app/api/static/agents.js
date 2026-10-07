@@ -1,72 +1,81 @@
-
-// AInterceptor — agents page helper detection + one-click login
+// AInterceptor — agents page: local helper detection + one-click login
 (function () {
-  // The agent picks the first bindable port in this range (Windows often
-// reserves 45231 for Hyper-V/WSL/Docker). We probe them until one answers.
-const AGENT_PORTS = [];
-for (let p = 45231; p <= 45241; p++) AGENT_PORTS.push(p);
-let AGENT = null;  // set by findAgent() once a port responds
+  // ── ports ────────────────────────────────────────────────────────
+  // Windows often reserves 45231 for Hyper-V/WSL/Docker. Try a short
+  // range; the first port that answers /status wins.
+  const AGENT_PORTS = [];
+  for (let p = 45231; p <= 45241; p++) AGENT_PORTS.push(p);
+  let AGENT = null;        // e.g. "http://127.0.0.1:45232"
+  let AGENT_ALIVE = false;
 
-async function findAgent() {
-  for (const port of AGENT_PORTS) {
-    const url = "http://127.0.0.1:" + port;
-    try {
-      const r = await fetch(url + "/status", { cache: "no-store" });
-      if (r.ok) { AGENT = url; return url; }
-    } catch (e) { /* try next */ }
-  }
-  return null;
-}
+  const AGENT_NOT_RUNNING_MSG =
+    'The local agent is not running on this machine. ' +
+    'Install it with: pip install --upgrade ' +
+    '"git+https://github.com/arunramakantsingh-coder/AInterceptor.git' +
+    '@fix/cli-chat-provider-gate-cisco-shell#subdirectory=agent" ' +
+    'then start it with: airouter-agent serve';
 
-// Track whether the local agent responded to the last health check.
-// If a user clicks Login without the agent running, we show the
-// install command instead of failing silently.
-let AGENT_ALIVE = false;
-const AGENT_NOT_RUNNING_MSG =
-  'The local agent is not running on this machine. ' +
-  'Install it with: pip install --upgrade "git+https://github.com/arunramakantsingh-coder/AInterceptor.git@fix/cli-chat-provider-gate-cisco-shell#subdirectory=agent" ' +
-  'then start it with: airouter-agent serve';
-
-window.agentNotRunning = function () {
-  alert(AGENT_NOT_RUNNING_MSG);
-  return false;
-};
-
+  // ── helpers ──────────────────────────────────────────────────────
   function el(id) { return document.getElementById(id); }
 
   function setDot(ok, titleText, detailText) {
     const dot = el("agent-dot");
     if (!dot) return;
     dot.style.color = ok ? "#4ade80" : "#f87171";
-    el("agent-title").textContent = titleText;
-    el("agent-detail").textContent = detailText;
-    el("agent-help").style.display = ok ? "none" : "block";
-    // Keep Login buttons visible at all times. If the agent is down,
-    // the click handler shows the install command instead of failing.
+    const t = el("agent-title"); if (t) t.textContent = titleText;
+    const d = el("agent-detail"); if (d) d.textContent = detailText;
+    const h = el("agent-help"); if (h) h.style.display = ok ? "none" : "block";
+    // Keep Login buttons visible always.
     document.querySelectorAll(".agent-run").forEach(b => {
       b.style.display = "inline-block";
     });
   }
 
+  async function findAgent() {
+    for (const port of AGENT_PORTS) {
+      const url = "http://127.0.0.1:" + port;
+      try {
+        const r = await fetch(url + "/status", { cache: "no-store" });
+        if (r.ok) { AGENT = url; return url; }
+      } catch (e) { /* try next */ }
+    }
+    return null;
+  }
+
+  // ── status check ─────────────────────────────────────────────────
   async function checkAgent() {
     try {
+      const found = await findAgent();
+      if (!found) {
+        AGENT_ALIVE = false;
+        setDot(false, "No local agent found",
+                    "Run `airouter-agent serve` on your laptop.");
+        return;
+      }
       const r = await fetch(AGENT + "/status", { cache: "no-store" });
       const d = await r.json();
       if (d.ok) {
-          AGENT_ALIVE = true;
-        const serverOk = d.server_reachable ? "server reachable" : "server unreachable";
-        setDot(true, "Agent running on " + (d.hostname || "this laptop"),
-                    d.os + " · " + serverOk + " · " + (d.has_token ? "device token set" : "not connected"));
+        AGENT_ALIVE = true;
+        const port = AGENT.split(":").pop();
+        const srv = d.server_reachable ? "server reachable" : "server unreachable";
+        setDot(true,
+          "Agent running on " + (d.hostname || "this laptop"),
+          (d.os || "?") + " · " + srv + " · port " + port +
+          " · " + (d.has_token ? "device token set" : "not connected"));
       } else {
-        AGENT_ALIVE = false; setDot(false, "Agent not responding", "Run `airouter-agent serve` on your laptop.");
+        AGENT_ALIVE = false;
+        setDot(false, "Agent not responding",
+                    "Run `airouter-agent serve` on your laptop.");
       }
     } catch (e) {
-      AGENT_ALIVE = false; setDot(false, "No local agent found", "Run `airouter-agent serve` on your laptop.");
+      AGENT_ALIVE = false;
+      setDot(false, "No local agent found",
+                  "Run `airouter-agent serve` on your laptop.");
     }
   }
   window.checkAgent = checkAgent;
 
-  // Copy buttons
+  // ── copy buttons ─────────────────────────────────────────────────
   document.querySelectorAll("[data-copy]").forEach(btn => {
     btn.addEventListener("click", () => {
       const txt = btn.getAttribute("data-copy");
@@ -85,7 +94,7 @@ window.agentNotRunning = function () {
     });
   });
 
-  // Run buttons
+  // ── login buttons ────────────────────────────────────────────────
   document.querySelectorAll(".agent-run").forEach(btn => {
     btn.addEventListener("click", async () => {
       const provider = btn.getAttribute("data-provider");
@@ -93,7 +102,17 @@ window.agentNotRunning = function () {
       if (out) { out.style.display = "block"; out.textContent = "Starting…"; }
       btn.disabled = true;
       try {
-        if (!AGENT_ALIVE) { window.agentNotRunning(); return; }
+        // Re-probe on click in case the agent started after page load.
+        if (!AGENT_ALIVE) {
+          const found = await findAgent();
+          if (!found) {
+            if (out) out.textContent = AGENT_NOT_RUNNING_MSG;
+            alert(AGENT_NOT_RUNNING_MSG);
+            return;
+          }
+          AGENT_ALIVE = true;
+          checkAgent();
+        }
         const r = await fetch(AGENT + "/login/" + provider, { method: "POST" });
         const d = await r.json();
         if (!d.job_id) throw new Error(d.error || "no job id");
@@ -125,8 +144,7 @@ window.agentNotRunning = function () {
     }
   }
 
-  // Fire on page load
+  // ── start ────────────────────────────────────────────────────────
   checkAgent();
-  // Keep status fresh
   setInterval(checkAgent, 5000);
 })();

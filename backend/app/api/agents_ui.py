@@ -34,6 +34,20 @@ def _repo_branch() -> str:
 
 
 REPO_BRANCH = _repo_branch()
+import hashlib as _hl
+
+def _agents_js_version() -> str:
+    """Content hash of agents.js for cache-busting. Any change to the
+    file changes this value, so the browser always fetches the fresh
+    version."""
+    js = _os.path.join(_os.path.dirname(__file__), "static", "agents.js")
+    try:
+        with open(js, "rb") as fh:
+            return _hl.md5(fh.read()).hexdigest()[:8]
+    except Exception:
+        return "dev"
+
+
 PIP_INSTALL = (
     'pip install --upgrade '
     f'"git+{REPO_URL}@{REPO_BRANCH}#subdirectory=agent"'
