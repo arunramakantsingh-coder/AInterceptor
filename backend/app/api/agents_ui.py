@@ -1,8 +1,10 @@
 """Dashboard: agents page — one-click provider login via local helper."""
 from __future__ import annotations
+import os as _os
+import subprocess as _sp
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -13,30 +15,30 @@ from app.api import web_common as W
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard-agents"])
 
-# ── agent install constants ──────────────────────────────────
-import os as _os
-import subprocess as _sp
+PROVIDERS = ["chatgpt", "claude", "deepseek", "gemini"]
+
+REPO_URL = "https://github.com/arunramakantsingh-coder/AInterceptor.git"
+
 
 def _repo_branch() -> str:
     """Branch currently checked out in the repo. Falls back to main."""
     try:
         out = _sp.check_output(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=_os.path.dirname(__file__), stderr=_sp.DEVNULL, text=True,
+            cwd=_os.path.dirname(__file__),
+            stderr=_sp.DEVNULL, text=True,
         ).strip()
         return out or "main"
     except Exception:
         return "main"
 
-REPO_URL    = "https://github.com/arunramakantsingh-coder/AInterceptor.git"
+
 REPO_BRANCH = _repo_branch()
 PIP_INSTALL = (
     'pip install --upgrade '
     f'"git+{REPO_URL}@{REPO_BRANCH}#subdirectory=agent"'
 )
-
-
-PROVIDERS = ["chatgpt", "claude", "deepseek", "gemini"]
+INSTALL_BAT_URL = "/dashboard/agents/install.bat"
 
 
 def _fmt_age(ts):
@@ -119,6 +121,39 @@ def _providers_card(sess_by_provider):
     return "".join(parts)
 
 
+def _install_card():
+    return (
+        '<div class="card" style="margin-top:22px;">'
+        '<h3>Install the agent</h3>'
+        '<p class="muted" style="font-size:13px;">Run this once on the laptop you want to log in from. Python 3.10+ required. The agent runs a small local server on port 45231; no credentials pass through it.</p>'
+        '<div style="background:#0a0a0a; padding:14px 16px; border-radius:6px; font-family:monospace; font-size:12px; color:#ccc; line-height:1.9;">'
+        '<div><span style="color:#666;"># 1. install the agent</span></div>'
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+        '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">' + W.esc(PIP_INSTALL) + '</code>'
+        '<button type="button" class="btn-secondary" data-copy="' + W.esc(PIP_INSTALL) + '" style="padding:3px 10px; font-size:11px;">copy</button>'
+        '</div>'
+        '<div style="margin-top:12px;"><span style="color:#666;"># 2. start the local helper</span></div>'
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+        '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">airouter-agent serve</code>'
+        '<button type="button" class="btn-secondary" data-copy="airouter-agent serve" style="padding:3px 10px; font-size:11px;">copy</button>'
+        '</div>'
+        '<div style="margin-top:12px;"><span style="color:#666;"># 3. link this laptop to your account</span></div>'
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+        '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">airouter-agent connect --server https://ainterceptor.taila2310c.ts.net</code>'
+        '<button type="button" class="btn-secondary" data-copy="airouter-agent connect --server https://ainterceptor.taila2310c.ts.net" style="padding:3px 10px; font-size:11px;">copy</button>'
+        '</div>'
+        '</div>'
+        '<div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">'
+        '<a class="btn" href="' + INSTALL_BAT_URL + '" '
+        'style="padding:8px 16px; font-size:13px;">Download installer (.bat)</a>'
+        '<span class="muted" style="font-size:12px;">Double-click to run. Installs + starts the agent.</span>'
+        '</div>'
+        '<p class="muted" style="margin-top:10px; font-size:12px;">On first run, Windows may prompt for admin rights once &mdash; that reserves port 45231 so the dashboard button can reach the agent. It is a one-time UAC.</p>'
+        '<p class="muted" style="margin-top:14px; font-size:12px;">Full guide: <a href="/dashboard/docs/docs/AGENT_INSTALL.md">AGENT_INSTALL.md</a></p>'
+        '</div>'
+    )
+
+
 @router.get("/agents", response_class=HTMLResponse)
 def agents_page(user: User = Depends(current_user_web),
                 db: Session = Depends(get_db)):
@@ -149,33 +184,46 @@ def agents_page(user: User = Depends(current_user_web),
         + _devices_card(devices)
         + '<div style="margin-top:14px;"><a class="btn btn-secondary" href="/dashboard/devices">Manage devices &rarr;</a></div>'
         + '</div>'
-        + '<div class="card" style="margin-top:22px;">'
-        + '<h3>Install the agent</h3>'
-        + '<p class="muted" style="font-size:13px;">Run this once on the laptop you want to log in from. Python 3.10+ required. The agent runs a small local server on port 45231; no credentials pass through it.</p>'
-        + '<div style="background:#0a0a0a; padding:14px 16px; border-radius:6px; font-family:monospace; font-size:12px; color:#ccc; line-height:1.9;">'
-        +   '<div><span style="color:#666;"># 1. install the agent</span></div>'
-        +   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
-        +     '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">' + W.esc(PIP_INSTALL) + '</code>'
-        +     '<button type="button" class="btn-secondary" data-copy="' + W.esc(PIP_INSTALL) + '" style="padding:3px 10px; font-size:11px;">copy</button>'
-        +   '</div>'
-        +   '<div style="margin-top:12px;"><span style="color:#666;"># 2. start the local helper</span></div>'
-        +   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
-        +     '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">airouter-agent serve</code>'
-        +     '<button type="button" class="btn-secondary" data-copy="airouter-agent serve" style="padding:3px 10px; font-size:11px;">copy</button>'
-        +   '</div>'
-        +   '<div style="margin-top:12px;"><span style="color:#666;"># 3. link this laptop to your account</span></div>'
-        +   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
-        +     '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">airouter-agent connect --server https://ainterceptor.taila2310c.ts.net</code>'
-        +     '<button type="button" class="btn-secondary" data-copy="airouter-agent connect --server https://ainterceptor.taila2310c.ts.net" style="padding:3px 10px; font-size:11px;">copy</button>'
-        +   '</div>'
+        + _install_card()
         + '</div>'
-        + '<div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">'
-        +   '<a class="btn" href="/dashboard/agents/install.bat" download="install-airouter-agent.bat" '
-        +   'style="padding:8px 16px; font-size:13px;">Download installer (.bat)</a>'
-        +   '<span class="muted" style="font-size:12px;">Double-click to run. Installs + starts the agent.</span>'
-        + '</div>'
-        + '<p class="muted" style="margin-top:10px; font-size:12px;">On first run, Windows may prompt for admin rights once — that reserves port 45231 so the dashboard button can reach the agent. It is a one-time UAC.</p>'
-        + '<p class="muted" style="margin-top:14px; font-size:12px;">Full guide: <a href="/dashboard/docs/docs/AGENT_INSTALL.md">AGENT_INSTALL.md</a></p>'
-        + '</div>
+        + '<script src="/agents-static/agents.js" defer></script>'
     )
     return HTMLResponse(W.page("Agents", body, W.topbar(user.email)))
+
+
+@router.get("/agents/install.bat")
+def agents_install_bat(user: User = Depends(current_user_web)):
+    """Serve a Windows .bat that installs + starts the agent in one go."""
+    bat = (
+        "@echo off\r\n"
+        "title AInterceptor Agent Installer\r\n"
+        "echo.\r\n"
+        "echo  ============================================\r\n"
+        "echo   AInterceptor Local Agent - one-time setup\r\n"
+        "echo  ============================================\r\n"
+        "echo.\r\n"
+        "echo  Step 1/2: installing the agent from GitHub...\r\n"
+        "echo.\r\n"
+        "python -m pip install --upgrade \"git+" + REPO_URL + "@" + REPO_BRANCH + "#subdirectory=agent\"\r\n"
+        "if errorlevel 1 (\r\n"
+        "    echo.\r\n"
+        "    echo  Installation failed. Check that Python 3.10+ is installed\r\n"
+        "    echo  and that 'python' is on your PATH.\r\n"
+        "    echo.\r\n"
+        "    pause\r\n"
+        "    exit /b 1\r\n"
+        ")\r\n"
+        "echo.\r\n"
+        "echo  Step 2/2: starting the local helper...\r\n"
+        "echo.\r\n"
+        "echo  Leave this window OPEN while you use the dashboard.\r\n"
+        "echo  Press Ctrl+C to stop.\r\n"
+        "echo.\r\n"
+        "python -m airouter_agent.cli serve\r\n"
+        "pause\r\n"
+    )
+    return Response(
+        content=bat,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="install-airouter-agent.bat"'},
+    )
