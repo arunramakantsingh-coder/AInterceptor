@@ -170,7 +170,8 @@ def main() -> int:
     pconf.set_defaults(fn=cmd_config)
 
     psrv = sub.add_parser("serve", help="Run local helper for web UI")
-    psrv.add_argument("--port", type=int, default=45231)
+    psrv.add_argument("--port", type=int, default=None,
+                        help="Force a specific port. Omit to auto-pick from 45231-45241.")
     psrv.set_defaults(fn=cmd_serve)
 
     ps = sub.add_parser("status", help="Show agent configuration")

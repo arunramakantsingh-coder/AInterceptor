@@ -151,32 +151,42 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {"job_id": job_id, "provider": provider})
 
 
-def _try_bind(port: int) -> bool:
-    """Can we bind 127.0.0.1:port right now?"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.bind((DEFAULT_HOST, port))
-        return True
-    except OSError:
-        return False
-    finally:
+def _pick_server(host: str, candidates: list[int]) -> ThreadingHTTPServer:
+    """Bind the first port that actually works. Returns the live server.
+
+    We do not pre-check ports separately — earlier versions tried
+    bind() once in a throwaway socket, but on Windows the throwaway
+    socket and the real server can disagree (SO_REUSEADDR, allow_
+    reuse_address, and OS reservations all interact). Bind-first is
+    the only reliable way.
+    """
+    last_err: Exception | None = None
+    for port in candidates:
         try:
-            s.close()
-        except Exception:
-            pass
+            httpd = ThreadingHTTPServer((host, port), Handler)
+            print(f"[agent-serve] listening on http://{host}:{port}")
+            print(f"[agent-serve] (dashboard probes 45231-45241 and finds this)")
+            return httpd
+        except OSError as e:
+            print(f"[agent] port {port} unavailable ({e.__class__.__name__}: {e})")
+            last_err = e
+            continue
+    raise RuntimeError(
+        f"none of {candidates} bindable. Windows reserves some ranges for "
+        f"Hyper-V/WSL/Docker.\n"
+        f"Try a manual port:  airouter-agent serve --port 46000\n"
+        f"Last error: {last_err}"
+    )
 
 
 def main(port: int | None = None) -> int:
-    if port is None:
-        try:
-            port = _pick_port()
-        except RuntimeError as e:
-            print(f"[agent] {e}")
-            return 1
-    addr = (DEFAULT_HOST, port)
-    httpd = ThreadingHTTPServer(addr, Handler)
-    print(f"[agent-serve] listening on http://{DEFAULT_HOST}:{port}")
-    print(f"[agent-serve] (dashboard probes 45231-45241 and finds this)")
+    candidates = [port] if port else PORT_CANDIDATES
+    try:
+        httpd = _pick_server(DEFAULT_HOST, candidates)
+    except RuntimeError as e:
+        print(f"[agent] {e}")
+        return 1
+
     print(f"[agent-serve] allowed origins: {sorted(ALLOWED_ORIGINS)}")
     print("[agent-serve] Ctrl+C to stop")
     try:
