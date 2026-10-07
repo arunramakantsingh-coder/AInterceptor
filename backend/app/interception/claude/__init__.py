@@ -382,22 +382,22 @@ class ClaudeRuntime(ProviderRuntime):
         if self._cdp is not None:
             try:
                 await self._cdp.detach()
-            except Exception:
+            except BaseException:
                 pass
         if self._owns_context and self._context is not None:
             try:
                 await self._context.close()
-            except Exception:
+            except BaseException:
                 pass
         if self._owns_browser and self._browser is not None:
             try:
                 await self._browser.close()
-            except Exception:
+            except BaseException:
                 pass
         if self._pw is not None:
             try:
                 await self._pw.stop()
-            except Exception:
+            except BaseException:
                 pass
         self._cdp = None
         self._transport = None

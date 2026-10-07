@@ -33,13 +33,14 @@ class ChatIn(BaseModel):
     model: str
     messages: list[Message]
     stream: bool = True
+    stream_options: dict | None = None
 
 
 def _openai_chunk(model: str, delta, finish: str | None = None,
                   cmpl_id: str | None = None) -> str:
-    """One SSE chunk. `delta` may be a str (content) or a dict (role/tool_calls).
-    `cmpl_id` must be the SAME for every chunk of a single completion —
-    OpenAI's contract, and dsh's pi-ai adapter enforces it."""
+    """One SSE chunk. Matches OpenAI's exact frame shape — dsh's pi-ai
+    adapter is strict about this (logprobs, system_fingerprint, empty
+    content on role opener)."""
     if isinstance(delta, str):
         inner = {"content": delta} if delta else {}
     elif isinstance(delta, dict):
@@ -51,11 +52,34 @@ def _openai_chunk(model: str, delta, finish: str | None = None,
         "object": "chat.completion.chunk",
         "created": int(time.time()),
         "model": model,
+        "system_fingerprint": "fp_ainterceptor",
         "choices": [{
             "index": 0,
             "delta": inner,
+            "logprobs": None,
             "finish_reason": finish,
         }],
+        "usage": None,
+    }
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+def _openai_usage_chunk(model: str, cmpl_id: str, prompt_chars: int,
+                        completion_chars: int) -> str:
+    """OpenAI's final usage-only chunk. Sent when the client set
+    stream_options.include_usage=true. dsh requires this."""
+    payload = {
+        "id": cmpl_id,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "system_fingerprint": "fp_ainterceptor",
+        "choices": [],
+        "usage": {
+            "prompt_tokens": max(1, prompt_chars // 4),
+            "completion_tokens": max(1, completion_chars // 4),
+            "total_tokens": max(2, (prompt_chars + completion_chars) // 4),
+        },
     }
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -173,18 +197,39 @@ async def chat(body: ChatIn,
             parse_calls_fn=lambda r: _ptc(r, _extract_fn),
         )
         import uuid as _uuid, time as _time
-        return {
-            "id": f"chatcmpl-{_uuid.uuid4().hex[:24]}",
-            "object": "chat.completion",
-            "created": int(_time.time()),
-            "model": body.model,
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": _agent_result["content"]},
-                "finish_reason": "stop",
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-        }
+        _content = _agent_result.get("content") or ""
+        _cmpl_id = f"chatcmpl-{_uuid.uuid4().hex[:24]}"
+
+        # Non-streaming client → plain JSON body.
+        if not getattr(body, "stream", False):
+            return {
+                "id": _cmpl_id,
+                "object": "chat.completion",
+                "created": int(_time.time()),
+                "model": body.model,
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": _content},
+                    "finish_reason": "stop",
+                }],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            }
+
+        # Streaming client (dsh, pi-ai) → proper SSE frames. The agent
+        # already finished its loop; we replay the final content as one
+        # SSE stream so the client's parser sees a normal completion.
+        async def _agent_stream():
+            yield _openai_chunk(body.model, {"role": "assistant", "content": ""}, None, _cmpl_id)
+            if _content:
+                yield _openai_chunk(body.model, _content, None, _cmpl_id)
+            yield _openai_chunk(body.model, "", "stop", _cmpl_id)
+            _so = getattr(body, "stream_options", None) or {}
+            if isinstance(_so, dict) and _so.get("include_usage"):
+                yield _openai_usage_chunk(
+                    body.model, _cmpl_id, 0, len(_content))
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_agent_stream(), media_type="text/event-stream")
 
 
     # When the client sends OpenAI tools, build a text prompt
@@ -316,7 +361,7 @@ async def chat(body: ChatIn,
         _cmpl_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         try:
             # OpenAI contract: first chunk carries {"role": "assistant"}
-            yield _openai_chunk(body.model, {"role": "assistant"}, None, _cmpl_id)
+            yield _openai_chunk(body.model, {"role": "assistant", "content": ""}, None, _cmpl_id)
             async for delta in stream_reply(provider, state, prompt):
                 captured["text"] += delta
                 delta_count += 1
@@ -333,6 +378,11 @@ async def chat(body: ChatIn,
             else:
                 captured["status"] = "ok"
             yield _openai_chunk(body.model, "", "stop", _cmpl_id)
+            _so = getattr(body, "stream_options", None) or {}
+            if isinstance(_so, dict) and _so.get("include_usage"):
+                yield _openai_usage_chunk(
+                    body.model, _cmpl_id,
+                    len(prompt or ""), len(captured.get("text", "")))
             yield "data: [DONE]\n\n"
         except ProviderUnavailable as e:
             captured["status"] = "provider_unavailable"

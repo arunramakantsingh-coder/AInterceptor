@@ -70,6 +70,33 @@ async def _bootstrap() -> dict:
     await supervisor.start()
     sr.set_supervisor(supervisor)
 
+    # 3a. Restore persisted sessions from exports/ BEFORE the exporter
+    # starts its 5-second timer. Chrome profile is the hot layer; these
+    # JSON exports are the cold backup. On every daemon restart we push
+    # them back into the live context so a stale or missing profile
+    # cookie never forces a fresh login.
+    from app.runtime.session_exporter import load_state
+    from app.runtime.session_importer import apply_state_to_provider
+    _restore_saved_sessions = []
+    for _prov in active:
+        _state = load_state(export_dir, _prov)
+        if not _state:
+            continue
+        try:
+            _res = await apply_state_to_provider(supervisor, _prov, _state)
+            if _res.get("ok"):
+                _restore_saved_sessions.append(
+                    f"{_prov}(cookies={_res.get('cookies', 0)},"
+                    f"local={_res.get('local_storage', 0)})")
+            else:
+                print(f"[restore] {_prov}: {_res.get('error')}", flush=True)
+        except Exception as _e:
+            print(f"[restore] {_prov} failed: {_e}", flush=True)
+    if _restore_saved_sessions:
+        print(f"[restore] applied saved sessions: {', '.join(_restore_saved_sessions)}", flush=True)
+    else:
+        print("[restore] no saved sessions to apply", flush=True)
+
     # 3. watchdog (offscreen)
     watchdog.start(interval=3.0)
 
