@@ -16,11 +16,20 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 
 
 class Message(BaseModel):
+    # Extra="allow" so OpenAI agent clients can send tool_calls,
+    # tool_call_id, name, and any future fields without 422-ing the
+    # whole request. We only read role + content downstream.
+    model_config = {"extra": "allow"}
+
     role: str
-    content: str
+    # content is a string for text turns, null for a pure tool_call
+    # assistant turn, and can be a list of parts for multimodal input.
+    content: str | list | None = None
 
 
 class ChatIn(BaseModel):
+    tools: list[dict] | None = None
+    tool_choice: str | dict | None = None
     model: str
     messages: list[Message]
     stream: bool = True
@@ -109,9 +118,25 @@ async def chat(body: ChatIn,
     except NoProviderAvailable as e:
         raise HTTPException(503, str(e))
 
-    # Use last user message as prompt (Phase 1 simplification)
-    prompt = next((m.content for m in reversed(body.messages)
-                   if m.role == "user"), "")
+    # When the client sends OpenAI tools, build a text prompt
+    # containing the tool catalog + full message history. Otherwise
+    # keep the original "last user message" simplification.
+    tools_active = bool(getattr(body, "tools", None))
+    if tools_active:
+        from app.runtime.tool_shim import build_full_prompt
+        _msgs = []
+        for _m in body.messages:
+            if hasattr(_m, "model_dump"):
+                _msgs.append(_m.model_dump())
+            elif isinstance(_m, dict):
+                _msgs.append(_m)
+            else:
+                _msgs.append({"role": getattr(_m, "role", ""),
+                              "content": getattr(_m, "content", "")})
+        prompt = build_full_prompt(_msgs, body.tools or [])
+    else:
+        prompt = next((m.content for m in reversed(body.messages)
+                       if m.role == "user"), "")
     if not prompt.strip():
         raise HTTPException(400, "no user message found")
 
@@ -135,6 +160,24 @@ async def chat(body: ChatIn,
             status = "error"
             raise HTTPException(500, str(e))
         full = "".join(chunks)
+        if tools_active:
+            from app.runtime.tool_shim import parse_tool_calls, shape_response
+            _clean, _calls = parse_tool_calls(full)
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            try:
+                db.add(UsageEvent(
+                    user_id=user.id, api_key_id=key.id,
+                    provider=provider, model=body.model,
+                    tokens_in=len(prompt), tokens_out=len(full),
+                    latency_ms=latency_ms,
+                    status="tool_calls" if _calls else "ok",
+                    path="A"))
+                from datetime import datetime, timezone as _tz
+                key.last_used_at = datetime.now(_tz.utc)
+                db.commit()
+            except Exception:
+                pass
+            return shape_response(_clean, _calls, body.model)
         latency_ms = int((time.monotonic() - t0) * 1000)
         try:
             db.add(UsageEvent(
@@ -169,6 +212,32 @@ async def chat(body: ChatIn,
     async def gen():
         delta_count = 0
         error_msg = None
+        # When tools are active, buffer the whole reply, then parse for
+        # <tool_call> blocks and emit either tool_calls chunks or a
+        # plain content chunk. Cannot stream token-by-token here because
+        # we do not know if the model will emit tool calls mid-reply.
+        if tools_active:
+            _buf: list[str] = []
+            try:
+                async for delta in stream_reply(provider, state, prompt):
+                    _buf.append(delta)
+                _full_reply = "".join(_buf)
+                from app.runtime.tool_shim import parse_tool_calls, stream_chunks
+                _clean, _calls = parse_tool_calls(_full_reply)
+                _cmpl_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+                for _frame in stream_chunks(_clean, _calls, body.model, _cmpl_id):
+                    yield _frame
+                captured["text"] = _full_reply
+                captured["status"] = "tool_calls" if _calls else "ok"
+            except ProviderUnavailable as e:
+                err = {"error": {"message": str(e), "type": "provider_unavailable"}}
+                yield f"data: {json.dumps(err)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                err = {"error": {"message": str(e), "type": "internal_error"}}
+                yield f"data: {json.dumps(err)}\n\n"
+                yield "data: [DONE]\n\n"
+            return
         try:
             async for delta in stream_reply(provider, state, prompt):
                 captured["text"] += delta
