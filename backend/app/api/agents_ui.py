@@ -13,6 +13,29 @@ from app.api import web_common as W
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard-agents"])
 
+# ── agent install constants ──────────────────────────────────
+import os as _os
+import subprocess as _sp
+
+def _repo_branch() -> str:
+    """Branch currently checked out in the repo. Falls back to main."""
+    try:
+        out = _sp.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=_os.path.dirname(__file__), stderr=_sp.DEVNULL, text=True,
+        ).strip()
+        return out or "main"
+    except Exception:
+        return "main"
+
+REPO_URL    = "https://github.com/arunramakantsingh-coder/AInterceptor.git"
+REPO_BRANCH = _repo_branch()
+PIP_INSTALL = (
+    'pip install --upgrade '
+    f'"git+{REPO_URL}@{REPO_BRANCH}#subdirectory=agent"'
+)
+
+
 PROVIDERS = ["chatgpt", "claude", "deepseek", "gemini"]
 
 
@@ -128,12 +151,12 @@ def agents_page(user: User = Depends(current_user_web),
         + '</div>'
         + '<div class="card" style="margin-top:22px;">'
         + '<h3>Install the agent</h3>'
-        + '<p class="muted" style="font-size:13px;">Run this on the laptop you want to log in from. Python 3.10+ required. The agent runs a small local server on port 45231; no credentials pass through it.</p>'
+        + '<p class="muted" style="font-size:13px;">Run this once on the laptop you want to log in from. Python 3.10+ required. The agent runs a small local server on port 45231; no credentials pass through it.</p>'
         + '<div style="background:#0a0a0a; padding:14px 16px; border-radius:6px; font-family:monospace; font-size:12px; color:#ccc; line-height:1.9;">'
         +   '<div><span style="color:#666;"># 1. install the agent</span></div>'
         +   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
-        +     '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">pip install "git+https://github.com/arunramakantsingh-coder/AInterceptor.git#subdirectory=agent"</code>'
-        +     '<button type="button" class="btn-secondary" data-copy="pip install &quot;git+https://github.com/arunramakantsingh-coder/AInterceptor.git#subdirectory=agent&quot;" style="padding:3px 10px; font-size:11px;">copy</button>'
+        +     '<code style="background:#111; padding:6px 10px; border-radius:4px; color:#ccc;">' + W.esc(PIP_INSTALL) + '</code>'
+        +     '<button type="button" class="btn-secondary" data-copy="' + W.esc(PIP_INSTALL) + '" style="padding:3px 10px; font-size:11px;">copy</button>'
         +   '</div>'
         +   '<div style="margin-top:12px;"><span style="color:#666;"># 2. start the local helper</span></div>'
         +   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
@@ -146,12 +169,13 @@ def agents_page(user: User = Depends(current_user_web),
         +     '<button type="button" class="btn-secondary" data-copy="airouter-agent connect --server https://ainterceptor.taila2310c.ts.net" style="padding:3px 10px; font-size:11px;">copy</button>'
         +   '</div>'
         + '</div>'
-        + '<p class="muted" style="margin-top:10px; font-size:12px;">' + 'On first run, Windows may prompt for admin rights once — that reserves '
-        +   'port 45231 so the dashboard button can reach the agent. It is a one-time UAC.'
-        + '</p>'
+        + '<div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">'
+        +   '<a class="btn" href="/dashboard/agents/install.bat" download="install-airouter-agent.bat" '
+        +   'style="padding:8px 16px; font-size:13px;">Download installer (.bat)</a>'
+        +   '<span class="muted" style="font-size:12px;">Double-click to run. Installs + starts the agent.</span>'
+        + '</div>'
+        + '<p class="muted" style="margin-top:10px; font-size:12px;">On first run, Windows may prompt for admin rights once — that reserves port 45231 so the dashboard button can reach the agent. It is a one-time UAC.</p>'
         + '<p class="muted" style="margin-top:14px; font-size:12px;">Full guide: <a href="/dashboard/docs/docs/AGENT_INSTALL.md">AGENT_INSTALL.md</a></p>'
-        + '</div>'
-        + '</div>'
-        + '<script src="/agents-static/agents.js" defer></script>'
+        + '</div>
     )
     return HTMLResponse(W.page("Agents", body, W.topbar(user.email)))
