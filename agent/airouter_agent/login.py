@@ -20,6 +20,32 @@ ANON_MARKERS = (
     "sign in with",
 )
 
+# Cloudflare interstitial markers — the page is NOT ready yet, even
+# though the URL may be clean. Before this check was added, a CF
+# challenge page (URL = chatgpt.com/, body empty) matched the "logged
+# in" logic after 4 seconds — producing a false positive and uploading
+# a bogus session. See commit for details.
+CF_MARKERS_TITLE = (
+    "just a moment",
+    "attention required",
+    "verifying you are human",
+    "checking your browser",
+    "cloudflare",
+)
+
+CF_MARKERS_BODY = (
+    "verify you are human",
+    "checking your browser before accessing",
+    "enable javascript and cookies to continue",
+    "cf-chl-",
+    "challenge-platform",
+)
+
+# Stability window before declaring success. CF challenges often take
+# 5-15s to resolve even when the title/body look clean.
+STABLE_CONFIRMATIONS = 5    # 5 × 2s sleep = 10s of stability
+
+
 LOGIN_MARKERS = {
     "claude":   ("/login", "/auth", "/signin"),
     "chatgpt":  ("/auth/login", "/auth/0"),
@@ -41,7 +67,21 @@ async def _wait_until_logged_in(page, provider: str, timeout: int = 600) -> None
         if any(m.lower() in url for m in markers):
             confirmed = 0
             continue
-        # URL is clean → check the body for anonymous prompts
+
+        # Title check — Cloudflare serves its interstitial with the
+        # title "Just a moment..." or similar. Body is often empty at
+        # this stage, so the body check alone isn't enough.
+        try:
+            title = (await page.title() or "").lower()
+        except Exception:
+            title = ""
+        if any(m in title for m in CF_MARKERS_TITLE):
+            if confirmed == 0:
+                print(f"[agent] waiting — page is a Cloudflare challenge")
+            confirmed = 0
+            continue
+
+        # Body check — anon markers AND cloudflare-specific text
         try:
             body = (await page.evaluate("document.body.innerText") or "").lower()
         except Exception:
@@ -49,9 +89,15 @@ async def _wait_until_logged_in(page, provider: str, timeout: int = 600) -> None
         if any(m in body for m in ANON_MARKERS):
             confirmed = 0
             continue
-        # Clean URL + no anonymous prompt. Confirm stability for 4s.
+        if any(m in body for m in CF_MARKERS_BODY):
+            confirmed = 0
+            continue
+
+        # Clean URL, clean title, no anon/CF markers. Require the
+        # state to persist for STABLE_CONFIRMATIONS cycles — CF
+        # challenges can flash a clean-looking page briefly.
         confirmed += 1
-        if confirmed >= 2:
+        if confirmed >= STABLE_CONFIRMATIONS:
             print("Login detected.")
             return
     raise TimeoutError("login did not complete in time")
