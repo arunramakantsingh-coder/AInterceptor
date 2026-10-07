@@ -129,6 +129,54 @@ async def chat(body: ChatIn,
     _tool_prompt_fn = getattr(_provider_mod, "tool_prompt", None) if _provider_mod else None
     _extract_fn = getattr(_provider_mod, "extract_tool_calls", None) if _provider_mod else None
 
+    # ── Agent-side execution short-circuit ────────────────────────────
+    # When AGENT_EXECUTION=1 and the client sent tools, AInterceptor
+    # itself runs the tool loop: prompt → tool_call → execute on the
+    # target → feed result back → repeat until done. The client gets
+    # a plain chat completion back; it never sees tool_calls and never
+    # executes anything. AIPs remain interchangeable and credential-
+    # blind. See app/agent/loop.py.
+    import os as _os
+    if (_os.getenv("AGENT_EXECUTION") == "1"
+            and getattr(body, "tools", None)):
+        from app.agent.loop import run_agent
+        from app.runtime.tool_shim import build_full_prompt as _bfp, parse_tool_calls as _ptc
+        _agent_msgs = []
+        for _m in body.messages:
+            if hasattr(_m, "model_dump"):
+                _agent_msgs.append(_m.model_dump())
+            elif isinstance(_m, dict):
+                _agent_msgs.append(_m)
+            else:
+                _agent_msgs.append({
+                    "role": getattr(_m, "role", ""),
+                    "content": getattr(_m, "content", ""),
+                })
+        _agent_state = load_session_state(db, user.id, provider)
+        _agent_result = await run_agent(
+            stream_reply=stream_reply,
+            provider=provider,
+            state=_agent_state,
+            messages=_agent_msgs,
+            tools=body.tools or [],
+            build_prompt_fn=lambda m, t: _bfp(m, t, _tool_prompt_fn),
+            parse_calls_fn=lambda r: _ptc(r, _extract_fn),
+        )
+        import uuid as _uuid, time as _time
+        return {
+            "id": f"chatcmpl-{_uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(_time.time()),
+            "model": body.model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": _agent_result["content"]},
+                "finish_reason": "stop",
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        }
+
+
     # When the client sends OpenAI tools, build a text prompt
     # containing the tool catalog + full message history. Otherwise
     # keep the original "last user message" simplification.
