@@ -26,8 +26,10 @@ window.agentNotRunning = function () {
     el("agent-title").textContent = titleText;
     el("agent-detail").textContent = detailText;
     el("agent-help").style.display = ok ? "none" : "block";
+    // Keep Login buttons visible at all times. If the agent is down,
+    // the click handler shows the install command instead of failing.
     document.querySelectorAll(".agent-run").forEach(b => {
-      b.style.display = ok ? "inline-block" : "none";
+      b.style.display = "inline-block";
     });
   }
 
@@ -36,14 +38,15 @@ window.agentNotRunning = function () {
       const r = await fetch(AGENT + "/status", { cache: "no-store" });
       const d = await r.json();
       if (d.ok) {
+          AGENT_ALIVE = true;
         const serverOk = d.server_reachable ? "server reachable" : "server unreachable";
         setDot(true, "Agent running on " + (d.hostname || "this laptop"),
                     d.os + " · " + serverOk + " · " + (d.has_token ? "device token set" : "not connected"));
       } else {
-        setDot(false, "Agent not responding", "Run `airouter-agent serve` on your laptop.");
+        AGENT_ALIVE = false; setDot(false, "Agent not responding", "Run `airouter-agent serve` on your laptop.");
       }
     } catch (e) {
-      setDot(false, "No local agent found", "Run `airouter-agent serve` on your laptop.");
+      AGENT_ALIVE = false; setDot(false, "No local agent found", "Run `airouter-agent serve` on your laptop.");
     }
   }
   window.checkAgent = checkAgent;

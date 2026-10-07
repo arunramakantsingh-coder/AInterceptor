@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import platform
 import secrets
+import socket
 import subprocess
 import sys
 import threading
@@ -142,7 +143,88 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {"job_id": job_id, "provider": provider})
 
 
+def _try_bind(port: int) -> bool:
+    """Can we bind 127.0.0.1:port right now?"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind((DEFAULT_HOST, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
+def _ensure_port_bindable(port: int) -> bool:
+    """Make sure we can bind `port`. On Windows, if Windows has reserved
+    it (Hyper-V/WSL/Docker grab dynamic port ranges), ask the user once
+    to let us reserve it via netsh — elevated. Idempotent: if the port
+    is already reserved from a previous run, the elevation is skipped.
+    """
+    if _try_bind(port):
+        return True
+
+    if platform.system() != "Windows":
+        print(f"[agent] port {port} is in use. Close whatever is using it and retry.")
+        return False
+
+    print()
+    print("=" * 64)
+    print(f"[agent] Port {port} is blocked by Windows.")
+    print("[agent] This usually means Hyper-V, WSL, or Docker reserved it")
+    print("[agent] inside their dynamic port range. We can fix it once,")
+    print("[agent] for good, with admin rights.")
+    print("=" * 64)
+    print()
+    print("[agent] A UAC prompt will appear. Click Yes to reserve the port.")
+    print()
+
+    # Single elevated PowerShell invocation: stop winnat, add the exclusion,
+    # restart winnat. The '&' chains commands so the whole sequence runs in
+    # one elevated shell, avoiding multiple UAC prompts.
+    inner = (
+        f"net stop winnat & "
+        f"netsh int ipv4 add excludedportrange protocol=tcp "
+        f"startport={port} numberofports=1 & "
+        f"net start winnat"
+    )
+    ps_cmd = (
+        "Start-Process powershell -Verb RunAs -Wait "
+        "-ArgumentList '-NoProfile','-Command','" + inner + "'"
+    )
+
+    try:
+        rc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=60,
+        )
+        if rc.returncode != 0:
+            print(f"[agent] elevation returned {rc.returncode}")
+            if rc.stderr:
+                print(rc.stderr[:400])
+    except Exception as e:
+        print(f"[agent] elevation failed: {e}")
+        return False
+
+    # Retry bind
+    if _try_bind(port):
+        print(f"[agent] port {port} is now reserved and bindable. Setup complete.")
+        return True
+
+    print(f"[agent] port {port} still not bindable after netsh.")
+    print(f"[agent] Run this manually in an Admin PowerShell, then retry serve:")
+    print(f"    net stop winnat")
+    print(f"    netsh int ipv4 add excludedportrange protocol=tcp startport={port} numberofports=1")
+    print(f"    net start winnat")
+    return False
+
+
 def main(port: int = DEFAULT_PORT) -> int:
+    if not _ensure_port_bindable(port):
+        return 1
     addr = (DEFAULT_HOST, port)
     httpd = ThreadingHTTPServer(addr, Handler)
     print(f"[agent-serve] listening on http://{DEFAULT_HOST}:{port}")
