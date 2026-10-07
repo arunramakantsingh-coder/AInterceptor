@@ -34,10 +34,17 @@
   async function findAgent() {
     for (const port of AGENT_PORTS) {
       const url = "http://127.0.0.1:" + port;
+      // Windows reserves some ports for Hyper-V/WSL/Docker; firewall
+      // DROPS packets on those (not reject), so plain fetch() hangs
+      // forever. Abort after 1.5s and try the next port.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 1500);
       try {
-        const r = await fetch(url + "/status", { cache: "no-store" });
+        const r = await fetch(url + "/status",
+                              { cache: "no-store", signal: ctrl.signal });
         if (r.ok) { AGENT = url; return url; }
-      } catch (e) { /* try next */ }
+      } catch (e) { /* timeout or network — try next */ }
+      finally { clearTimeout(timer); }
     }
     return null;
   }
