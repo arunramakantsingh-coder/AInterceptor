@@ -64,3 +64,4 @@ nohup.out
 *.save
 .backup_*/
 .env.backup*
+*.buggy_v1
