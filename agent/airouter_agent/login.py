@@ -77,7 +77,14 @@ async def _wait_until_logged_in(page, provider: str, timeout: int = 600) -> None
             title = ""
         if any(m in title for m in CF_MARKERS_TITLE):
             if confirmed == 0:
-                print(f"[agent] waiting — page is a Cloudflare challenge")
+                print()
+                print("=" * 60)
+                print("  CLOUDFLARE CHALLENGE DETECTED")
+                print("  Look at the Chrome window that just opened.")
+                print("  Click the 'Verify you are human' checkbox.")
+                print("  The agent will continue automatically.")
+                print("=" * 60)
+                print()
             confirmed = 0
             continue
 
@@ -118,7 +125,12 @@ async def run_login(provider: str, server: str, token: str) -> int:
     # Use the user's real Chrome (not Playwright's bundled Chromium) so that
     # Google OAuth trusts the browser. Also keep a persistent profile so
     # Google remembers the device after the first successful login.
-    profile_dir = pathlib.Path.home() / ".airouter" / "chrome-profile" / provider
+    # Shared profile across providers — one Chrome, one Google
+    # session. Once you log into Google here, all subsequent
+    # provider logins reuse those Google cookies. This dramatically
+    # reduces CF friction: Google sees a familiar device, CF sees a
+    # warm profile with history.
+    profile_dir = pathlib.Path.home() / ".airouter" / "chrome-profile" / "agent"
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as pw:
@@ -126,14 +138,22 @@ async def run_login(provider: str, server: str, token: str) -> int:
             user_data_dir=str(profile_dir),
             channel="chrome",                 # real Chrome, not Chromium
             headless=False,
+            # Remove Playwright's default --enable-automation flag.
+            # Without this, Chrome shows the "Chrome is being controlled
+            # by automated test software" banner, which Cloudflare and
+            # Google both use as a strong automation signal.
+            ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-first-run",
                 "--no-default-browser-check",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-infobars",
             ],
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        await page.goto(LOGIN_URLS[provider])
+        await page.goto(LOGIN_URLS[provider], wait_until="domcontentloaded", timeout=60000)
+        await asyncio.sleep(2)   # give CF initial check time to settle
         try:
             await _wait_until_logged_in(page, provider)
         except TimeoutError as e:
