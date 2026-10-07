@@ -241,3 +241,23 @@ def agents_install_bat(user: User = Depends(current_user_web)):
         media_type="application/octet-stream",
         headers={"Content-Disposition": 'attachment; filename="install-airouter-agent.bat"'},
     )
+
+
+from fastapi.responses import FileResponse as _FileResponse
+
+@router.get("/agents-static/agents.js")
+def serve_agents_js(user: User = Depends(current_user_web)):
+    """Serve agents.js directly. Bypasses the /agents-static mount
+    because the mount has been returning 404 for reasons we haven't
+    isolated. Same content, same URL path, one less moving part.
+    """
+    import pathlib as _pl
+    js = _pl.Path(__file__).parent / "static" / "agents.js"
+    if not js.exists():
+        from fastapi import HTTPException
+        raise HTTPException(404, "agents.js missing")
+    return _FileResponse(
+        str(js),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
