@@ -83,13 +83,19 @@ async def _bootstrap() -> dict:
         if not _state:
             continue
         try:
-            _res = await apply_state_to_provider(supervisor, _prov, _state)
+            import asyncio as _aio
+            _res = await _aio.wait_for(
+                apply_state_to_provider(supervisor, _prov, _state),
+                timeout=10.0,
+            )
             if _res.get("ok"):
                 _restore_saved_sessions.append(
                     f"{_prov}(cookies={_res.get('cookies', 0)},"
                     f"local={_res.get('local_storage', 0)})")
             else:
                 print(f"[restore] {_prov}: {_res.get('error')}", flush=True)
+        except _aio.TimeoutError:
+            print(f"[restore] {_prov} timed out (10s) — skipping", flush=True)
         except Exception as _e:
             print(f"[restore] {_prov} failed: {_e}", flush=True)
     if _restore_saved_sessions:

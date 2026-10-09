@@ -53,8 +53,47 @@ def _any_circuit_available(provider: str) -> bool:
     return False
 
 
+# Client-side aliases: some clients (pi-ai / dsh) validate model ids
+# against their own catalogs and reject names they think are retired.
+# These aliases let those clients send a neutral name that maps to a
+# real provider on our side.
+_ALIASES = {
+    # AInterceptor-prefixed (own namespace)
+    "ainterceptor-deepseek": "deepseek",
+    "ainterceptor-claude":   "claude",
+    "ainterceptor-gemini":   "gemini",
+    "ainterceptor-chatgpt":  "chatgpt",
+    "ainterceptor-grok":     "grok",
+    "ainterceptor-qwen":     "qwen",
+    "ainterceptor-mistral":  "mistral",
+    # OpenAI-catalog names → map to AInterceptor's real providers.
+    # Clients like dsh / pi-ai validate model ids against a known
+    # catalog; we accept their ids and route to the real session.
+    "gpt-4o":              "chatgpt",
+    "gpt-4o-mini":         "chatgpt",
+    "gpt-4-turbo":         "chatgpt",
+    "gpt-4":               "chatgpt",
+    "gpt-3.5-turbo":       "chatgpt",
+    "claude-3-5-sonnet":   "claude",
+    "claude-3-5-sonnet-20241022": "claude",
+    "claude-3-opus":       "claude",
+    "claude-3-haiku":      "claude",
+    "claude-sonnet-4":     "claude",
+    "gemini-1.5-pro":      "gemini",
+    "gemini-1.5-flash":    "gemini",
+    "gemini-2.0-flash":    "gemini",
+    "deepseek-chat":       "deepseek",
+    "deepseek-reasoner":   "deepseek",
+    # Neutral aliases
+    "default":             "deepseek",
+    "auto":                "deepseek",
+}
+
+
 def select(model: str, request_key: str = "default") -> str:
     """Return the chosen provider name. Raises NoProviderAvailable if none fit."""
+    if model and model.lower() in _ALIASES:
+        model = _ALIASES[model.lower()]
     state = get_state()
     active = set(state.list_active())
     limiter = get_limiter()
