@@ -394,6 +394,7 @@ class WebRuntimeBase(ProviderRuntime):
 
                 body = bytearray()
                 status_code = 0
+                last_text = ""
                 async for kind, payload in cap.events(timeout=120.0):
                     if kind == "response_started":
                         try:
@@ -402,6 +403,24 @@ class WebRuntimeBase(ProviderRuntime):
                             status_code = 0
                     elif kind == "data":
                         body.extend(payload)
+                        # Incremental delta: the parser is monotone —
+                        # __call__ returns the longest text seen so far
+                        # for the cumulative body. Yield only the new
+                        # suffix on each chunk so the client sees tokens
+                        # arrive live instead of one blob at the end.
+                        try:
+                            partial = self.parser(body.decode("utf-8", errors="replace"))
+                            if partial and len(partial) > len(last_text):
+                                delta = partial[len(last_text):]
+                                if delta:
+                                    yield StreamEvent(
+                                        self.provider, request.request_id,
+                                        EventType.STREAM_DELTA, seq,
+                                        delta=delta)
+                                    seq += 1
+                                    last_text = partial
+                        except Exception:
+                            pass
                     elif kind == "failed":
                         yield StreamEvent(self.provider, request.request_id,
                                           EventType.STREAM_FAILED, seq,
@@ -447,9 +466,13 @@ class WebRuntimeBase(ProviderRuntime):
                                       metadata={"reason": "parser_returned_empty"})
                     return
 
-                yield StreamEvent(self.provider, request.request_id,
-                                  EventType.STREAM_DELTA, seq, delta=text)
-                seq += 1
+                # Only emit the residual text not already streamed.
+                if text and len(text) > len(last_text):
+                    residual = text[len(last_text):]
+                    if residual:
+                        yield StreamEvent(self.provider, request.request_id,
+                                          EventType.STREAM_DELTA, seq, delta=residual)
+                        seq += 1
                 yield StreamEvent(self.provider, request.request_id,
                                   EventType.STREAM_COMPLETED, seq,
                                   finish_reason="stop")
