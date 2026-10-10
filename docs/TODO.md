@@ -73,3 +73,18 @@ END
       Currently admin_cli imports the probe in-process.
 - [ ] Chat rotation: open a new tab chat when history grows past N
       turns. Fixes accumulated-context slowdown (see HANDOVER §2).
+
+## Rebrand (deferred — SVG, not string replacement)
+
+The "deepseek HARNESS" header is drawn as SVG paths in:
+  ~/.npm/_npx/*/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-*.js
+
+Classes: `_wordmark_*`, `_boot_*`, `_card_*` (see `wordmark_u7vgf_31`)
+Grep for `dsh-wordmark-whale-clip` and `dsh-wordmark-badge-clip`.
+
+Two paths to fix:
+  A. Local copy + CSS override in dist/index.html
+     - `[class*="wordmark"] { display: none }` + inject "AIN" text
+  B. Write a dsh client plugin that replaces the wordmark slot
+
+Deferred: cosmetic. Do after planner-mode prompt is live.
