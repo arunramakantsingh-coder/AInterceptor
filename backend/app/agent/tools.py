@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.agent import targets as target_registry
 from app.agent.connectors import get_connector
 from app.agent import permissions
+from app.agent import ops_tools
 
 
 TOOLS = [
@@ -74,6 +75,59 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_capabilities",
+            "description": ("Report which external tools AIN can drive on "
+                            "this host (nmap, tailscale, ssh, docker, ...). "
+                            "Call this first when unsure what's installed."),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tailscale_status",
+            "description": ("List every tailnet peer reachable from this "
+                            "host, with IP and online state."),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "probe_port",
+            "description": "TCP-connect check on host:port. Returns OPEN / CLOSED / TIMEOUT.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "host": {"type": "string", "description": "hostname or IP"},
+                    "port": {"type": "integer", "description": "1-65535"},
+                    "timeout_s": {"type": "number", "description": "default 3"},
+                },
+                "required": ["host", "port"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_lan",
+            "description": ("Run nmap against a CIDR (max /16). Without "
+                            "ports runs a ping scan; with ports does a "
+                            "TCP-connect port scan. Use to discover live "
+                            "hosts on the operator's network."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "range": {"type": "string", "description": "CIDR or single IP"},
+                    "ports": {"type": "string", "description": "e.g. '22,80,443' (optional)"},
+                },
+                "required": ["range"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "shell",
             "description": (
                 "Run a shell command on a target. Some commands are "
@@ -96,6 +150,16 @@ TOOLS = [
 
 def run(tool_name: str, args: dict) -> str:
     """Execute a tool call. Returns a plain string result."""
+    # ── Operational tools (run on the AIN host) ──
+    if tool_name == "list_capabilities":
+        return ops_tools.list_capabilities(args)
+    if tool_name == "tailscale_status":
+        return ops_tools.tailscale_status(args)
+    if tool_name == "probe_port":
+        return ops_tools.probe_port(args)
+    if tool_name == "scan_lan":
+        return ops_tools.scan_lan(args)
+
     if tool_name == "list_targets":
         rows = []
         for t in target_registry.list_targets():
