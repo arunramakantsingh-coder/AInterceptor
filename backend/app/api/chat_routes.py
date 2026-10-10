@@ -193,7 +193,9 @@ async def chat(body: ChatIn,
             state=_agent_state,
             messages=_agent_msgs,
             tools=body.tools or [],
-            build_prompt_fn=lambda m, t: _bfp(m, t, _tool_prompt_fn),
+            build_prompt_fn=lambda m, t: _bfp(
+                m, t, _tool_prompt_fn,
+                planner_mode=(_os.getenv("AGENT_PLANNER_MODE") == "1")),
             parse_calls_fn=lambda r: _ptc(r, _extract_fn),
         )
         import uuid as _uuid, time as _time

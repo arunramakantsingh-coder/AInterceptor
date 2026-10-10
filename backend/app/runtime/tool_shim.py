@@ -75,15 +75,22 @@ def render_tool_definitions(tools: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_full_prompt(messages: list[dict], tools: list[dict], tool_prompt_fn=None) -> str:
-    """Assemble a single text prompt from OpenAI messages + tools."""
+def build_full_prompt(messages: list[dict], tools: list[dict],
+                      tool_prompt_fn=None, planner_mode: bool = False) -> str:
+    """Assemble a single text prompt from OpenAI messages + tools.
+
+    planner_mode: when True, drop the client's system messages and
+    prepend the AInterceptor planner prompt instead. See
+    backend/app/agent/prompts.py for the rationale.
+    """
     system_parts: list[str] = []
     convo_parts: list[str] = []
     for m in messages:
         role = (m.get("role") or "").lower()
         text = _render_content(m.get("content"))
         if role == "system":
-            if text.strip():
+            # In planner mode the client's framing is replaced below.
+            if text.strip() and not planner_mode:
                 system_parts.append(text)
         elif role == "user":
             convo_parts.append(f"USER: {text}")
@@ -98,6 +105,13 @@ def build_full_prompt(messages: list[dict], tools: list[dict], tool_prompt_fn=No
 
     tool_block = (tool_prompt_fn(tools) if tool_prompt_fn is not None
                   else render_tool_definitions(tools))
+
+    if planner_mode:
+        try:
+            from app.agent.prompts import PLANNER_SYSTEM_PROMPT
+            system_parts.insert(0, PLANNER_SYSTEM_PROMPT)
+        except Exception:
+            pass
 
     sections = []
     if system_parts:
