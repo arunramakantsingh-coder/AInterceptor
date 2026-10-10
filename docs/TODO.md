@@ -64,3 +64,12 @@ LATER
 [ ] Multi-root workspace for the agent (currently $HOME only).
 
 END
+
+## Small cleanups (do not bundle)
+
+- [ ] Dashboard nav has TWO "Docs" entries:
+      `/dashboard/docs` and `/docs`. Rename one or remove.
+- [ ] `atest osi` should move to `/internal/osi/<provider>` per R12.
+      Currently admin_cli imports the probe in-process.
+- [ ] Chat rotation: open a new tab chat when history grows past N
+      turns. Fixes accumulated-context slowdown (see HANDOVER §2).
