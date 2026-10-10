@@ -1,3 +1,27 @@
+## 2026-10-10 — CLI dispatcher bridge + atest osi
+
+- fix(cli): ops.py falls back to admin_cli, so every ~/bin/a* wrapper works
+- feat(cli): `atest osi <provider>` — OSI-layer latency probe (L3/L4/L6/L7)
+  - pure measurement, no chat pollution, provider-agnostic
+  - reads home_url from the provider's own file (R10-compliant)
+
+### Working end-to-end
+
+- atest osi deepseek -> DNS/TCP/TLS/TTFB breakdown + network floor
+- all ~/bin/a* wrappers route correctly
+
+### Known issues
+
+- admin_cli.py still imports backend modules in-process
+  (R12 debt: should talk to /internal/* over HTTP)
+
+### Next session
+
+1. R12 endpoint: move atest osi to /internal/osi/<provider>
+2. Rebrand to AIN
+3. systemd autostart
+4. Planner-mode prompt
+
 # AInterceptor — Progress Report
 
 Newest entry at top. Updated per R1.

@@ -1,3 +1,29 @@
+## 2026-10-10 — CLI dispatcher bridge
+
+**Title:** Fix a* wrapper -> admin_cli routing gap.
+
+**Context:** ~/bin/atest called scripts.ops, which had no `atest`
+case. admin_cli.py had the handler but nothing called it. Result:
+`unknown: atest`. Same gap for aprobe, alogin, aproviders.
+
+**Options:**
+  A. Rewrite all ~/bin/a* wrappers to point at admin_cli directly.
+  B. Add a fallback in ops.py that forwards unknown commands to
+     admin_cli.main(), stripping the leading "a".
+  C. Leave broken, use admin_cli directly.
+
+**Chosen:** B.
+
+**Why:** Minimal, reversible, keeps every wrapper path stable. Zero
+wrapper churn. Aligns with R13 (surgical evolution).
+
+**Drift:** The deeper R12 debt remains — admin_cli.py imports
+backend modules in-process instead of talking to /internal/*. Noted
+in PROGRESS.md as next-session item.
+
+**Impact:** Every ~/bin/a* wrapper works again. `atest osi <provider>`
+newly available.
+
 # AInterceptor — Session Log
 
 Durable record of decisions, drifts, and options considered.

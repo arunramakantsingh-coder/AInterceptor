@@ -73,8 +73,30 @@ def main():
             return 1
         return S.aconfig_reset(rest[0])
 
-    print(f"unknown: {cmd}")
-    return 1
+    # ── Fallback: forward to the admin_cli dispatcher ──
+    # R12 says the CLI talks to the daemon over HTTP. Right now
+    # admin_cli.py still imports backend modules in-process; that's
+    # a known debt to fix (see docs/HANDOVER.md). This bridge makes
+    # every `~/bin/a*` wrapper work without renaming anything.
+    try:
+        from scripts import admin_cli
+        # ops() commands carry the leading "a"; admin_cli's dispatcher
+        # uses the bare name (test, login, providers, config, ...).
+        # Strip the leading "a" before forwarding. Wrappers stay as-is.
+        if sys.argv[1:]:
+            stripped = sys.argv[1].lower()
+            if stripped.startswith("a") and stripped[1:] in {
+                "test", "login", "logout", "show", "hide",
+                "providers", "config",
+            }:
+                sys.argv = [sys.argv[0], stripped[1:]] + sys.argv[2:]
+        return admin_cli.main()
+    except SystemExit as e:
+        return int(e.code or 0)
+    except Exception as e:
+        print(f"unknown: {cmd}")
+        print(f"  (admin_cli fallback also failed: {e})")
+        return 1
 
 
 if __name__ == "__main__":

@@ -671,6 +671,12 @@ KNOWN_CONFIG = {
     "AINTERCEPTOR_VNC_PASSWORD":       "password for x11vnc (embedded in login-page iframe URL)",
 }
 
+
+async def _do_atest_osi(provider: str) -> int:
+    """OSI-layer probe — pure network measurement, no chat pollution."""
+    from scripts import osi_probe
+    return osi_probe.run(provider)
+
 def cmd_aconfig_show() -> int:
     env = read_env()
     aint = {k: v for k, v in env.items() if k.startswith("AINTERCEPTOR_")}
@@ -744,6 +750,7 @@ def main() -> int:
         print("  ashow                  move Chrome on-screen")
         print("  ahide                  move Chrome off-screen")
         print("  atest <provider>       send [AINT TEST], verify reply")
+        print("  atest osi <provider>   OSI-layer latency probe (no chat)")
         print("  aconfig [show|list|get|set]   read/write .env keys")
         return 0
 
@@ -768,8 +775,13 @@ def main() -> int:
         return do_hide()
     if cmd == "test":
         if not rest:
-            print("usage: atest <provider>")
+            print("usage: atest <provider> | atest osi <provider>")
             return 1
+        if rest[0].lower() == "osi":
+            if len(rest) < 2:
+                print("usage: atest osi <provider>")
+                return 1
+            return asyncio.run(_do_atest_osi(rest[1]))
         return asyncio.run(_do_atest(rest[0]))
     if cmd == "config":
         return handle_aconfig(rest)
