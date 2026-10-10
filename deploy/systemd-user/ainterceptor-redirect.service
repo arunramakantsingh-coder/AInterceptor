@@ -1,0 +1,15 @@
+[Unit]
+Description=AIN /harness redirect (port 3081)
+After=ainterceptor-dsh.service
+Wants=ainterceptor-dsh.service
+
+[Service]
+Type=simple
+ExecStart=/home/arun/bin/dsh-redirect
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/arun/deepseek-harness/dsh-redirect.log
+StandardError=append:/home/arun/deepseek-harness/dsh-redirect.log
+
+[Install]
+WantedBy=default.target
