@@ -88,3 +88,42 @@ Two paths to fix:
   B. Write a dsh client plugin that replaces the wordmark slot
 
 Deferred: cosmetic. Do after planner-mode prompt is live.
+
+## Harness code review — 2026-10-10 (dsh read-only pass)
+
+Findings ranked by severity. All from an automated dsh review of
+this repo. Verify each before fixing.
+
+### Critical (may be live bugs)
+
+- [ ] daemon.py: undefined `is_alive()` called by watchdog.
+      Watchdog runs every 3s; trace whether this actually fires.
+- [ ] daemon.py: stray `}` at end of file. Check if it's real or
+      inside a docstring/string literal.
+
+### Architectural
+
+- [ ] dispatcher.py is built on "Path A / Path B", but .ai/rules/
+      10-provider-isolation.md explicitly forbids that concept.
+      Refactor candidate — not urgent, code works.
+- [ ] Two provider lists disagree in size:
+      interception/registry.py (4) vs browser_supervisor.PROVIDER_URLS (20).
+      Pick one as source of truth, delete the other.
+- [ ] perplexity appears in both NO_RUNTIME_MODULE and
+      PATH_A_SUPPORTED — Path A unreachable by definition.
+
+### Cleanup
+
+- [ ] daemon.py: orphaned prober — `_probe_dispatch` defined,
+      `prober = None` returned, teardown swallows AttributeError.
+- [ ] _chrome_args: unused `pos` variable.
+- [ ] push_chrome_off_screen(): duplicated platform guard.
+- [ ] command_tree.py read only through line ~120 during review.
+      Complete the read when touching it next.
+- [ ] ops.py and admin_cli.py not reviewed by the automated pass.
+      Add to a future review run.
+
+### Verification gap
+
+- [ ] targets.py couldn't be read during the review (DSML multi-arg
+      bug). See section above. Fix that bug, then re-read targets.py.
