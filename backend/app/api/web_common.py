@@ -128,6 +128,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/settings", "Settings"),
         ("/docs", "Docs"),
         ("/login", "Admin (VNC)"),
+        ("/harness", "Harness \u2197"),
     ]
     parts = ['<div class="dashboard-nav">']
     for href, label in items:

@@ -77,8 +77,11 @@ async def _bootstrap() -> dict:
     # cookie never forces a fresh login.
     from app.runtime.session_exporter import load_state
     from app.runtime.session_importer import apply_state_to_provider
+    # Restore-on-boot is OFF by default (see docs/HANDOVER.md).
+    # Chrome's persistent profile already carries the live session.
+    # Opt in with AINTERCEPTOR_RESTORE_ON_BOOT=1 to rebuild from exports.
     _restore_saved_sessions = []
-    for _prov in active:
+    for _prov in (active if os.environ.get("AINTERCEPTOR_RESTORE_ON_BOOT") == "1" else []):
         _state = load_state(export_dir, _prov)
         if not _state:
             continue
