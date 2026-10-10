@@ -1,32 +1,58 @@
 # AGENTS.md — AInterceptor
 
-Read order: this file -> PROJECT_GOVERNANCE_STANDARD_v1.1.md -> BLUEPRINT.md
--> PROJECT/ROADMAP.md -> .ai/CURRENT_TASK.md -> .ai/KNOWN_ISSUES.md
+Operational rules for AI agents and human contributors. Read this first.
+
+Then: PROJECT_GOVERNANCE_STANDARD_v1.1.md, BLUEPRINT.md,
+PROJECT/AIOS_ARCHITECTURE.md, PROJECT/ROADMAP.md, .ai/CURRENT_TASK.md.
+
+## Project Identity
+- Name: AInterceptor | Codename: AINT
+- Vision: Cisco-style AI Network Operating System
+- Products: Webapp (multi-AI chat) + API (OpenRouter-style gateway)
+- Stack: Python 3.12, FastAPI, Postgres, Playwright, Docker
+- Host: Windows dev, Linux deploy via Docker
 
 ## Iron Rules
-1. Never force-push. Rollback = revert commit.
-2. Never commit secrets.
-3. Verify remote + branch before milestone ops.
-4. Never claim success without observed evidence.
-5. Every change is a single pasteable script (Governance Section 18).
-6. Milestone commits only via scripts/milestone_commit.ps1.
+1. Never modify Claude. It is the reference implementation. Frozen.
+2. Never force-push. Rollback = revert commit.
+3. Never commit secrets (cookies, tokens, storage_state, keys).
+4. Every change is a single pasteable script (Governance §18, §19).
+5. Verify before claiming. Observed, not assumed.
+6. Milestones commit only via scripts/milestone_commit.ps1.
 7. No implementation before the framework exists.
-8. Project rules may be stricter, never weaker.
+8. One provider per directory. No cross-imports between adapters.
+9. Every phase ships its UI surface or its API contract.
+10. Project rules may be stricter, never weaker.
 
-## Stack
-Python (FastAPI + Playwright) backend. Next.js dashboard (Phase 6).
+## Two Subsystems (Governance §20)
+- Interceptor: web-layer interception. backend/app/interception/, providers/.
+- Orchestrator: routing, capability, merging, Gateway API. backend/app/orchestrator/, gateway/.
+Every change declares its subsystem. No cross-imports except via typed interfaces in interception/contracts.py.
 
-9. **Script Delivery Rule (Section 19)** — every instruction that changes the repo is ONE pasteable script that BOTH writes the file(s) AND runs any commands. No "now run this" follow-ups.
+## Repository Map
+AGENTS.md, BLUEPRINT.md, README.md, PROJECT_GOVERNANCE*.md,
+PROJECT/ (docs), .ai/ (agent memory), backend/ (Python),
+cli/ (Cisco shell), docker/ (Dockerfile, compose), agent/ (user-side),
+tests/ (integration + parser + e2e).
 
-## Two Subsystems (Section 20)
-- **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
-- **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
-Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.
+## Cisco-Style CLI
+AInterceptor-BOOT> airouter
+AIRouter> enable
+AIRouter# configure terminal
+AIRouter(config)# ai
+AIRouter(config-ai)# provider claude
+AIRouter(config-ai-provider-claude)# login
+AIRouter# copy running-config startup-config
+AIRouter# chat claude
 
-## Two Subsystems (Section 20)
-- **Interceptor** — web-layer interception. `backend/app/interception/`, `providers/`.
-- **Orchestrator** — routing, capability selection, merging, **public Gateway API**. `backend/app/orchestrator/`, `gateway/`.
-Every change declares its subsystem. No cross-subsystem imports except via defined interfaces.
+running-config = in-memory. startup-config = .ainterceptor/nvram/startup-config.json.
+copy running-config startup-config = persist. See PROJECT/CONFIGURATION_GUIDE.md.
 
-## UI-First (Section 21)
-Every phase ships its dashboard page in the same milestone. No backend-only phases.
+## Deployment
+Phase 1: Docker Compose (Windows dev, Linux deploy).
+Chrome runs inside the container, headless. Never visible to users.
+See PROJECT/DEPLOYMENT_GUIDE.md.
+
+## When in Doubt
+Re-read PROJECT_GOVERNANCE_STANDARD_v1.1.md. Safer rule wins. Update docs with code.
+Repository is durable memory. Chat history is not.

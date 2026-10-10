@@ -1,0 +1,20 @@
+[project]
+name = "airouter-agent"
+version = "0.1.0"
+description = "AInterceptor user-side login agent"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.48.0",
+    "httpx>=0.27.2",
+]
+
+[project.scripts]
+airouter-agent = "airouter_agent.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["airouter_agent*"]

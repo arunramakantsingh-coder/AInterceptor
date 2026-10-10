@@ -1,1 +1,1 @@
-"""AInterceptor backend."""
+"""AInterceptor backend application."""
