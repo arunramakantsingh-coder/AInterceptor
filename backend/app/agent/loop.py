@@ -14,6 +14,8 @@ import os
 import time
 
 from app.agent import tools as tools_mod
+from app.agent import approval_queue as aq
+from app.agent import permissions
 
 
 async def run_agent(
@@ -25,6 +27,7 @@ async def run_agent(
     tools: list[dict],
     build_prompt_fn,
     parse_calls_fn,
+    session_id: str = "",
     max_rounds: int | None = None,
     max_seconds: int = 300,
 ) -> dict:
@@ -81,6 +84,39 @@ async def run_agent(
                     "name": name, "content": f"error parsing args: {e}",
                 })
                 continue
+
+            # ── Permission gate (L2) ─────────────────────────────
+            target_id = args.get("target", "vm")
+            decision, reason = permissions.evaluate(name, args)
+
+            if decision == "deny":
+                convo.append({
+                    "role": "tool", "tool_call_id": call["id"],
+                    "name": name,
+                    "content": f"[permission denied] {reason}",
+                })
+                continue
+
+            if decision == "ask":
+                ticket = await aq.submit(
+                    session_id=session_id,
+                    request_id=str(call.get("id", "")),
+                    tool=name,
+                    target_id=target_id,
+                    args=args,
+                    reason=reason,
+                )
+                verdict = await aq.wait(ticket)
+                if not verdict.get("allowed"):
+                    convo.append({
+                        "role": "tool", "tool_call_id": call["id"],
+                        "name": name,
+                        "content": f"[permission denied by operator] "
+                                   f"{verdict.get('reason', 'denied')}",
+                    })
+                    continue
+
+            # ── Execute (L3) ─────────────────────────────────────
             try:
                 result = tools_mod.run(name, args)
             except Exception as e:

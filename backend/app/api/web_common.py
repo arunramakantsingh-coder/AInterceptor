@@ -125,6 +125,7 @@ def dashboard_nav(current: str = "") -> str:
         ("/dashboard/keys", "API keys"),
         ("/dashboard/monitoring/raw", "Monitoring"),
         ("/dashboard/docs", "Docs"),
+        ("/dashboard/approvals", "Approvals"),
         ("/dashboard/settings", "Settings"),
         ("/docs", "Docs"),
         ("/login", "Admin (VNC)"),

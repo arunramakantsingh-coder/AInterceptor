@@ -19,6 +19,7 @@ from app.api import internal_routes
 from app.api import raw_routes
 from app.api import dashboard_raw
 from app.api import commandline_ui
+from app.api import approvals_routes
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
 
@@ -60,6 +61,7 @@ app.include_router(internal_routes.router)
 app.include_router(raw_routes.router)
 app.include_router(dashboard_raw.router)
 app.include_router(commandline_ui.router)
+app.include_router(approvals_routes.router)
 
 
 @app.get("/")

@@ -204,6 +204,7 @@ async def chat(body: ChatIn,
                 m, t, _tool_prompt_fn,
                 planner_mode=(_os.getenv("AGENT_PLANNER_MODE") == "1")),
             parse_calls_fn=lambda r: _ptc(r, _extract_fn),
+            session_id=f"chatcmpl-{_uuid.uuid4().hex[:16]}",
         )
         import uuid as _uuid, time as _time
         _content = _agent_result.get("content") or ""
