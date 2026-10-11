@@ -174,6 +174,7 @@ async def chat(body: ChatIn,
     if (_os.getenv("AGENT_EXECUTION") == "1"
             and getattr(body, "tools", None)):
         from app.agent.loop import run_agent
+        from app.agent.tools import TOOLS as _AIN_TOOLS
         from app.runtime.tool_shim import build_full_prompt as _bfp, parse_tool_calls as _ptc
         _agent_msgs = []
         for _m in body.messages:
@@ -192,7 +193,13 @@ async def chat(body: ChatIn,
             provider=provider,
             state=_agent_state,
             messages=_agent_msgs,
-            tools=body.tools or [],
+            # AInterceptor owns the tool catalog in agent mode. The
+            # client's tools=[...] describes the CLIENT's tool surface
+            # (e.g. dsh sends bash, read, glob). Our dispatcher only
+            # knows AIN's names (shell, scan_lan, ...). Passing the
+            # client's catalog to the AIP produces calls we can't
+            # execute -- "unknown tool 'bash'". Override with ours.
+            tools=_AIN_TOOLS,
             build_prompt_fn=lambda m, t: _bfp(
                 m, t, _tool_prompt_fn,
                 planner_mode=(_os.getenv("AGENT_PLANNER_MODE") == "1")),

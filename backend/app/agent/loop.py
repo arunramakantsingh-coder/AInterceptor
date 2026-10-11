@@ -43,7 +43,24 @@ async def run_agent(
             chunks.append(d)
         reply = "".join(chunks)
 
+        try:
+            import pathlib as _pl
+            _d = _pl.Path("/tmp/ain_trace")
+            _d.mkdir(exist_ok=True)
+            (_d / f"round_{round_i}_raw.txt").write_text(reply)
+        except Exception:
+            pass
+
         clean, calls = parse_calls_fn(reply)
+
+        try:
+            import pathlib as _pl, json as _j
+            _d = _pl.Path("/tmp/ain_trace")
+            _d.mkdir(exist_ok=True)
+            (_d / f"round_{round_i}_parsed.json").write_text(
+                _j.dumps(calls, indent=2))
+        except Exception:
+            pass
 
         if not calls:
             return {"content": clean, "rounds": round_i + 1, "conversation": convo}

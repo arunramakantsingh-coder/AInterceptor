@@ -108,9 +108,13 @@ class DeepSeekStreamParser:
         if not incoming:
             return
         existing = "".join(self._text_values(fragment.get("content")))
-        # Idempotency: if the incoming text already appears at the end of the
-        # fragment (replayed cumulative frame), do not duplicate it.
-        if existing.endswith(incoming) and len(existing) >= len(incoming):
+        # Idempotency: skip only an EXACT full replay (existing == incoming).
+        # The previous rule was `existing.endswith(incoming)` which fired on
+        # legitimate single-character appends. DeepSeek streams numbers like
+        # "800" then "0" as separate events; the naive suffix check collapsed
+        # "8000" to "800", "2222" to "222", "7777" to "777". Any value ending
+        # in a repeated digit was corrupted. Verified against the raw SSE.
+        if incoming == existing:
             return
         fragment["content"] = self._merge_append(existing, incoming)
 
@@ -411,7 +415,13 @@ def decode_deepseek_final(raw: str) -> str:
                     # Ignore append-to-fragment during final decode — the
                     # complete snapshot supersedes it. If we reached here
                     # without a snapshot, treat as append to latest.
-                    if not latest_response_text.endswith(val):
+                    #
+                    # Skip only an EXACT full replay. The old `endswith`
+                    # check dropped legitimate single-char appends: with
+                    # latest="800" and val="0", "800".endswith("0") is True
+                    # and the trailing digit was lost. Verified against the
+                    # raw SSE ("800" + "0" as separate APPEND events).
+                    if val != latest_response_text:
                         latest_response_text = latest_response_text + val
 
     return latest_response_text

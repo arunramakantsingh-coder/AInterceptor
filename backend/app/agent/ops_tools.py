@@ -78,17 +78,27 @@ def probe_port(args: dict) -> str:
     timeout = float(args.get("timeout_s") or 3.0)
     if not host or not (1 <= port <= 65535):
         return "error: need host and 1<=port<=65535"
+    def _port_hint() -> str:
+        # 3-digit ports on a non-loopback host are often the result of
+        # the DeepSeek web stream truncating a 4-digit value (800 vs
+        # 8000). Nudge the model to verify rather than silently accept.
+        if port < 1024 and host not in ("localhost", "127.0.0.1", "::1"):
+            return (f"\n  hint: {port} is a privileged port. Common "
+                    f"services live on 8000/8080/8443; a 3-digit value "
+                    f"may be truncated. Verify and retry if needed.")
+        return ""
+
     t0 = time.perf_counter()
     try:
         with socket.create_connection((host, port), timeout=timeout) as s:
             dt = (time.perf_counter() - t0) * 1000.0
-            return f"OPEN   {host}:{port}  ({dt:.0f} ms)"
+            return f"OPEN   {host}:{port}  ({dt:.0f} ms)" + _port_hint()
     except socket.timeout:
-        return f"TIMEOUT {host}:{port}  (>{timeout}s)"
+        return f"TIMEOUT {host}:{port}  (>{timeout}s)" + _port_hint()
     except ConnectionRefusedError:
-        return f"CLOSED {host}:{port}  (refused)"
+        return f"CLOSED {host}:{port}  (refused)" + _port_hint()
     except Exception as e:
-        return f"ERROR  {host}:{port}  {type(e).__name__}: {e}"
+        return f"ERROR  {host}:{port}  {type(e).__name__}: {e}" + _port_hint()
 
 
 # ── tool: scan_lan ──────────────────────────────────────────────────
