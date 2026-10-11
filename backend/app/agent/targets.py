@@ -59,10 +59,11 @@ def _bootstrap() -> None:
     # shows a dialog on the user's desktop for every command.
     register(Target(
         id="win-laptop",
-        kind="winhelper",
-        address=os.getenv("AGENT_WIN_HELPER", "100.67.225.84:8765"),
+        kind="ssh",
+        address="100.67.225.84",
         user="Arun",
-        capabilities=["shell", "fs.read", "fs.write", "fs.glob"],
+        capabilities=["fs.read", "fs.write", "fs.glob",
+                      "shell", "powershell", "vbox"],
     ))
 
 
