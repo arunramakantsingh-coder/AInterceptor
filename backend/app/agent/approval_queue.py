@@ -59,9 +59,41 @@ def _audit(record: dict) -> None:
         pass
 
 
+# ── recent decision cache ─────────────────────────────────────
+# Keyed by (session_id, tool, target_id, args_hash). Stores decisions
+# from the last RECENT_TTL_S seconds. Allows the loop to skip the
+# queue on a re-send after the operator has already approved the same
+# action.
+import hashlib as _hashlib
+RECENT_TTL_S = 600.0
+_RECENT: dict[str, dict] = {}
+
+
+def _signature(session_id: str, tool: str, target_id: str, args: dict) -> str:
+    blob = json.dumps({"s": session_id, "t": tool, "g": target_id, "a": args},
+                      sort_keys=True, default=str)
+    return _hashlib.sha256(blob.encode()).hexdigest()[:24]
+
+
+def check_recent(session_id: str, tool: str, target_id: str, args: dict) -> dict | None:
+    """Return the last cached verdict for this exact call, if fresh."""
+    sig = _signature(session_id, tool, target_id, args)
+    hit = _RECENT.get(sig)
+    if hit is None:
+        return None
+    if time.time() - hit["ts"] > RECENT_TTL_S:
+        _RECENT.pop(sig, None)
+        return None
+    return hit["verdict"]
+
+
 async def submit(*, session_id: str, request_id: str,
                  tool: str, target_id: str, args: dict,
                  reason: str) -> Ticket:
+    try:
+        await expire_old()
+    except Exception:
+        pass
     async with _LOCK:
         t = Ticket(
             ticket_id=uuid.uuid4().hex[:12],
@@ -85,29 +117,43 @@ async def submit(*, session_id: str, request_id: str,
 
 
 async def wait(ticket: Ticket, timeout: float | None = None) -> dict:
-    """Block until a decision or timeout. Returns the verdict dict."""
+    """Block until a decision, or until `timeout` seconds pass.
+
+    IMPORTANT: an early return from this function does NOT cancel the
+    ticket. The ticket stays in the pending queue so the operator can
+    still decide it later. Only decide() or the janitor close a ticket.
+    """
     timeout = timeout if timeout is not None else DEFAULT_TIMEOUT_S
     try:
         await asyncio.wait_for(ticket.event.wait(), timeout=timeout)
-        verdict = ticket.verdict or {"allowed": False, "reason": "no verdict"}
+        return ticket.verdict or {"allowed": False, "reason": "no verdict"}
     except asyncio.TimeoutError:
-        verdict = {"allowed": False, "reason": "timeout"}
-        ticket.verdict = verdict
-        _audit({
-            "ts": time.time(), "event": "timeout",
-            "ticket_id": ticket.ticket_id,
-            "reason": f"no decision in {timeout}s",
-        })
+        # The caller is tired of waiting; the ticket is not dead.
+        # Return a "still pending" verdict; leave the ticket in _PENDING.
+        return {"allowed": False, "reason": "still_pending",
+                "ticket_id": ticket.ticket_id}
+
+
+async def expire_old() -> int:
+    """Janitor: remove tickets older than DEFAULT_TIMEOUT_S from
+    _PENDING and record them as expired. Call this on each submit().
+    """
+    now = time.time()
+    expired = 0
     async with _LOCK:
-        _PENDING.pop(ticket.ticket_id, None)
-        _HISTORY.append({
-            "ts": time.time(), "ticket_id": ticket.ticket_id,
-            "tool": ticket.tool, "target": ticket.target_id,
-            "verdict": verdict,
-        })
+        for tid, t in list(_PENDING.items()):
+            if now - t.created_at > DEFAULT_TIMEOUT_S:
+                _PENDING.pop(tid, None)
+                _HISTORY.append({
+                    "ts": now, "ticket_id": tid,
+                    "tool": t.tool, "target": t.target_id,
+                    "verdict": {"allowed": False, "reason": "expired"},
+                })
+                _audit({"ts": now, "event": "expired", "ticket_id": tid})
+                expired += 1
         if len(_HISTORY) > 500:
             del _HISTORY[:-500]
-    return verdict
+    return expired
 
 
 async def decide(ticket_id: str, allowed: bool, reason: str = "",
@@ -118,6 +164,11 @@ async def decide(ticket_id: str, allowed: bool, reason: str = "",
             return False
         t.verdict = {"allowed": allowed, "reason": reason or ("approved" if allowed else "denied")}
         t.event.set()
+        try:
+            sig = _signature(t.session_id, t.tool, t.target_id, t.args)
+            _RECENT[sig] = {"ts": time.time(), "verdict": t.verdict}
+        except Exception:
+            pass
         _audit({
             "ts": time.time(), "event": "decide",
             "ticket_id": ticket_id, "allowed": allowed,

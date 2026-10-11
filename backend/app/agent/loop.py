@@ -98,23 +98,50 @@ async def run_agent(
                 continue
 
             if decision == "ask":
-                ticket = await aq.submit(
-                    session_id=session_id,
-                    request_id=str(call.get("id", "")),
-                    tool=name,
-                    target_id=target_id,
-                    args=args,
-                    reason=reason,
-                )
-                verdict = await aq.wait(ticket)
-                if not verdict.get("allowed"):
-                    convo.append({
-                        "role": "tool", "tool_call_id": call["id"],
-                        "name": name,
-                        "content": f"[permission denied by operator] "
-                                   f"{verdict.get('reason', 'denied')}",
-                    })
-                    continue
+                # 1. Cache hit? Recent approval for this exact call.
+                cached = aq.check_recent(session_id, name, target_id, args)
+                if cached is not None and cached.get("allowed"):
+                    pass  # fall through to execute
+                else:
+                    # 2. Submit the ticket and wait BRIEFLY.
+                    ticket = await aq.submit(
+                        session_id=session_id,
+                        request_id=str(call.get("id", "")),
+                        tool=name,
+                        target_id=target_id,
+                        args=args,
+                        reason=reason,
+                    )
+                    try:
+                        verdict = await aq.wait(ticket, timeout=8.0)
+                    except Exception:
+                        verdict = {"allowed": False, "reason": "wait_failed"}
+                    if not verdict.get("allowed"):
+                        # 3. Not decided in 8s. Return a chat message
+                        # with the ticket URL so the operator can
+                        # approve on the dashboard. The next request
+                        # with the same call will hit the cache.
+                        import os as _os
+                        base = _os.getenv("AINTERCEPTOR_PUBLIC_URL",
+                                          "https://ainterceptor.taila2310c.ts.net")
+                        url = f"{base}/dashboard/approvals"
+                        preview = args.get("cmd") or args.get("path") or ""
+                        msg = (
+                            f"\n\n**[approval required]**\n"
+                            f"Tool: `{name}` on `{target_id}`\n"
+                            f"Reason: {reason}\n"
+                            f"Preview: `{str(preview)[:160]}`\n\n"
+                            f"Ticket: `{ticket.ticket_id}`\n"
+                            f"Approve: {url}\n\n"
+                            f"After approving, send the same message again "
+                            f"\u2014 the decision will be reused."
+                        )
+                        return {
+                            "content": (clean or "") + msg,
+                            "rounds": round_i + 1,
+                            "conversation": convo,
+                            "approval_pending": ticket.ticket_id,
+                        }
 
             # ── Execute (L3) ─────────────────────────────────────
             try:
