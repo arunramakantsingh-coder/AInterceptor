@@ -127,3 +127,12 @@ this repo. Verify each before fixing.
 
 - [ ] targets.py couldn't be read during the review (DSML multi-arg
       bug). See section above. Fix that bug, then re-read targets.py.
+
+## Verified 2026-10-11 — end-to-end multi-target
+
+AIP receives AIN's catalog, plans a shell call with target=win-laptop,
+AIN dispatches to SSHConnector, command runs on Windows, reply is
+clean. No DSML leak, no refusal.
+
+Test: /v1 with prompt "Call the shell tool with target=win-laptop,
+cmd=hostname, report raw output" -> reply contains DESKTOP-9S3SKGC.
