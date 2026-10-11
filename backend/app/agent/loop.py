@@ -25,9 +25,14 @@ async def run_agent(
     tools: list[dict],
     build_prompt_fn,
     parse_calls_fn,
-    max_rounds: int = 8,
+    max_rounds: int | None = None,
     max_seconds: int = 300,
 ) -> dict:
+    if max_rounds is None:
+        try:
+            max_rounds = int(os.getenv("AGENT_MAX_ROUNDS", "30"))
+        except ValueError:
+            max_rounds = 30
     convo = [dict(m) for m in messages]
     started = time.monotonic()
 
@@ -85,5 +90,39 @@ async def run_agent(
                 "name": name, "content": str(result)[:50_000],
             })
 
-    return {"content": f"[agent reached max_rounds={max_rounds}]",
-            "rounds": max_rounds, "conversation": convo}
+    # Round limit hit. Do NOT return an empty marker — the caller
+    # loses the whole investigation. Instead make one final LLM call
+    # (no tools this time) asking for a summary of what has been
+    # learned, and return that.
+    convo.append({
+        "role": "user",
+        "content": (
+            f"You have reached the tool-round limit ({max_rounds} rounds). "
+            "Do not call any more tools. In your reply, summarize "
+            "everything you have learned so far. Mark any item as "
+            "unverified if you could not confirm it. State briefly what "
+            "you would investigate next if more rounds were available."
+        ),
+    })
+    try:
+        prompt = build_prompt_fn(convo, [])  # empty tools -> no more calls
+        chunks: list[str] = []
+        async for d in stream_reply(provider, state, prompt):
+            chunks.append(d)
+        raw = "".join(chunks)
+        try:
+            clean, _ = parse_calls_fn(raw)
+        except Exception:
+            clean = raw
+        content = (clean or raw or
+                   f"[agent reached max_rounds={max_rounds}; "
+                   f"summarizer returned empty]")
+    except Exception as e:
+        content = (f"[agent reached max_rounds={max_rounds}; "
+                   f"final summarization call failed: {e}]")
+    return {
+        "content": content,
+        "rounds": max_rounds,
+        "conversation": convo,
+        "limit_reached": "max_rounds",
+    }
