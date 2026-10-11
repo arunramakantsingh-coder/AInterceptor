@@ -169,6 +169,15 @@ async def decide(ticket_id: str, allowed: bool, reason: str = "",
             _RECENT[sig] = {"ts": time.time(), "verdict": t.verdict}
         except Exception:
             pass
+        # Ticket resolved: remove from pending, append to history.
+        _PENDING.pop(ticket_id, None)
+        _HISTORY.append({
+            "ts": time.time(), "ticket_id": ticket_id,
+            "tool": t.tool, "target": t.target_id,
+            "verdict": t.verdict,
+        })
+        if len(_HISTORY) > 500:
+            del _HISTORY[:-500]
         _audit({
             "ts": time.time(), "event": "decide",
             "ticket_id": ticket_id, "allowed": allowed,

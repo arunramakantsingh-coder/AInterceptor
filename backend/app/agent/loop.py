@@ -112,8 +112,17 @@ async def run_agent(
                         args=args,
                         reason=reason,
                     )
+                    # Long enough for the operator to switch tabs and
+                    # click Allow. If they take longer, the loop returns
+                    # with the ticket URL and the next identical request
+                    # hits the decision cache.
+                    import os as _os
                     try:
-                        verdict = await aq.wait(ticket, timeout=8.0)
+                        wait_s = float(_os.getenv("AGENT_APPROVAL_WAIT_S", "120"))
+                    except ValueError:
+                        wait_s = 120.0
+                    try:
+                        verdict = await aq.wait(ticket, timeout=wait_s)
                     except Exception:
                         verdict = {"allowed": False, "reason": "wait_failed"}
                     if not verdict.get("allowed"):
