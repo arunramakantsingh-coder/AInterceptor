@@ -1,0 +1,70 @@
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      openrouter:
+        api: openai-completions
+        baseURL: http://127.0.0.1:8000/v1
+        apiKeyEnv: AINTERCEPTOR_API_KEY
+        models:
+          - id: deepseek-chat
+            name: DeepSeek (via AInterceptor)
+          - id: claude-3-5-sonnet
+            name: Claude (via AInterceptor)
+          - id: gemini-1.5-pro
+            name: Gemini (via AInterceptor)
+
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: openrouter
+    model: deepseek-chat
+
+# ─────────────────────────────────────────────────────────────────
+# disable: dsh native tools (only AIN's tools should be visible)
+#
+# Reason: two tool systems confuse the AIP. dsh ships its own
+# read/write/bash/glob tools bound to its sandbox; AIN ships its
+# own multi-target tools. When the AIP sees both, it mixes them
+# up ("unknown tool 'bash'") and mistakes the sandbox for AIN's
+# permission layer.
+#
+# Disabled: bash, pwsh, fs (read/write/edit), str-replace-editor.
+# Kept: fs-search (glob+grep — AIN has glob but not grep yet),
+#       web, ask-user, and every meta-tool (goal, jobs, todo,
+#       subagent, workflow, present, cordis).
+#
+# Verify after restart: the model's tool list should NOT show
+# bash/pwsh/read/write/edit. If it does, an id was wrong.
+# Revert with: cp <backup> ~/.dsh/profiles/web/cordis.patch.yml
+# ─────────────────────────────────────────────────────────────────
+
+- id: tool-bash
+  name: "@deepseek-ai/dsh-tool-bash"
+  config:
+    enabled: false
+
+- id: tool-bash-persistent
+  name: "@deepseek-ai/dsh-tool-bash-persistent"
+  config:
+    enabled: false
+
+- id: tool-pwsh
+  name: "@deepseek-ai/dsh-tool-pwsh"
+  config:
+    enabled: false
+
+- id: tool-pwsh-persistent
+  name: "@deepseek-ai/dsh-tool-pwsh-persistent"
+  config:
+    enabled: false
+
+- id: tool-fs
+  name: "@deepseek-ai/dsh-tool-fs"
+  config:
+    enabled: false
+
+- id: tool-str-replace-editor
+  name: "@deepseek-ai/dsh-tool-str-replace-editor"
+  config:
+    enabled: false
