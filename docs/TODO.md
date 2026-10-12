@@ -158,3 +158,22 @@ Interim UX improvement: when the loop returns early with the
 approval message, prepend it with "RE-SEND YOUR MESSAGE AFTER
 APPROVING" in bold. That's a one-line change in loop.py.
 
+
+## AIP chat rotation — required before next verification session
+
+AIN drives ONE browser tab per provider (deepseek, claude, etc.).
+Every /v1 request writes to that same tab. Over hours of use, the
+tab accumulates every past message. The model then reads its own
+history and echoes old replies instead of generating fresh ones.
+
+Seen 2026-10-12: DSH re-sent a task, the model echoed the OLD
+"approval required" message with the OLD ticket id, even though
+the cache had the approval and the ticket was resolved.
+
+Fixes, in order of correctness:
+  A. New page per /v1 request (heavy; browser page churn)
+  B. Auto-rotate when tab conversation exceeds N turns (light)
+  C. Explicit "arotate <provider>" command the operator runs
+     before a verification session (one line of code, do this first)
+
+Recommendation: C first (5 min), then B (30 min).
