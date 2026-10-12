@@ -1,7 +1,9 @@
 # AInterceptor - Session Handover
 
-Last updated: 2026-10-10 (evening)
-HEAD:        a0a54d6  fix(cli): bridge ops.py to admin_cli + feat(cli): atest osi <provider>
+Last updated: 2026-10-12
+HEAD:        38c253c  docs(ai): create .ai/agents and .ai/workflows skeleton
+Tag:         v0.2.10-approval-gate
+Snapshot:    v0.2.10-approval-gate (VBox)
 Branch:      fix/cli-chat-provider-gate-cisco-shell
 Purpose:     resume cleanly in a fresh chat. Read this before touching anything.
 
@@ -9,7 +11,7 @@ Purpose:     resume cleanly in a fresh chat. Read this before touching anything.
 0. WHAT AINTERCEPTOR IS
 ================================================================
 
-AInterceptor is an AGENT. It owns access: files, shell, network,
+AInterceptor is an AGENT. It holds access: files, shell, network,
 targets, credentials, browser sessions. It is the thing that acts.
 
 AIPs (DeepSeek, Claude, Gemini, ChatGPT, others) are INTERCHANGEABLE
@@ -17,201 +19,225 @@ REASONING ENGINES. Chosen per-request by the router. They receive a
 prompt, return text. They never hold a credential, never touch a
 target, never execute a tool.
 
-The SHIM translates OpenAI-shaped tool calls to each AIP's native
-syntax (DeepSeek: <||DSML||>; others have their own). Per Rule 10,
-that syntax lives in the provider's own file.
+The SHIM translates between AInterceptor's OpenAI-shaped tool
+protocol and each AIP's native syntax (DeepSeek: <||DSML||>; others
+have their own). Per Rule 10, provider-specific syntax lives in the
+provider file, not the shim.
 
 ================================================================
-1. CURRENT STATE
+1. CURRENT STATE - WHAT WORKS
 ================================================================
 
-  AInterceptor daemon           OK   python -m app.runtime.daemon, :8000
-  /v1/chat/completions          OK   OpenAI-compatible, chat + tools
-  DeepSeek via /v1              OK   ~15-25s warm (AIP-internal, not ours)
-  Claude via /v1                --   parked (CF challenge on tab)
-  Gemini via /v1                --   parser sometimes empty
-  ChatGPT via /v1               --   parked (WebSocket capture needed)
-  dsh harness (VM) on :3080     OK   served via Tailscale
-  /harness URL stable           OK   https://ainterceptor.taila2310c.ts.net/harness/
-  atest osi <provider>          OK   L3/L4/L6/L7 latency probe
-  CLI dispatcher (ops.py)       OK   falls through to admin_cli
+  AInterceptor daemon              OK   python -m app.runtime.daemon, :8000
+  /v1/chat/completions             OK   OpenAI-compatible, chat + tools
+  DeepSeek via /v1                 OK   reply verified, port digits preserved
+  Claude via /v1                   --   parked, CF challenge unresolved
+  Gemini via /v1                   --   parser sometimes empty
+  ChatGPT via /v1                  --   parked, needs WebSocket capture
+  dsh harness (VM) on :3080        OK   served via Tailscale, native tools disabled
+  /harness URL stable              OK   https://ainterceptor.taila2310c.ts.net/harness/
+  AIN owns the tool catalog        OK   verified: model lists AIN's tools only
+  SSH connector                    OK   ssh.py, reaches win-laptop
+  win-laptop as kind=ssh           OK   100.67.225.84, key auth
+  Interactive approval gate        OK   allow | deny | ask, dashboard + queue
+  Approval dashboard               OK   /dashboard/approvals
+  max_rounds with summarizer       OK   30 default, env AGENT_MAX_ROUNDS
 
 ================================================================
-2. WHAT HAPPENED TODAY (lessons)
+2. WHAT SHIPPED TODAY (commits in order)
 ================================================================
 
-Attempted to improve streaming latency by adding a DOM-poll on the
-hot path. Result: slower, and it broke Claude + Gemini via the shared
-base class. Reverted. Three rules violated, all now explicit:
+  38c253c  docs(ai): create .ai/agents and .ai/workflows skeleton
+  c1a8cc4  fix(agent): forgiving approval cache + on-disk persistence
+  5fbf8ca  fix(agent): decide() clears pending + writes history; loop wait 120s
+  abd24f7  fix(agent): session_id is stable per API key, not random
+  0ca9679  fix(agent): approval ticket survives caller timeout
+  4002464  fix(agent): session_id uses module-level uuid, not block-local _uuid
+  c6898db  feat(agent): interactive approval gate
+  55412b5  docs(lld): AIN agent architecture
+  bc796c1  deploy(dsh): disable native tools, route all actions through AIN
+  6f6454e  docs(todo): verified end-to-end multi-target via /v1
+  a919d08  feat(agent): SSH connector + win-laptop as kind=ssh target
+  efe2fed  fix(agent): raise max_rounds to 30, summarize on limit
 
-  R10  Provider isolation. Never edit web_runtime_base.py to fix a
-       one-provider issue. Shared base is provider-neutral only.
-       Provider-specific streaming/parsing lives in the provider's
-       own __init__.py.
-
-  R11  Performance priority. The hot path is dispatcher.stream_reply
-       -> runtime.execute -> prompt submit -> response capture ->
-       first delta. Nothing inside it may poll, sleep, re-scan,
-       re-render, or log unless load-bearing.
-
-  R15  Diagnose becomes command. Every ad-hoc diagnostic must be
-       promoted to a command in command_tree.py in the same commit.
-       No one-off scripts stay.
-
-Root cause of "why slow": the AIP thinks, not the network. Measured
-end-to-end: network floor is ~600ms (DNS+TCP+TLS+TTFB). Everything
-above that is the model generating. Nothing on our side fixes it.
-
-Second finding: the AIP's web page carries the conversation. Every
-/v1 call appends to the same tab's chat. Over dozens of calls, the
-chat history grows to hundreds of thousands of tokens and each reply
-gets slower. This is why "158s" happened. Fix is to rotate to a new
-chat when the history gets long (not built yet; on TODO).
+Also earlier today: port-fix in deepseek/__init__.py verified end-to-end,
+snapshot v0.2.9-harness-to-windows.
 
 ================================================================
-3. CLI ARCHITECTURE (the puzzle from today)
+3. THE MILESTONE THAT PROVES THE ARCHITECTURE
 ================================================================
 
-Two dispatchers exist:
+The whole chain works:
 
-  backend/scripts/ops.py        Extended admin. Handles: asessions,
-                                ahealth, aversion, alogs, aevidence,
-                                astart, arestart, astop, abootstrap,
-                                asave, aconfig-reset. Falls through
-                                to admin_cli when the command is
-                                not recognized (added a0a54d6).
+  dsh (client) -> POST /v1 -> AIN agent loop -> permissions.evaluate
+     -> allow | deny | ask
+     -> tool dispatch -> connector (local or ssh)
+     -> Windows laptop over SSH
+     -> result back to AIP
+     -> AIP summarizes -> reply
 
-  backend/scripts/admin_cli.py  Core admin. Handles: providers, login,
-                                logout, show, hide, test, config.
+Verified: "Run VBoxManage list vms on win-laptop" returned
+  "Tiny Core", "AInterceptor", "EVE" - the three VirtualBox VMs.
 
-  Every ~/bin/a* wrapper calls scripts.ops, which strips the leading
-  "a" and forwards to admin_cli when needed.
-
-  R12 DEBT: admin_cli.py imports backend modules in-process instead
-  of talking to /internal/* over HTTP. Fix when a second consumer
-  exists, not before. Noted but not urgent.
-
-To add a new command:
-  1. Handler in ops.py or admin_cli.py (whichever fits).
-  2. Entry in backend/app/api/command_tree.py (same commit, R15).
-  3. Wrapper in ~/bin/ if it needs a short name.
-  4. Document in docs/COMMANDS.md (R3).
+The AIP never saw the IP 100.67.225.84. It called with target name
+"win-laptop". AIN's targets.py resolved name -> address + key +
+transport. That is the design.
 
 ================================================================
-4. RULES THAT BIND (from .ai/rules/)
+4. WHAT'S NOT DONE - NEXT SESSION'S WORK
 ================================================================
 
-  R10  provider-isolation.md          -> one file per provider
-  R11  performance-priority.md        -> hot path is sacred
-  R12  module-split.md                -> CLI/Web/engine talk HTTP only
-  R13  surgical-evolution.md          -> no rewrites, evolve
-  R14  simplify-before-extend.md      -> remove code to add features
-  R15  diagnose-becomes-command.md    -> no one-off scripts
-  R16  provider-account-registry.md
-  R17  docs-are-living.md
+Priority order:
 
-Plus .ai/RULES.md (R1-R7): PROGRESS.md on every milestone, tag-based
-commit automation, docs before push, pasteable scripts, future work
-in .ai/FUTURE_WORK.md, session log on every decision, automate.
+1. AIN-native chat with in-chat approval.
+   3-4 hours. Refactor loop.py to yield events, /chat/stream SSE
+   endpoint, HTML page with chat + inline Allow/Deny buttons. Replaces
+   dsh as the client. Solves the approval UX friction (no tab switch,
+   no re-send).
+
+2. Daemon import isolation.
+   Today a one-line bug in approval_queue.py crash-looped the daemon
+   for over an hour. Fix: lazy-import tool files, isolate failures,
+   keep /health and /dashboard up even if a tool is broken.
+
+3. Multi-arg DSML parser correctness.
+   When 3+ parameters are in one invoke block, the closing tag can
+   leak. DSH flagged this earlier. Verify with a 3-arg sample and fix
+   _DSML_PARAM_RE if broken.
+
+4. install_package, get_system_info, systemctl_control tools.
+   See docs/LLD_AGENT_ARCHITECTURE.md, Phase 2.
+
+5. EVE-NG connector (http.py connector + register target).
+
+6. self-extension (request_capability meta-tool).
+   Designed in LLD Phase 3. Not built.
+
+7. Daemon on-boot Chrome: skip non-active provider tabs.
+
+8. Permission policy refinements in permissions.py:
+   - DESTRUCTIVE_MARKERS list is minimal
+   - SAFE_SHELL_BINS list will need operator-specific entries
+   - consider per-target policy (win-laptop vs linux: different safe lists)
 
 ================================================================
-5. LAYOUT
+5. RULES THAT BIND
 ================================================================
 
-  backend/app/
-    api/chat_routes.py           /v1/chat/completions
-    control_plane/router.py      select(model) + alias map
-    interception/<provider>/     per-provider (R10)
-    interception/web_runtime_base.py  SHARED - keep neutral
-    runtime/daemon.py            process entry point
-    runtime/dispatcher.py        Path A / Path B selection
-    runtime/browser_supervisor.py  Chrome + CDP
-    runtime/session_exporter.py  cold backup every 300s
-    runtime/session_importer.py  apply exports (opt-in on boot)
-    runtime/tool_shim.py         OpenAI <-> text tool protocol
-    agent/                       AInterceptor-native agent layer
+Read first:
+  .ai/RULES.md                    R1-R7 (progress, tags, docs, script, future,
+                                       session log, automate)
+  .ai/rules/10-provider-isolation.md
+  .ai/rules/11-performance-priority.md
+  .ai/rules/12-module-split.md
+  .ai/rules/13-surgical-evolution.md
+  .ai/rules/14-simplify-before-extend.md
+  .ai/rules/15-diagnose-becomes-command.md
+  .ai/rules/16-provider-account-registry.md
+  .ai/rules/17-docs-are-living.md
 
-  backend/scripts/
-    ops.py                       extended admin dispatcher
-    admin_cli.py                 core admin dispatcher
-    osi_probe.py                 OSI latency probe (called by atest)
-    chat_any.py                  CLI chat REPL
+Rule 10 is the one most often violated by well-meaning changes:
+  - per-provider syntax in the provider file
+  - do NOT put provider-specific logic in shared base classes
+  - do NOT put operator-specific knowledge (custom ports, machine
+    names, service conventions) into shipped code
+  - the gate is the only place that decides permissions
+
+Rule 11: the hot path (stream_reply -> execute -> submit -> capture
+-> first delta) has no polling, no sleeping, no re-scanning.
+
+Rules we learned this session and want recorded (not yet in .ai):
+  - One command at a time when the command writes state.
+  - The gate is the only place that decides. The dispatcher is pure.
 
 ================================================================
 6. ENVIRONMENT
 ================================================================
 
-  VM:              ssh arun@100.82.62.82  |  cd ~/ainterceptor
-  Activate:        source .venv/bin/activate
-  Restart daemon:  arestart
-  Status:          astatus / ahealth
-  OSI probe:       atest osi <provider>
-  API key:         sk-aint-0LcsVpp9OmAiiW4rOcQnE88ei4Ga4k2TCVt8KoBF
-  dsh token file:  ~/deepseek-harness/dsh-url.txt
-  dsh start:       ~/bin/dsh-start
-  VNC redirect:    ~/bin/dsh-redirect (port 3081 -> tailscale /harness)
-  Credential vault: ~/.dsh/.credentials.yaml
+  VM:               ssh arun@100.82.62.82  |  cd ~/ainterceptor
+  Activate:         source .venv/bin/activate
+  Restart daemon:   systemctl --user restart ainterceptor-daemon.service
+                    (also restarts dsh and redirect via PartOf)
+  Status:           astatus / ahealth
+  OSI probe:        atest osi <provider>
+  Approvals:        https://ainterceptor.taila2310c.ts.net/dashboard/approvals
+  API key:          sk-aint-0LcsVpp9OmAiiW4rOcQnE88ei4Ga4k2TCVt8KoBF
+  dsh token file:   ~/deepseek-harness/dsh-url.txt
+  dsh start:        ~/bin/dsh-start
+  dsh profile:      ~/.dsh/profiles/web/cordis.patch.yml
+                    (native tools disabled; AIN owns catalog)
+  Approvals log:    ~/.ainterceptor/approvals.log (JSONL)
+  Approvals cache:  ~/.ainterceptor/approvals_cache.json
 
 ================================================================
-7. NEXT (priority order)
+7. FILES CREATED / TOUCHED THIS SESSION
 ================================================================
 
-1. systemd user units for daemon + dsh + redirect.
-   loginctl enable-linger arun.
-   Makes every state change (reboot, resume, crash) come back.
+New:
+  backend/app/agent/approval_queue.py       ticket queue + cache + audit
+  backend/app/agent/connectors/ssh.py       SSH connector (universal remote)
+  backend/app/agent/prompts.py              planner-mode system prompt
+  backend/app/api/approvals_routes.py       dashboard + JSON endpoints
+  docs/LLD_AGENT_ARCHITECTURE.md            five-layer agent design
+  docs/LLD_AGENT_TOOLS.md                   tool system design
+  deploy/systemd-user/*.service             systemd units (repo copy)
+  deploy/systemd-user/README.md
+  deploy/dsh-profile/cordis.patch.yml       dsh profile (repo copy)
+  deploy/dsh-profile/README.md
+  .ai/agents/README.md                      skeleton
+  .ai/workflows/README.md                   skeleton
 
-2. Rebrand to AIN.
-   Remove "DeepSeek Harness" and "OpenRouter" strings from the UI.
-   Codename: AIN (AI Interceptor Node).
-
-3. Planner-mode system prompt.
-   When AGENT_EXECUTION=1, replace the "you are an agent with limited
-   permission" framing with "you are a planner; the operator owns
-   everything; AInterceptor executes under their permission model."
-   Stops AIP refusals on operational tasks (EVE-NG, Cisco, ops).
-
-4. Interactive permission gate.
-   Replace the static allowlist in agent/permissions.py with a queue.
-
-5. EVE-NG target connector.
-
-6. Chat rotation.
-   When the provider's page chat grows beyond N turns, open a new
-   chat automatically. Fixes the accumulated-history slowdown.
-
-================================================================
-8. SNAPSHOTS (VirtualBox)
-================================================================
-
-  v0.2.3-harness-url-stable       latest, clean, known-good
-  v0.2.2-stream-fix
-  v0.2.1-agent-layer-released
-  v0.2.0-agent-layer
-  good-20261008-pre-app-layer
-  good-20261007-agents-working
-
-Restore:  VBoxManage snapshot "AInterceptor" restore "<name>"
+Modified:
+  backend/app/agent/loop.py                 gate + queue + summarizer
+  backend/app/agent/permissions.py          3-valued evaluate
+  backend/app/agent/tools.py                dispatcher is pure
+  backend/app/agent/targets.py              win-laptop kind=ssh
+  backend/app/api/chat_routes.py            session_id stable per key
+  backend/app/api/web_common.py             Approvals nav entry
+  backend/app/main.py                       approvals router
+  backend/app/interception/deepseek/__init__.py  port-digit fix
+  docs/HANDOVER.md                          this doc
+  docs/TODO.md                              running list
 
 ================================================================
-9. GIT TAGS
+8. GOTCHAS LEARNED THIS SESSION
 ================================================================
 
-  v0.2.3-harness-url-stable      7084256
-  v0.2.2-stream-fix              dff1be7
-  v0.2.1-agent-layer             12e6ee1
+- Python local scope: a name assigned anywhere in a function is
+  function-local for the WHOLE function. Referencing `_uuid` before
+  `import uuid as _uuid` = UnboundLocalError. Use module-level imports.
 
-Uncommitted-but-pushed: a0a54d6 (CLI bridge + atest osi)
+- The daemon crash-loops if any imported module fails. One bad file
+  = no daemon. Nothing guards imports yet.
+
+- DeepSeek web UI drops the trailing digit of 4-digit numbers ending
+  in a repeated digit: 8000 -> 800, 2222 -> 222, 7777 -> 777, but
+  9090 survives. Root cause was OUR parser's suffix-matching
+  idempotency check in DeepSeekStreamParser._append_content. Fixed.
+
+- Windows OpenSSH Server has a restricted PATH: it does not include
+  C:/Program Files/Oracle/VirtualBox. Add via Machine env var, not
+  the user's. Restart-Service sshd to pick it up.
+
+- dsh sends its own tool catalog. When AIN owns the catalog, we
+  override it in chat_routes.py. Otherwise the model sees bash/read
+  (dsh's) alongside shell/read (AIN's) and gets confused.
+
+- The approval flow's in-chat message appears only after the loop's
+  wait expires. Chicken-and-egg: user sees message -> switches tabs
+  -> clicks -> comes back -> re-sends. The AIN-native chat with
+  in-chat buttons is the correct fix.
 
 ================================================================
-10. WHAT NOT TO DO
+9. IMMEDIATE NEXT ACTIONS
 ================================================================
 
-- Do NOT edit web_runtime_base.py to fix a one-provider issue.
-- Do NOT put polling/sleeps on the hot path.
-- Do NOT write one-off diagnostic scripts — make them commands.
-- Do NOT "improve" while fixing a bug. One change at a time.
-- Do NOT edit Claude without explicit operator approval.
-- Do NOT mount dsh under a URL subpath (its /api calls go to root).
-- Do NOT pkill -9 Chrome (cookies won't flush).
+1. Fresh chat with this handover + docs/NEXT_CHAT_PROMPT.md.
+2. Read the rules.
+3. Verify daemon + SSH work (two read-only commands).
+4. Then decide: AIN-native chat, or a smaller piece from section 4.
+
+Do not start a large task without confirming state (daemon 200,
+ssh Arun@100.67.225.84 hostname returns DESKTOP-9S3SKGC).
 
 END
