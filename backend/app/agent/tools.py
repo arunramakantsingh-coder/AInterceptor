@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from app.agent import targets as target_registry
 from app.agent.connectors import get_connector
-from app.agent import permissions
 from app.agent import ops_tools
 
 
@@ -169,10 +168,10 @@ def run(tool_name: str, args: dict) -> str:
     target_id = args.pop("target", "vm")
     t = target_registry.get(target_id)
 
-    ok, reason = permissions.check(tool_name, args)
-    if not ok:
-        return f"[permission denied] {reason}"
-
+    # NOTE: permission checking happens in the loop, before this
+    # dispatcher is called. tools.run is pure execution. If you find
+    # yourself adding permissions.check here, that's a Rule-10
+    # violation — the gate is the only place that decides.
     conn = get_connector(t)
 
     if tool_name == "read":

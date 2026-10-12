@@ -67,8 +67,32 @@ def _audit(record: dict) -> None:
 import hashlib as _hashlib
 RECENT_TTL_S = 600.0
 
-# Load persisted decisions on module import
-_load_recent()
+_RECENT_FILE = pathlib.Path.home() / ".ainterceptor" / "approvals_cache.json"
+
+
+def _persist_recent() -> None:
+    try:
+        _RECENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        fresh = {k: v for k, v in _RECENT.items()
+                 if now - v.get("ts", 0) <= RECENT_TTL_S}
+        _RECENT_FILE.write_text(json.dumps(fresh, default=str))
+    except Exception:
+        pass
+
+
+def _load_recent() -> None:
+    try:
+        if not _RECENT_FILE.exists():
+            return
+        data = json.loads(_RECENT_FILE.read_text())
+        now = time.time()
+        for k, v in data.items():
+            if now - v.get("ts", 0) <= RECENT_TTL_S:
+                _RECENT[k] = v
+    except Exception:
+        pass
+
 _RECENT: dict[str, dict] = {}
 
 
@@ -232,3 +256,7 @@ async def list_pending() -> list[dict]:
 async def history(limit: int = 100) -> list[dict]:
     async with _LOCK:
         return list(reversed(_HISTORY[-limit:]))
+
+
+# Load persisted decisions on first import.
+_load_recent()
