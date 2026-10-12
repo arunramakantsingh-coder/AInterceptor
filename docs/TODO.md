@@ -136,3 +136,25 @@ clean. No DSML leak, no refusal.
 
 Test: /v1 with prompt "Call the shell tool with target=win-laptop,
 cmd=hostname, report raw output" -> reply contains DESKTOP-9S3SKGC.
+
+## Approval flow — re-send not obvious + wait too short (2026-10-12)
+
+Two issues seen in practice:
+
+1. Clicking Allow on the dashboard does NOT resume the original HTTP
+   request — that request already returned after AGENT_APPROVAL_WAIT_S
+   (currently 10s). The user must re-send the message to trigger the
+   cached approval. This is not obvious in the chat.
+
+2. 10s is too short for a user to switch tabs, click, and come back.
+   120s made the chat feel dead. Middle ground: 45-60s, with a
+   visible spinner in the chat while waiting.
+
+Real fix: AIN-native chat with in-chat Allow/Deny buttons. The
+approval happens inside the request, not out-of-band. That work is
+planned for the next session.
+
+Interim UX improvement: when the loop returns early with the
+approval message, prepend it with "RE-SEND YOUR MESSAGE AFTER
+APPROVING" in bold. That's a one-line change in loop.py.
+
