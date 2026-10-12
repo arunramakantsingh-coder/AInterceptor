@@ -28,7 +28,47 @@ SAFE_SHELL_BINS = {
     "python", "python3", "node", "npm",
     "docker", "systemctl", "journalctl",  # status-only if used read-only
     "vboxmanage",
+    # pure read-only inspection tools (no side effects on the target).
+    # sed/awk are deliberately EXCLUDED: sed -i rewrites files in place
+    # and awk can shell out — both stay "ask".
+    "diff", "stat", "file", "md5sum", "sha256sum", "jq",
 }
+
+# Shell wrappers that may precede the real command. The gate peels
+# them (and their arguments) and evaluates the inner command, so
+# "timeout 5 rm -rf /" is judged by "rm", never by "timeout".
+WRAPPER_BINS = {
+    "timeout", "env", "nice", "nohup", "ionice", "stdbuf",
+}
+
+
+def _is_number(token: str) -> bool:
+    try:
+        float(token)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_wrapper_arg(token: str) -> bool:
+    """An option, a number, or a VAR=VALUE assignment — a wrapper
+    argument, never a command name."""
+    return token.startswith("-") or "=" in token or _is_number(token)
+
+
+def _peel_wrappers(cmd: str) -> str:
+    """Strip leading shell wrappers and their arguments so the gate
+    judges the inner command. Fail closed: any token that is neither
+    a known wrapper nor a wrapper argument stops the peel."""
+    tokens = cmd.split()
+    while tokens:
+        name = os.path.basename(tokens[0].lower().lstrip("./"))
+        if name not in WRAPPER_BINS:
+            break
+        tokens = tokens[1:]
+        while tokens and _is_wrapper_arg(tokens[0]):
+            tokens = tokens[1:]
+    return " ".join(tokens)
 
 # Substrings that force "ask" regardless of anything else. These are
 # operators of last resort: if a command contains one, the operator
@@ -90,8 +130,12 @@ def evaluate(tool_name: str, args: dict, context: dict | None = None) -> tuple[s
         if tool_name == "scan_lan":
             return "allow", ""
 
-        # First binary: check safe list.
-        first = cmd.split()[0].lower().lstrip("./")
+        # First binary: check safe list — AFTER peeling wrappers, so
+        # "timeout 5 rm -rf /" is judged by "rm", not "timeout".
+        peeled = _peel_wrappers(cmd)
+        if not peeled:
+            return "deny", "command is only shell wrappers"
+        first = peeled.split()[0].lower().lstrip("./")
         first = os.path.basename(first)
 
         if _shell_allowed_by_env():

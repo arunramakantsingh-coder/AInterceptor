@@ -1,3 +1,26 @@
+## 2026-10-12 — permission gate wrapper-peeling (item 2.1)
+
+- fix(agent): the gate now peels shell wrappers (timeout,
+  env, nice, nohup, ionice, stdbuf) and their arguments,
+  then evaluates the INNER command — "timeout 5 rm -rf /"
+  is judged by "rm", never by "timeout"
+- feat(agent): SAFE_SHELL_BINS expanded with pure read-only
+  inspection tools: diff, stat, file, md5sum, sha256sum, jq
+  (sed/awk deliberately excluded: sed -i rewrites files and
+  awk can shell out — both stay "ask")
+- test: backend/tests/test_permissions_gate.py — 25 cases
+  including the three wrapper+destructive exploit combos
+
+### Working end-to-end
+- "timeout 5 ssh ..." no longer falsely triggers "ask"
+  (unblocks DSH verification); wrapper-hidden destructive
+  commands still trigger "ask"
+
+### Next session
+1. Item 2.2 — chat rotation (arotate first, then auto-rotate)
+2. Item 1.1 — on-demand provider tabs (fresh chat + snapshot)
+3. Item 6.1 — agent-login default
+
 ## 2026-10-12 — daemon import isolation (item 1.3)
 
 - fix(agent): main.py loads all 24 api routers through a safe

@@ -116,3 +116,21 @@ Drift:   None. Rule 13 surgical: no existing behavior changed
          for working modules; only failure behavior changed.
 Impact:  backend/app/main.py, backend/app/agent/tools.py,
          backend/app/agent/connectors/__init__.py
+
+
+## 2026-10-12 — Permission gate wrapper-peeling (item 2.1)
+
+Chosen:  Peel wrappers and their arguments, then evaluate the
+         inner command. Conservative token model: after a
+         wrapper, consume only options (-x), numbers, and
+         VAR=VALUE assignments; anything else stops the peel.
+Options: (a) safe-list the wrappers themselves — rejected:
+         "timeout 5 rm -rf /" would pass; (b) full shell
+         grammar parser — rejected: over-engineering, Rule 14.
+Why:     "timeout 5 ssh ..." falsely triggered "ask", but
+         safe-listing "timeout" opens the wrapper exploit.
+Drift:   sed/awk excluded from the safe list despite the task
+         list's "careful sed/awk" — sed -i writes and awk can
+         shell out; fail-closed means they stay "ask".
+Impact:  backend/app/agent/permissions.py,
+         backend/tests/test_permissions_gate.py
