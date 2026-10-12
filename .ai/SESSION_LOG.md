@@ -95,3 +95,24 @@ Impact:  agent/airouter_agent/serve.py, /dashboard/agents, nav.
 Chosen:  Build the agent page + sessions enhancement first.
 Why:     User judged the agent page as the centerpiece of onboarding.
 Impact:  CareerOS integration deferred to next session.
+
+
+## 2026-10-12 — Daemon import isolation design (item 1.3)
+
+Chosen:  Safe-loader pattern at the three import choke points
+         (main.py router inclusion, tools.py ops backend,
+         connectors/__init__.py per-kind loading). A broken
+         module logs `[main]/[tools]/[connectors] DISABLED ...`
+         to stderr and the daemon keeps serving.
+Options: (a) lazy-import everything — rejected: scattered,
+         hides the failure until first use; (b) supervisor
+         subprocess per module — rejected: heavy; (c) safe
+         loader at choke points — chosen: one place per layer,
+         failure is loud and local.
+Why:     A one-line bug in approval_queue.py crash-looped the
+         daemon for over an hour. The gate (/health, /dashboard)
+         must survive any single-module failure.
+Drift:   None. Rule 13 surgical: no existing behavior changed
+         for working modules; only failure behavior changed.
+Impact:  backend/app/main.py, backend/app/agent/tools.py,
+         backend/app/agent/connectors/__init__.py

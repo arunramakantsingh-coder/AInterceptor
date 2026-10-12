@@ -1,3 +1,33 @@
+## 2026-10-12 — daemon import isolation (item 1.3)
+
+- fix(agent): main.py loads all 24 api routers through a safe
+  loader — a broken module disables only its own routes, never
+  the daemon; failures are logged `[main] DISABLED ...`
+- fix(agent): tools.py guards the ops backend import; ops tools
+  degrade to error strings; the dispatcher no longer raises when
+  a connector is unavailable (LLD section 4 honored)
+- fix(agent): connectors/__init__.py loads each connector through
+  a safe loader — a broken connector disables only its kind
+- Verified by fault injection: poisoned app.api.approvals_routes
+  -> app imports with 70 routes, health present, approvals
+  absent; poisoned ssh connector -> tools.run returns
+  "error: no connector for target 'win-laptop': connector
+  unavailable for kind='ssh'"
+
+### Working end-to-end
+- daemon starts with any single api module, ops tool backend,
+  or connector broken (the crash-loop class is closed)
+
+### Known issues
+- chat_routes.py carries an uncommitted approval-pending
+  auto-rotate WIP from an earlier session (left untouched)
+- disk 5.0 GB free (78%) — operator action needed
+
+### Next session
+1. Item 2.1 — permission gate wrapper-peeling
+2. Item 1.1 — on-demand provider tabs
+3. Item 2.2 — chat rotation (arotate first)
+
 ## 2026-10-10 — CLI dispatcher bridge + atest osi
 
 - fix(cli): ops.py falls back to admin_cli, so every ~/bin/a* wrapper works

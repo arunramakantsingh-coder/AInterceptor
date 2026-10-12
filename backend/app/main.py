@@ -1,34 +1,45 @@
 """FastAPI app entrypoint."""
 from __future__ import annotations
+import importlib
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth_routes, keys_routes, health_routes, sessions_routes, chat_routes, login_routes, admin_routes
-from app.api import login_page
-from app.api import dashboard_routes
-from app.api import device_routes
-from app.api import device_ui
-from app.api import google_auth
-from app.api import agents_ui
-from app.api import sessions_ui
-from app.api import devices_ui
-from app.api import providers_ui
-from app.api import usage_ui
-from app.api import settings_ui
-from app.api import docs_ui
-from app.api import internal_routes
-from app.api import raw_routes
-from app.api import dashboard_raw
-from app.api import commandline_ui
-from app.api import approvals_routes
 from fastapi import Request as _Req
 from fastapi.responses import RedirectResponse as _RR
 
+# Import isolation: every api module loads through a safe loader.
+# A broken module disables ONLY its own routes, never the daemon.
+# /health and /dashboard stay up because health_routes loads first
+# and every failure is logged, not raised. This exists because a
+# one-line bug in approval_queue.py once crash-looped the whole
+# daemon for over an hour.
+API_MODULES = (
+    "health_routes", "auth_routes", "keys_routes", "sessions_routes",
+    "chat_routes", "login_routes", "admin_routes", "login_page",
+    "dashboard_routes", "device_routes", "device_ui", "google_auth",
+    "agents_ui", "sessions_ui", "devices_ui", "providers_ui",
+    "usage_ui", "settings_ui", "docs_ui", "internal_routes",
+    "raw_routes", "dashboard_raw", "commandline_ui", "approvals_routes",
+)
+
 app = FastAPI(title="AInterceptor", version="0.1.0")
+
+for _name in API_MODULES:
+    try:
+        _mod = importlib.import_module(f"app.api.{_name}")
+        app.include_router(_mod.router)
+    except Exception as _e:  # isolation is the point: log, keep going
+        print(f"[main] DISABLED app.api.{_name}: {_e!r}",
+              file=sys.stderr, flush=True)
 
 @app.on_event("startup")
 def _start_watchdog():
-    from app.runtime import watchdog
-    watchdog.start()
+    try:
+        from app.runtime import watchdog
+        watchdog.start()
+    except Exception as _e:
+        print(f"[main] watchdog DISABLED: {_e!r}",
+              file=sys.stderr, flush=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,31 +48,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(health_routes.router)
-app.include_router(auth_routes.router)
-app.include_router(keys_routes.router)
-app.include_router(sessions_routes.router)
-app.include_router(chat_routes.router)
-app.include_router(login_routes.router)
-app.include_router(admin_routes.router)
-app.include_router(login_page.router)
-app.include_router(dashboard_routes.router)
-app.include_router(device_routes.router)
-app.include_router(device_ui.router)
-app.include_router(google_auth.router)
-app.include_router(agents_ui.router)
-app.include_router(sessions_ui.router)
-app.include_router(devices_ui.router)
-app.include_router(providers_ui.router)
-app.include_router(usage_ui.router)
-app.include_router(settings_ui.router)
-app.include_router(docs_ui.router)
-app.include_router(internal_routes.router)
-app.include_router(raw_routes.router)
-app.include_router(dashboard_raw.router)
-app.include_router(commandline_ui.router)
-app.include_router(approvals_routes.router)
 
 
 @app.get("/")

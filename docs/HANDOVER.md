@@ -95,10 +95,11 @@ Priority order:
    dsh as the client. Solves the approval UX friction (no tab switch,
    no re-send).
 
-2. Daemon import isolation.
-   Today a one-line bug in approval_queue.py crash-looped the daemon
-   for over an hour. Fix: lazy-import tool files, isolate failures,
-   keep /health and /dashboard up even if a tool is broken.
+2. ~~Daemon import isolation.~~ SHIPPED 2026-10-12 —
+   main.py safe-loads all 24 api routers; tools.py guards the ops
+   backend; connectors load per-kind through safe loaders.
+   Fault-injection verified (poisoned approvals_routes -> daemon
+   imports, health present, approvals absent). See PROGRESS.md.
 
 3. Multi-arg DSML parser correctness.
    When 3+ parameters are in one invoke block, the closing tag can

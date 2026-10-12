@@ -5,10 +5,26 @@ up the target and calls the matching connector. AIPs never see a
 credential or a host address — only these schemas.
 """
 from __future__ import annotations
+import sys
 
 from app.agent import targets as target_registry
 from app.agent.connectors import get_connector
-from app.agent import ops_tools
+
+try:
+    from app.agent import ops_tools
+except Exception as _e:  # import isolation: degrade ops tools, keep catalog
+    ops_tools = None
+    print(f"[tools] ops_tools DISABLED: {_e!r}",
+          file=sys.stderr, flush=True)
+
+
+def _ops(tool: str, args: dict) -> str:
+    """Run an ops tool. Returns an error string when the ops
+    backend failed to import (import isolation, LLD section 4:
+    the dispatcher never raises)."""
+    if ops_tools is None:
+        return f"error: tool backend unavailable ({tool})"
+    return getattr(ops_tools, tool)(args)
 
 
 TOOLS = [
@@ -151,13 +167,13 @@ def run(tool_name: str, args: dict) -> str:
     """Execute a tool call. Returns a plain string result."""
     # ── Operational tools (run on the AIN host) ──
     if tool_name == "list_capabilities":
-        return ops_tools.list_capabilities(args)
+        return _ops("list_capabilities", args)
     if tool_name == "tailscale_status":
-        return ops_tools.tailscale_status(args)
+        return _ops("tailscale_status", args)
     if tool_name == "probe_port":
-        return ops_tools.probe_port(args)
+        return _ops("probe_port", args)
     if tool_name == "scan_lan":
-        return ops_tools.scan_lan(args)
+        return _ops("scan_lan", args)
 
     if tool_name == "list_targets":
         rows = []
@@ -172,7 +188,10 @@ def run(tool_name: str, args: dict) -> str:
     # dispatcher is called. tools.run is pure execution. If you find
     # yourself adding permissions.check here, that's a Rule-10
     # violation — the gate is the only place that decides.
-    conn = get_connector(t)
+    try:
+        conn = get_connector(t)
+    except Exception as _e:
+        return f"error: no connector for target {target_id!r}: {_e}"
 
     if tool_name == "read":
         return conn.read(args["path"])
