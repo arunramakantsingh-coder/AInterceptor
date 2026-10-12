@@ -8,9 +8,16 @@ Read the handover first, then execute.
 I am continuing work on AInterceptor. Read the attached HANDOVER.md
 fully before touching anything.
 
-Current HEAD: 38c253c
-Tag:          v0.2.10-approval-gate
-VM:           ssh arun@100.82.62.82  |  cd ~/ainterceptor  |  source .venv/bin/activate
+Current HEAD: ffcfb1e
+Branch:       fix/cli-chat-provider-gate-cisco-shell
+VM:           ssh -i ~/.ssh/id_ed25519_ainterceptor arun@100.82.62.82
+              cd ~/ainterceptor  |  source .venv/bin/activate
+
+Shipped 2026-10-12 (this cycle):
+  1.3  Daemon import isolation (821b880)
+  2.1  Permission gate wrapper-peeling (efd1dda)
+  2.2  Chat rotation: arotate + auto-rotate at
+       AINTERCEPTOR_ROTATE_TURNS=25 (ffcfb1e)
 
 Non-negotiable rules (from .ai/rules/ and .ai/RULES.md):
 
@@ -33,15 +40,23 @@ Rules learned 2026-10-12 (fold into .ai/rules/ when you have a moment):
   - Every write command must fail closed: pre-flight checks first,
     abort WITHOUT writing if the anchor doesn't match.
 
+Operator rule: do NOT start item 1.1 or 1.2 without a fresh chat
+and a clean snapshot. This chat IS that fresh chat — the tree was
+clean at ffcfb1e when the previous session stopped.
+
 Before starting work:
   1. Run: curl -s -o /dev/null -w "daemon: %{http_code}\n" http://127.0.0.1:8000/health
   2. Run: timeout 5 ssh -o BatchMode=yes Arun@100.67.225.84 "hostname"
      Expect: DESKTOP-9S3SKGC
   3. Read docs/LLD_AGENT_ARCHITECTURE.md to understand the current
      five-layer design of the agent.
+  4. Record a clean snapshot (git status, /health, astatus) in
+     PROGRESS.md before touching item 1.1.
 
-Then propose the first task from section 4 of the handover. My vote:
-AIN-native chat with in-chat approval. But I want your read first -
-which item do you recommend we start with, and why?
+Next task: item 1.1 — on-demand provider tabs (the biggest
+resource win; the daemon currently opens one tab per provider at
+boot and keeps them forever). See docs/TODO.md and HANDOVER.md
+section 4 for the full description. After 1.1: item 6.1
+(agent-login default), then item 1.2 (AIN-native chat).
 
 Do not start any large task without confirming state.
