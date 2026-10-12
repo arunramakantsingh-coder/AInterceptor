@@ -1,6 +1,11 @@
 """Gemini Web runtime using browser transport interception."""
 from __future__ import annotations
 
+# Rule 10: this provider's new-chat landing URL lives here.
+# browser_supervisor.rotate() reads it by name. No shared
+# table of provider URLs elsewhere in the codebase.
+NEW_CHAT_URL = "https://gemini.google.com/app"
+
 import json
 import os
 from pathlib import Path

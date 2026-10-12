@@ -1,3 +1,37 @@
+## 2026-10-12 — chat rotation (item 2.2)
+
+- feat(runtime): browser_supervisor.rotate(provider)
+  navigates a provider's tab to its own NEW_CHAT_URL
+  (Rule 10: the URL lives in the provider's
+  interception module, no shared table elsewhere)
+- feat(api): POST /internal/rotate/{provider} —
+  loopback-only internal route, same policy as the
+  rest of /internal/*
+- feat(cli): arotate <provider> — ops_read.arotate()
+  -> /internal/rotate; wired in ops.py dispatch and
+  help text, command_tree.py (Providers category),
+  ~/bin/arotate, docs/COMMANDS.md
+- feat(runtime): auto-rotation — chat_routes.py counts
+  completed /v1 turns per provider (agent mode, non-
+  streaming, and the streaming finally), supervisor
+  .note_turn() signals at AINTERCEPTOR_ROTATE_TURNS
+  (default 25, 0 = off); the rotate runs as a
+  fire-and-forget task so it can never fail a request
+- fix(runtime): Tab gains a turns counter, reset on
+  rotation
+
+### Working end-to-end
+- POST /internal/rotate/deepseek -> "rotate: deepseek
+  -> https://chat.deepseek.com/" (verified live)
+- arotate deepseek works from ~/bin
+- .env: AINTERCEPTOR_ROTATE_TURNS=25
+
+### Next session
+1. Item 1.1 — on-demand provider tabs (fresh chat +
+   clean snapshot per operator rule)
+2. Item 6.1 — agent-login default
+3. Item 1.2 — AIN-native chat (after 1.1)
+
 ## 2026-10-12 — permission gate wrapper-peeling (item 2.1)
 
 - fix(agent): the gate now peels shell wrappers (timeout,

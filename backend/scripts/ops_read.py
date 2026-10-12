@@ -154,6 +154,25 @@ def aversion():
     return 0
 
 
+def arotate(provider=None):
+    """Rotate a provider's tab to its NEW_CHAT_URL.
+
+    Clears the accumulated conversation history from the
+    shared browser tab, so the AIP stops reading its own
+    past replies. Usage: arotate <provider>
+    """
+    if not provider:
+        print("usage: arotate <provider>")
+        print("       astatus lists the active providers")
+        return 1
+    code, body = _api("POST", f"/internal/rotate/{provider}")
+    if code != 200:
+        print(f"[FAIL] {code}: {body.get('error', body)}")
+        return 1
+    print(f"[OK] {body.get('result', body)}")
+    return 0
+
+
 def alogs(which="daemon", lines=40):
     path = LOG_FILES.get(which)
     if path is None:

@@ -134,3 +134,43 @@ Drift:   sed/awk excluded from the safe list despite the task
          shell out; fail-closed means they stay "ask".
 Impact:  backend/app/agent/permissions.py,
          backend/tests/test_permissions_gate.py
+
+
+## 2026-10-12 — Chat rotation (item 2.2)
+
+Chosen:  Three-part fix. (C) arotate <provider> CLI ->
+         POST /internal/rotate/{provider} -> supervisor
+         .rotate() navigates the tab to its NEW_CHAT_URL.
+         (B) auto-rotate: chat_routes counts completed
+         /v1 turns per provider at the three completion
+         points; supervisor.note_turn() signals when
+         AINTERCEPTOR_ROTATE_TURNS (25) is reached;
+         the rotate runs fire-and-forget.
+Options: (A) new page per /v1 request — rejected:
+         heavy browser page churn, 2h estimate, not
+         needed yet. Counting stream_reply completions
+         in the dispatcher — rejected: agent mode
+         calls it once per ROUND, over-counting tab
+         growth; per-request counting in chat_routes
+         matches "one turn = one exchange".
+Why:     The DeepSeek tab accumulates every /v1
+         message; the model reads its own history and
+         echoes old replies (seen live 2026-10-12:
+         DSH got the OLD approval message with the
+         OLD ticket id).
+Drift:   Built on the uncommitted rotate primitive
+         found in the working tree (supervisor.rotate
+         + internal route + NEW_CHAT_URL in the 4
+         providers' modules) — verified live, then
+         committed as one coherent item-2.2 change.
+         Default 25 turns is a judgment call; 0
+         disables for operators who want raw tabs.
+Impact:  backend/app/runtime/browser_supervisor.py,
+         backend/app/api/internal_routes.py,
+         backend/app/api/chat_routes.py,
+         backend/app/interception/{chatgpt,claude,
+         deepseek,gemini}/__init__.py,
+         backend/scripts/{ops_read,ops}.py,
+         backend/app/api/command_tree.py,
+         backend/scripts/install-wrappers.sh,
+         docs/COMMANDS.md, docs/TODO.md, .env

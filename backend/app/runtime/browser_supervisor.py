@@ -84,6 +84,7 @@ class Tab:
     page: Any = None       # patchright Page
     last_used: float = 0.0
     errors_since_success: int = 0
+    turns: int = 0         # completed /v1 turns (chat rotation)
 
 
 @dataclass
@@ -202,6 +203,82 @@ class BrowserSupervisor:
             tab = await self._open_tab(provider)
             self.state.tabs[provider] = tab
             return tab
+    async def rotate(self, provider: str) -> str:
+        """Navigate the provider's tab to its new-chat URL.
+
+        Clears any accumulated conversation history from the shared
+        browser tab. This solves the "model echoes its own past
+        replies" problem when the same tab is reused across many
+        /v1 calls.
+
+        Rule 10: the target URL comes from the provider's own
+        module (a module-level NEW_CHAT_URL constant). No hardcoded
+        URL table here.
+        """
+        import importlib as _imp
+        tab = (self.state.tabs or {}).get(provider)
+        if tab is None or tab.page is None:
+            return f"rotate: no live tab for {provider}"
+
+        target = None
+        try:
+            mod = _imp.import_module(f"app.interception.{provider}")
+            target = getattr(mod, "NEW_CHAT_URL", None)
+        except Exception:
+            pass
+        if not target:
+            # Fallback: use the provider SPEC's home_url via the tab
+            # URL's origin. Fail loud if we cannot determine it.
+            if tab.url:
+                from urllib.parse import urlparse as _up
+                u = _up(tab.url)
+                if u.scheme and u.netloc:
+                    target = f"{u.scheme}://{u.netloc}/"
+        if not target:
+            return (f"rotate: no NEW_CHAT_URL in "
+                    f"interception/{provider}/__init__.py and no "
+                    f"origin derivable from {tab.url!r}")
+
+        try:
+            # Bring to front FIRST. Chrome throttles background tabs
+            # hard: they can be starved of DOM events entirely. Being
+            # the active tab releases the throttle. Then navigate with
+            # wait_until="commit" (fires when the response headers land,
+            # which for a same-origin navigation is milliseconds).
+            try:
+                await tab.page.bring_to_front()
+            except Exception:
+                pass
+            await tab.page.goto(target, wait_until="commit", timeout=15000)
+            tab.url = target
+            tab.last_used = 0.0
+            return f"rotate: {provider} -> {target}"
+        except Exception as e:
+            return f"rotate: {provider} failed: {e}"
+
+
+    def note_turn(self, provider: str) -> bool:
+        """Count one completed /v1 turn for a provider's tab.
+
+        Returns True when the tab has reached
+        AINTERCEPTOR_ROTATE_TURNS completed turns and should
+        be rotated to its NEW_CHAT_URL. Rotation is disabled
+        when the env var is unset or 0.
+        """
+        try:
+            every = int(os.getenv("AINTERCEPTOR_ROTATE_TURNS", "0") or "0")
+        except ValueError:
+            every = 0
+        if every <= 0:
+            return False
+        tab = (self.state.tabs or {}).get(provider)
+        if tab is None:
+            return False
+        tab.turns += 1
+        if tab.turns >= every:
+            tab.turns = 0
+            return True
+        return False
 
     async def _open_tab(self, provider: str) -> Tab:
         url = PROVIDER_URLS[provider]

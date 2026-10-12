@@ -17,7 +17,7 @@ COMMANDS=(
   astart arestart astop areload
   astatus ahealth aversion aprobe atest
   amonitor atrace adispatch aint apath alive
-  aproviders alogin alogout ashow ahide asessions
+  aproviders arotate alogin alogout ashow ahide asessions
   aconfig aconfig-reset
   akeys
   alogs aevidence

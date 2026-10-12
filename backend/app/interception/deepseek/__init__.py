@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+# Rule 10: this provider's new-chat landing URL lives here.
+# browser_supervisor.rotate() reads it by name. No shared
+# table of provider URLs elsewhere in the codebase.
+NEW_CHAT_URL = "https://chat.deepseek.com/"
+
 import pathlib
 import json
 import os

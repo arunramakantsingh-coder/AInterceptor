@@ -71,8 +71,10 @@ END
       `/dashboard/docs` and `/docs`. Rename one or remove.
 - [ ] `atest osi` should move to `/internal/osi/<provider>` per R12.
       Currently admin_cli imports the probe in-process.
-- [ ] Chat rotation: open a new tab chat when history grows past N
+- [x] Chat rotation: open a new tab chat when history grows past N
       turns. Fixes accumulated-context slowdown (see HANDOVER §2).
+      SHIPPED 2026-10-12: arotate command (option C) + auto-rotate
+      at AINTERCEPTOR_ROTATE_TURNS (option B, default 25).
 
 ## Rebrand (deferred — SVG, not string replacement)
 
@@ -177,3 +179,13 @@ Fixes, in order of correctness:
      before a verification session (one line of code, do this first)
 
 Recommendation: C first (5 min), then B (30 min).
+
+RESOLVED 2026-10-12: C shipped as `arotate <provider>`
+(~/bin/arotate -> POST /internal/rotate/{provider}).
+B shipped as auto-rotate at AINTERCEPTOR_ROTATE_TURNS
+(default 25, 0 = off): chat_routes.py counts completed
+/v1 turns per provider, browser_supervisor.note_turn()
+signals when the threshold is hit, rotation runs as a
+fire-and-forget task so it can never fail a request.
+Option A (new page per request) remains available if
+per-request isolation is ever needed.

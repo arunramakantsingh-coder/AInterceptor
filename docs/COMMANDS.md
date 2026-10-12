@@ -91,6 +91,19 @@ Uses the **live VM Chrome**. If a tab shows a login wall, run `alogin <provider>
 
 ## 4. Provider Management
 
+### arotate <provider>
+Rotate a provider's browser tab to its new-chat URL.
+
+Clears the accumulated conversation history from the
+shared tab, so the AIP stops reading its own past
+replies (the "echo" bug: the model re-sent a task and
+got back an old approval message).
+
+    arotate deepseek
+
+Auto-rotation: `AINTERCEPTOR_ROTATE_TURNS` in `.env`
+rotates the tab after N completed /v1 turns (0 = off).
+
 ### aproviders
 List all 20 configured providers with status.
 
@@ -297,6 +310,7 @@ Store server + token manually.
 | Key | Purpose |
 |---|---|
 | AINTERCEPTOR_ACTIVE_PROVIDERS | Comma-separated list of live providers |
+| AINTERCEPTOR_ROTATE_TURNS | Completed /v1 turns before a provider's tab auto-rotates (0 = off) |
 | AINTERCEPTOR_PROBER_ENABLED | 0/1 — background prober (default 0) |
 | AINTERCEPTOR_ADMIN_EMAIL | Which user may toggle providers and CDP-inject |
 | AINTERCEPTOR_WEB_LOGIN_PASSWORD | Admin password for /login/<provider> |

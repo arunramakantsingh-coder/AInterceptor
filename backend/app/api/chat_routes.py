@@ -140,6 +140,40 @@ def list_models(
     return {"object": "list", "data": data}
 
 
+def _note_provider_turn(provider: str) -> None:
+    """Count one completed /v1 turn for a provider's tab.
+
+    Every exchange is written to the provider's shared
+    browser tab, so its conversation grows with use. Past
+    AINTERCEPTOR_ROTATE_TURNS turns the AIP starts reading
+    its own accumulated history and echoing old replies.
+    When the threshold is reached the tab is rotated to
+    its NEW_CHAT_URL (browser_supervisor.rotate) —
+    fire-and-forget, so rotation can never fail the
+    request that triggered it.
+    """
+    try:
+        import asyncio as _aio
+        import os as _os
+        from app.runtime import supervisor_registry as _sr
+        sup = _sr.get_supervisor()
+        if sup is None or not sup.note_turn(provider):
+            return
+        every = _os.getenv("AINTERCEPTOR_ROTATE_TURNS", "0")
+
+        async def _rotate():
+            try:
+                result = await sup.rotate(provider)
+                sup.log(f"auto-rotated {provider} after "
+                        f"{every} turns: {result}")
+            except Exception as e:
+                sup.log(f"auto-rotate {provider} failed: {e}")
+
+        _aio.get_running_loop().create_task(_rotate())
+    except Exception:
+        pass
+
+
 @router.post("/chat/completions")
 async def chat(body: ChatIn,
                auth: tuple[User, ApiKey] = Depends(key_user),
@@ -208,6 +242,7 @@ async def chat(body: ChatIn,
         )
         import uuid as _uuid, time as _time
         _content = _agent_result.get("content") or ""
+        _note_provider_turn(provider)
         _cmpl_id = f"chatcmpl-{_uuid.uuid4().hex[:24]}"
 
         # Non-streaming client → plain JSON body.
@@ -275,6 +310,7 @@ async def chat(body: ChatIn,
         try:
             async for delta in stream_reply(provider, state, prompt):
                 chunks.append(delta)
+            _note_provider_turn(provider)
             if not chunks:
                 status = "empty_stream"
         except ProviderUnavailable as e:
@@ -405,6 +441,11 @@ async def chat(body: ChatIn,
             yield f"data: {json.dumps(err)}\n\n"
             yield "data: [DONE]\n\n"
         finally:
+            try:
+                if captured["status"] == "ok":
+                    _note_provider_turn(provider)
+            except Exception:
+                pass
             try:
                 db.add(UsageEvent(
                     user_id=user.id, api_key_id=key.id,

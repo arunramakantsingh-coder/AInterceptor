@@ -14,6 +14,7 @@ def main():
         print("  asessions [list|--all|export <p> [path]|delete <p>]")
         print("  ahealth")
         print("  aversion")
+        print("  arotate <provider>")
         print("  alogs [daemon|chrome|x11vnc]")
         print("  aevidence [list|show <name>|clear [days]]")
         print("  astart | arestart | astop")
@@ -45,6 +46,7 @@ def main():
 
     if cmd == "ahealth":    return R.ahealth()
     if cmd == "aversion":   return R.aversion()
+    if cmd == "arotate":    return R.arotate(rest[0] if rest else None)
     if cmd == "alogs":      return R.alogs(rest[0] if rest else "daemon")
 
     if cmd == "aevidence":

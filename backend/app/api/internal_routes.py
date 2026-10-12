@@ -102,3 +102,27 @@ async def dispatch(body: DispatchIn, request: Request,
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@router.post("/rotate/{provider}")
+async def rotate_provider(provider: str, request: Request):
+    """Navigate a provider's tab to its NEW_CHAT_URL.
+
+    Clears the accumulated conversation history from the shared
+    browser tab. Loopback-only, no auth — same policy as the rest
+    of /internal/*.
+    """
+    if not _is_loopback(request):
+        raise HTTPException(403, "internal route: loopback only")
+
+    from app.runtime import supervisor_registry
+    sup = supervisor_registry.get_supervisor()
+    if sup is None:
+        raise HTTPException(503, "supervisor not running (daemon not ready)")
+
+    try:
+        result = await sup.rotate(provider)
+    except Exception as e:
+        raise HTTPException(500, f"rotate failed: {e}")
+
+    return {"provider": provider, "result": result}

@@ -125,6 +125,14 @@ COMMAND_TREE: dict[str, dict] = {
                  "syntax": "gemini", "examples": ["gemini"], "built": True},
 
     # ── Providers ────────────────────────────────────────────────
+    "arotate": {
+        "args": {"provider": {"type": "provider", "desc": "provider name"}},
+        "category": "Providers",
+        "desc": "Rotate a provider's tab to its new-chat URL — clears accumulated conversation history (the AIP stops echoing its own old replies)",
+        "syntax": "arotate <provider>",
+        "examples": ["arotate deepseek", "arotate claude"],
+        "built": True,
+    },
     "aproviders": {
         "category": "Providers",
         "desc": "Manage the 20 configured providers",
