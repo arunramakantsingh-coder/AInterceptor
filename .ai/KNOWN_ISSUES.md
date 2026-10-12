@@ -1,7 +1,9 @@
-# .ai/KNOWN_ISSUES.md
-| ID | Severity | Summary | Status |
-|---|---|---|---|
-| B001 | Medium | PowerShell here-string broke bootstrap | Resolved |
-| K001 | Low | backend/dashboard README list Phase 1+/6 commands before those phases | Open |
-| K002 | High | Existing Claude PoC uses page-side fetch and buffers the full response; this does not yet satisfy the reconciled transport/event interception boundary | Open — M1 |
-| K003 | Medium | Existing ProviderAdapter declares four methods while project governance refers to a five-method adapter interface; interface contract requires explicit reconciliation before implementation changes | Open — M1 |
+# Known Issues
+
+| ID | Severity | Area | Summary | Status |
+|---|---|---|---|---|
+| B001 | Closed | chatgpt | NOT a parser bug — chatgpt tab was anonymous. Probe + agent login both fixed. 2026-09-21 | Resolved |
+| B002 | Low | sessions | Fake cookie uploaded during testing sits as `claude/default/active` — delete with `asessions delete claude` | Open |
+| B003 | Low | claude | `claude login` uses Windows-only `ctypes.windll` — VNC/agent path works instead | Won't fix (superseded) |
+| B004 | Low | config | `AINTERCEPTOR_PROBER_ENABLED=1` in `.env` — background prober sends "ping" and pollutes chat history | Should be 0 |
+| B005 | Low | providers | `perplexity` listed but no runtime file; `character` has runtime but not registered | Partially resolved 2026-10-01: provider gate widened to all 20 catalog providers; `perplexity` now fails with an explicit "no interception runtime module" error. `perplexity.py` still to be implemented |

@@ -1,0 +1,18 @@
+[Unit]
+Description=AInterceptor daemon (FastAPI + Chrome/CDP + providers)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/arun/ainterceptor
+ExecStart=/home/arun/ainterceptor/run-linux.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/arun/ainterceptor/.ainterceptor/daemon.log
+StandardError=append:/home/arun/ainterceptor/.ainterceptor/daemon.log
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

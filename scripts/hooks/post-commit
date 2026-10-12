@@ -1,0 +1,42 @@
+#!/bin/bash
+# AInterceptor post-commit hook — auto-sync docs from commit tags.
+# Install with:  scripts/hooks/install.sh
+# Disable with:  AINT_SKIP_SYNC=1 git commit ...
+# Remove with:   rm .git/hooks/post-commit
+
+# Recursion guard
+if [ "${AINT_SKIP_SYNC:-0}" = "1" ]; then
+    exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$ROOT" ]; then exit 0; fi
+
+cd "$ROOT" || exit 0
+
+# Only run if sync_docs is available
+if [ ! -f "backend/scripts/sync_docs.py" ]; then
+    exit 0
+fi
+
+# Activate venv if present
+if [ -f ".venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
+
+export PYTHONPATH="${ROOT}/backend:${PYTHONPATH:-}"
+
+echo ""
+echo "[post-commit] syncing docs from commit tags…"
+if python -m scripts.sync_docs --last-commit 2>&1 | sed 's/^/  /'; then
+    if git status --porcelain | grep -qE '^\s*[AM]'; then
+        echo ""
+        echo "[post-commit] docs changed. Fold into the commit with:"
+        echo "    git add -u && git commit --amend --no-edit"
+        echo "  or leave them for the next commit."
+    fi
+else
+    echo "[post-commit] sync_docs failed (non-fatal)"
+fi
+echo ""

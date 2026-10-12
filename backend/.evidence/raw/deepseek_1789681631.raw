@@ -1,0 +1,189 @@
+event: update_session
+data: {"updated_at":1789681631.3161469}
+
+data: {"v":{"response":{"message_id":152,"parent_id":151,"model":"","role":"ASSISTANT","thinking_enabled":false,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":195379,"feedback":null,"inserted_at":1789681631.30103,"search_enabled":true,"fragments":[{"id":2,"type":"RESPONSE","content":"##","references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" here"}
+
+data: {"v":","}
+
+data: {"v":" ready"}
+
+data: {"v":" —"}
+
+data: {"v":" but"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" not"}
+
+data: {"v":" running"}
+
+data: {"v":" yet"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"You"}
+
+data: {"v":" can"}
+
+data: {"v":" only"}
+
+data: {"v":" truly"}
+
+data: {"v":" talk"}
+
+data: {"v":" to"}
+
+data: {"v":" me"}
+
+data: {"v":" through"}
+
+data: {"v":" A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":" after"}
+
+data: {"v":" the"}
+
+data: {"v":" surgical"}
+
+data: {"v":" fix"}
+
+data: {"v":" lands"}
+
+data: {"v":" and"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" streams"}
+
+data: {"v":" end"}
+
+data: {"v":"-to"}
+
+data: {"v":"-end"}
+
+data: {"v":"."}
+
+data: {"v":" Right"}
+
+data: {"v":" now"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"|"}
+
+data: {"v":" Layer"}
+
+data: {"v":" |"}
+
+data: {"v":" Status"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|---|---"}
+
+data: {"v":"|\n"}
+
+data: {"v":"|"}
+
+data: {"v":" P"}
+
+data: {"v":"arser"}
+
+data: {"v":" ("}
+
+data: {"v":"s"}
+
+data: {"v":"ynthetic"}
+
+data: {"v":" tests"}
+
+data: {"v":")"}
+
+data: {"v":" |"}
+
+data: {"v":" ✅"}
+
+data: {"v":" "}
+
+data: {"v":"28"}
+
+data: {"v":"/"}
+
+data: {"v":"28"}
+
+data: {"v":" passing"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|"}
+
+data: {"v":" CD"}
+
+data: {"v":"P"}
+
+data: {"v":" transport"}
+
+data: {"v":" |"}
+
+data: {"v":" ✅"}
+
+data: {"v":" listener"}
+
+data: {"v":" on"}
+
+data: {"v":" "}
+
+data: {"v":"922"}
+
+data: {"v":"3"}
+
+data: {"v":" confirmed"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|"}
+
+data: {"v":" `"}
+
+data: {"v":"Non"}
+
+data: {"v":"Cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"Network"}
+
+data: {"v":"Capture"}
+
+data: {"v":"`"}
+
+data: {"v":" async"}
+
+data: {"v":" protocol"}
+
+data: {"v":" |"}
+
+data: {"v":" ❌"}
+
+data: {"v":" **"}
+
+data: {"v":"the"}
+
+data: {"v":" script"}
+
+data: {"v":" I"}
+

@@ -1,0 +1,2558 @@
+event: ready
+data: {"request_message_id":161,"response_message_id":162,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789681740.967845}
+
+data: {"v":{"response":{"message_id":162,"parent_id":161,"model":"","role":"ASSISTANT","thinking_enabled":false,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":204735,"feedback":null,"inserted_at":1789681740.9590518,"search_enabled":true,"fragments":[{"id":2,"type":"RESPONSE","content":"##","references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" You"}
+
+data: {"v":" need"}
+
+data: {"v":" to"}
+
+data: {"v":" run"}
+
+data: {"v":" the"}
+
+data: {"v":" script"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":" can"}
+
+data: {"v":"'t"}
+
+data: {"v":" run"}
+
+data: {"v":" it"}
+
+data: {"v":" for"}
+
+data: {"v":" you"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"I"}
+
+data: {"v":" understand"}
+
+data: {"v":" the"}
+
+data: {"v":" message"}
+
+data: {"v":" is"}
+
+data: {"v":" `"}
+
+data: {"v":"hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"`,"}
+
+data: {"v":" but"}
+
+data: {"v":" in"}
+
+data: {"v":" this"}
+
+data: {"v":" conversation"}
+
+data: {"v":" you"}
+
+data: {"v":"'re"}
+
+data: {"v":" typing"}
+
+data: {"v":" **"}
+
+data: {"v":"to"}
+
+data: {"v":" me"}
+
+data: {"v":"**,"}
+
+data: {"v":" not"}
+
+data: {"v":" to"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" through"}
+
+data: {"v":" your"}
+
+data: {"v":" router"}
+
+data: {"v":"."}
+
+data: {"v":" Until"}
+
+data: {"v":" the"}
+
+data: {"v":" fix"}
+
+data: {"v":" script"}
+
+data: {"v":" runs"}
+
+data: {"v":","}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"'s"}
+
+data: {"v":" reply"}
+
+data: {"v":" through"}
+
+data: {"v":" A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":" will"}
+
+data: {"v":" still"}
+
+data: {"v":" be"}
+
+data: {"v":" garb"}
+
+data: {"v":"led"}
+
+data: {"v":".\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" Copy"}
+
+data: {"v":"-p"}
+
+data: {"v":"aste"}
+
+data: {"v":" this"}
+
+data: {"v":" exact"}
+
+data: {"v":" block"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"```"}
+
+data: {"v":"powers"}
+
+data: {"v":"hell"}
+
+data: {"v":"\n"}
+
+data: {"v":"cd"}
+
+data: {"v":" C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":"-M"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":"5"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"@"}
+
+data: {"v":"'\n"}
+
+data: {"v":"import"}
+
+data: {"v":" path"}
+
+data: {"v":"lib"}
+
+data: {"v":","}
+
+data: {"v":" sub"}
+
+data: {"v":"process"}
+
+data: {"v":","}
+
+data: {"v":" sys"}
+
+data: {"v":","}
+
+data: {"v":" os"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"RO"}
+
+data: {"v":"OT"}
+
+data: {"v":" ="}
+
+data: {"v":" path"}
+
+data: {"v":"lib"}
+
+data: {"v":".Path"}
+
+data: {"v":".c"}
+
+data: {"v":"wd"}
+
+data: {"v":"()\n"}
+
+data: {"v":"BE"}
+
+data: {"v":"  "}
+
+data: {"v":" ="}
+
+data: {"v":" RO"}
+
+data: {"v":"OT"}
+
+data: {"v":" /"}
+
+data: {"v":" \""}
+
+data: {"v":"backend"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"PY"}
+
+data: {"v":"  "}
+
+data: {"v":" ="}
+
+data: {"v":" r"}
+
+data: {"v":"\"C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"At"}
+
+data: {"v":"las"}
+
+data: {"v":"\\."}
+
+data: {"v":"ven"}
+
+data: {"v":"v"}
+
+data: {"v":"\\"}
+
+data: {"v":"Script"}
+
+data: {"v":"s"}
+
+data: {"v":"\\"}
+
+data: {"v":"python"}
+
+data: {"v":".exe"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"if"}
+
+data: {"v":" not"}
+
+data: {"v":" path"}
+
+data: {"v":"lib"}
+
+data: {"v":".Path"}
+
+data: {"v":"(P"}
+
+data: {"v":"Y"}
+
+data: {"v":")."}
+
+data: {"v":"exists"}
+
+data: {"v":"():\n"}
+
+data: {"v":"   "}
+
+data: {"v":" PY"}
+
+data: {"v":" ="}
+
+data: {"v":" sys"}
+
+data: {"v":".exec"}
+
+data: {"v":"utable"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"ds"}
+
+data: {"v":"_path"}
+
+data: {"v":" ="}
+
+data: {"v":" BE"}
+
+data: {"v":" /"}
+
+data: {"v":" \""}
+
+data: {"v":"app"}
+
+data: {"v":"/inter"}
+
+data: {"v":"ception"}
+
+data: {"v":"/de"}
+
+data: {"v":"ep"}
+
+data: {"v":"seek"}
+
+data: {"v":".py"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"src"}
+
+data: {"v":" ="}
+
+data: {"v":" ds"}
+
+data: {"v":"_path"}
+
+data: {"v":".read"}
+
+data: {"v":"_text"}
+
+data: {"v":"("}
+
+data: {"v":"encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":" current"}
+
+data: {"v":" property"}
+
+data: {"v":":"}
+
+data: {"v":" no"}
+
+data: {"v":" ."}
+
+data: {"v":"strip"}
+
+data: {"v":"()\n"}
+
+data: {"v":"old"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"       "}
+
+data: {"v":" if"}
+
+data: {"v":" parts"}
+
+data: {"v":":\n"}
+
+data: {"v":"           "}
+
+data: {"v":" return"}
+
+data: {"v":" self"}
+
+data: {"v":"._"}
+
+data: {"v":"join"}
+
+data: {"v":"_response"}
+
+data: {"v":"_p"}
+
+data: {"v":"arts"}
+
+data: {"v":"("}
+
+data: {"v":"parts"}
+
+data: {"v":")."}
+
+data: {"v":"strip"}
+
+data: {"v":"()\n"}
+
+data: {"v":"       "}
+
+data: {"v":" return"}
+
+data: {"v":" self"}
+
+data: {"v":"._"}
+
+data: {"v":"choice"}
+
+data: {"v":"_text"}
+
+data: {"v":".strip"}
+
+data: {"v":"()"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"new"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"       "}
+
+data: {"v":" if"}
+
+data: {"v":" parts"}
+
+data: {"v":":\n"}
+
+data: {"v":"           "}
+
+data: {"v":" return"}
+
+data: {"v":" self"}
+
+data: {"v":"._"}
+
+data: {"v":"join"}
+
+data: {"v":"_response"}
+
+data: {"v":"_p"}
+
+data: {"v":"arts"}
+
+data: {"v":"("}
+
+data: {"v":"parts"}
+
+data: {"v":")\n"}
+
+data: {"v":"       "}
+
+data: {"v":" return"}
+
+data: {"v":" self"}
+
+data: {"v":"._"}
+
+data: {"v":"choice"}
+
+data: {"v":"_text"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"if"}
+
+data: {"v":" old"}
+
+data: {"v":" in"}
+
+data: {"v":" src"}
+
+data: {"v":":\n"}
+
+data: {"v":"   "}
+
+data: {"v":" src"}
+
+data: {"v":" ="}
+
+data: {"v":" src"}
+
+data: {"v":".replace"}
+
+data: {"v":"(old"}
+
+data: {"v":","}
+
+data: {"v":" new"}
+
+data: {"v":","}
+
+data: {"v":" "}
+
+data: {"v":"1"}
+
+data: {"v":")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":" "}
+
+data: {"v":" ["}
+
+data: {"v":"OK"}
+
+data: {"v":"]"}
+
+data: {"v":" current"}
+
+data: {"v":":"}
+
+data: {"v":" removed"}
+
+data: {"v":" ."}
+
+data: {"v":"strip"}
+
+data: {"v":"()"}
+
+data: {"v":"\")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"2"}
+
+data: {"v":"."}
+
+data: {"v":" _"}
+
+data: {"v":"join"}
+
+data: {"v":"_response"}
+
+data: {"v":"_p"}
+
+data: {"v":"arts"}
+
+data: {"v":":"}
+
+data: {"v":" no"}
+
+data: {"v":" per"}
+
+data: {"v":"-f"}
+
+data: {"v":"ragment"}
+
+data: {"v":" strip"}
+
+data: {"v":"\n"}
+
+data: {"v":"old"}
+
+data: {"v":"2"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"       "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\n"}
+
+data: {"v":"       "}
+
+data: {"v":" for"}
+
+data: {"v":" part"}
+
+data: {"v":" in"}
+
+data: {"v":" parts"}
+
+data: {"v":":\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":" is"}
+
+data: {"v":" None"}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" not"}
+
+data: {"v":" assembled"}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" part"}
+
+data: {"v":"\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":" =="}
+
+data: {"v":" assembled"}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":".start"}
+
+data: {"v":"swith"}
+
+data: {"v":"("}
+
+data: {"v":"assemb"}
+
+data: {"v":"led"}
+
+data: {"v":"):\n"}
+
+data: {"v":"               "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" part"}
+
+data: {"v":"\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" assembled"}
+
+data: {"v":".start"}
+
+data: {"v":"swith"}
+
+data: {"v":"("}
+
+data: {"v":"part"}
+
+data: {"v":"):\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" f"}
+
+data: {"v":"\"{"}
+
+data: {"v":"assemb"}
+
+data: {"v":"led"}
+
+data: {"v":"}\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"{"}
+
+data: {"v":"part"}
+
+data: {"v":"}\"\n"}
+
+data: {"v":"       "}
+
+data: {"v":" return"}
+
+data: {"v":" assembled"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"new"}
+
+data: {"v":"2"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"       "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\n"}
+
+data: {"v":"       "}
+
+data: {"v":" for"}
+
+data: {"v":" part"}
+
+data: {"v":" in"}
+
+data: {"v":" parts"}
+
+data: {"v":":\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":" is"}
+
+data: {"v":" None"}
+
+data: {"v":" or"}
+
+data: {"v":" part"}
+
+data: {"v":" =="}
+
+data: {"v":" \"\""}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" not"}
+
+data: {"v":" assembled"}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" part"}
+
+data: {"v":"\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":" =="}
+
+data: {"v":" assembled"}
+
+data: {"v":":\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" part"}
+
+data: {"v":".start"}
+
+data: {"v":"swith"}
+
+data: {"v":"("}
+
+data: {"v":"assemb"}
+
+data: {"v":"led"}
+
+data: {"v":"):\n"}
+
+data: {"v":"               "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" part"}
+
+data: {"v":"\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" if"}
+
+data: {"v":" assembled"}
+
+data: {"v":".start"}
+
+data: {"v":"swith"}
+
+data: {"v":"("}
+
+data: {"v":"part"}
+
+data: {"v":"):\n"}
+
+data: {"v":"               "}
+
+data: {"v":" continue"}
+
+data: {"v":"\n"}
+
+data: {"v":"           "}
+
+data: {"v":" assembled"}
+
+data: {"v":" ="}
+
+data: {"v":" f"}
+
+data: {"v":"\"{"}
+
+data: {"v":"assemb"}
+
+data: {"v":"led"}
+
+data: {"v":"}\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"{"}
+
+data: {"v":"part"}
+
+data: {"v":"}\"\n"}
+
+data: {"v":"       "}
+
+data: {"v":" return"}
+
+data: {"v":" assembled"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"if"}
+
+data: {"v":" old"}
+
+data: {"v":"2"}
+
+data: {"v":" in"}
+
+data: {"v":" src"}
+
+data: {"v":":\n"}
+
+data: {"v":"   "}
+
+data: {"v":" src"}
+
+data: {"v":" ="}
+
+data: {"v":" src"}
+
+data: {"v":".replace"}
+
+data: {"v":"(old"}
+
+data: {"v":"2"}
+
+data: {"v":","}
+
+data: {"v":" new"}
+
+data: {"v":"2"}
+
+data: {"v":","}
+
+data: {"v":" "}
+
+data: {"v":"1"}
+
+data: {"v":")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":" "}
+
+data: {"v":" ["}
+
+data: {"v":"OK"}
+
+data: {"v":"]"}
+
+data: {"v":" _"}
+
+data: {"v":"join"}
+
+data: {"v":"_response"}
+
+data: {"v":"_p"}
+
+data: {"v":"arts"}
+
+data: {"v":":"}
+
+data: {"v":" no"}
+
+data: {"v":" per"}
+
+data: {"v":"-f"}
+
+data: {"v":"ragment"}
+
+data: {"v":" strip"}
+
+data: {"v":"\")\n\n"}
+
+data: {"v":"ds"}
+
+data: {"v":"_path"}
+
+data: {"v":".write"}
+
+data: {"v":"_text"}
+
+data: {"v":"(src"}
+
+data: {"v":","}
+
+data: {"v":" encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" new"}
+
+data: {"v":"line"}
+
+data: {"v":"=\""}
+
+data: {"v":"\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"3"}
+
+data: {"v":"."}
+
+data: {"v":" non"}
+
+data: {"v":"cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"_r"}
+
+data: {"v":"untime"}
+
+data: {"v":" final"}
+
+data: {"v":":"}
+
+data: {"v":" r"}
+
+data: {"v":"strip"}
+
+data: {"v":" new"}
+
+data: {"v":"lines"}
+
+data: {"v":" only"}
+
+data: {"v":"\n"}
+
+data: {"v":"n"}
+
+data: {"v":"rt"}
+
+data: {"v":" ="}
+
+data: {"v":" BE"}
+
+data: {"v":" /"}
+
+data: {"v":" \""}
+
+data: {"v":"app"}
+
+data: {"v":"/inter"}
+
+data: {"v":"ception"}
+
+data: {"v":"/n"}
+
+data: {"v":"on"}
+
+data: {"v":"cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"_r"}
+
+data: {"v":"untime"}
+
+data: {"v":".py"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"ns"}
+
+data: {"v":"rc"}
+
+data: {"v":" ="}
+
+data: {"v":" n"}
+
+data: {"v":"rt"}
+
+data: {"v":".read"}
+
+data: {"v":"_text"}
+
+data: {"v":"("}
+
+data: {"v":"encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"old"}
+
+data: {"v":"3"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"final"}
+
+data: {"v":" ="}
+
+data: {"v":" self"}
+
+data: {"v":"."}
+
+data: {"v":"parser"}
+
+data: {"v":"(body"}
+
+data: {"v":".decode"}
+
+data: {"v":"(\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" errors"}
+
+data: {"v":"=\""}
+
+data: {"v":"replace"}
+
+data: {"v":"\"))."}
+
+data: {"v":"strip"}
+
+data: {"v":"()"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"new"}
+
+data: {"v":"3"}
+
+data: {"v":" ="}
+
+data: {"v":" \"\"\""}
+
+data: {"v":"final"}
+
+data: {"v":" ="}
+
+data: {"v":" self"}
+
+data: {"v":"."}
+
+data: {"v":"parser"}
+
+data: {"v":"(body"}
+
+data: {"v":".decode"}
+
+data: {"v":"(\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" errors"}
+
+data: {"v":"=\""}
+
+data: {"v":"replace"}
+
+data: {"v":"\"))."}
+
+data: {"v":"rst"}
+
+data: {"v":"rip"}
+
+data: {"v":"(\""}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\")"}
+
+data: {"v":"\"\"\"\n"}
+
+data: {"v":"if"}
+
+data: {"v":" old"}
+
+data: {"v":"3"}
+
+data: {"v":" in"}
+
+data: {"v":" n"}
+
+data: {"v":"src"}
+
+data: {"v":":\n"}
+
+data: {"v":"   "}
+
+data: {"v":" n"}
+
+data: {"v":"src"}
+
+data: {"v":" ="}
+
+data: {"v":" n"}
+
+data: {"v":"src"}
+
+data: {"v":".replace"}
+
+data: {"v":"(old"}
+
+data: {"v":"3"}
+
+data: {"v":","}
+
+data: {"v":" new"}
+
+data: {"v":"3"}
+
+data: {"v":","}
+
+data: {"v":" "}
+
+data: {"v":"1"}
+
+data: {"v":")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" n"}
+
+data: {"v":"rt"}
+
+data: {"v":".write"}
+
+data: {"v":"_text"}
+
+data: {"v":"(n"}
+
+data: {"v":"src"}
+
+data: {"v":","}
+
+data: {"v":" encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" new"}
+
+data: {"v":"line"}
+
+data: {"v":"=\""}
+
+data: {"v":"\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":" "}
+
+data: {"v":" ["}
+
+data: {"v":"OK"}
+
+data: {"v":"]"}
+
+data: {"v":" runtime"}
+
+data: {"v":":"}
+
+data: {"v":" final"}
+
+data: {"v":" r"}
+
+data: {"v":"strip"}
+
+data: {"v":" new"}
+
+data: {"v":"lines"}
+
+data: {"v":" only"}
+
+data: {"v":"\")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"4"}
+
+data: {"v":"."}
+
+data: {"v":" tests"}
+
+data: {"v":"\n"}
+
+data: {"v":"def"}
+
+data: {"v":" run"}
+
+data: {"v":"(args"}
+
+data: {"v":","}
+
+data: {"v":" c"}
+
+data: {"v":"wd"}
+
+data: {"v":"="}
+
+data: {"v":"RO"}
+
+data: {"v":"OT"}
+
+data: {"v":"):\n"}
+
+data: {"v":"   "}
+
+data: {"v":" print"}
+
+data: {"v":"(f"}
+
+data: {"v":"\""}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"$"}
+
+data: {"v":" {'"}
+
+data: {"v":" '."}
+
+data: {"v":"join"}
+
+data: {"v":"(args"}
+
+data: {"v":")}"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" r"}
+
+data: {"v":" ="}
+
+data: {"v":" sub"}
+
+data: {"v":"process"}
+
+data: {"v":".run"}
+
+data: {"v":"(args"}
+
+data: {"v":","}
+
+data: {"v":" c"}
+
+data: {"v":"wd"}
+
+data: {"v":"=c"}
+
+data: {"v":"wd"}
+
+data: {"v":","}
+
+data: {"v":" capture"}
+
+data: {"v":"_output"}
+
+data: {"v":"=True"}
+
+data: {"v":","}
+
+data: {"v":" text"}
+
+data: {"v":"=True"}
+
+data: {"v":","}
+
+data: {"v":" encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" if"}
+
+data: {"v":" r"}
+
+data: {"v":".stdout"}
+
+data: {"v":":"}
+
+data: {"v":" print"}
+
+data: {"v":"(r"}
+
+data: {"v":".stdout"}
+
+data: {"v":")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" if"}
+
+data: {"v":" r"}
+
+data: {"v":".st"}
+
+data: {"v":"derr"}
+
+data: {"v":".strip"}
+
+data: {"v":"():"}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":"ST"}
+
+data: {"v":"D"}
+
+data: {"v":"ERR"}
+
+data: {"v":":\","}
+
+data: {"v":" r"}
+
+data: {"v":".st"}
+
+data: {"v":"derr"}
+
+data: {"v":")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" return"}
+
+data: {"v":" r"}
+
+data: {"v":"."}
+
+data: {"v":"return"}
+
+data: {"v":"code"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"rc"}
+
+data: {"v":" ="}
+
+data: {"v":" run"}
+
+data: {"v":"(["}
+
+data: {"v":"PY"}
+
+data: {"v":","}
+
+data: {"v":" \"-"}
+
+data: {"v":"m"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"p"}
+
+data: {"v":"ytest"}
+
+data: {"v":"\","}
+
+data: {"v":" \"-"}
+
+data: {"v":"q"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"tests"}
+
+data: {"v":"/test"}
+
+data: {"v":"_non"}
+
+data: {"v":"cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"_"}
+
+data: {"v":"par"}
+
+data: {"v":"sers"}
+
+data: {"v":".py"}
+
+data: {"v":"\",\n"}
+
+data: {"v":"         "}
+
+data: {"v":" \"-"}
+
+data: {"v":"o"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"as"}
+
+data: {"v":"yn"}
+
+data: {"v":"cio"}
+
+data: {"v":"_mode"}
+
+data: {"v":"="}
+
+data: {"v":"auto"}
+
+data: {"v":"\"],"}
+
+data: {"v":" c"}
+
+data: {"v":"wd"}
+
+data: {"v":"="}
+
+data: {"v":"RO"}
+
+data: {"v":"OT"}
+
+data: {"v":")\n"}
+
+data: {"v":"if"}
+
+data: {"v":" rc"}
+
+data: {"v":" !="}
+
+data: {"v":" "}
+
+data: {"v":"0"}
+
+data: {"v":":\n"}
+
+data: {"v":"   "}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":"RES"}
+
+data: {"v":"ULT"}
+
+data: {"v":":"}
+
+data: {"v":" FAIL"}
+
+data: {"v":" —"}
+
+data: {"v":" tests"}
+
+data: {"v":" broken"}
+
+data: {"v":","}
+
+data: {"v":" not"}
+
+data: {"v":" committing"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"   "}
+
+data: {"v":" sys"}
+
+data: {"v":".exit"}
+
+data: {"v":"("}
+
+data: {"v":"1"}
+
+data: {"v":")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"5"}
+
+data: {"v":"."}
+
+data: {"v":" repro"}
+
+data: {"v":"\n"}
+
+data: {"v":"env"}
+
+data: {"v":" ="}
+
+data: {"v":" os"}
+
+data: {"v":".en"}
+
+data: {"v":"viron"}
+
+data: {"v":".copy"}
+
+data: {"v":"()\n"}
+
+data: {"v":"env"}
+
+data: {"v":"[\""}
+
+data: {"v":"PY"}
+
+data: {"v":"TH"}
+
+data: {"v":"ON"}
+
+data: {"v":"UTF"}
+
+data: {"v":"8"}
+
+data: {"v":"\"]"}
+
+data: {"v":" ="}
+
+data: {"v":" \""}
+
+data: {"v":"1"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"env"}
+
+data: {"v":"[\""}
+
+data: {"v":"PY"}
+
+data: {"v":"TH"}
+
+data: {"v":"ON"}
+
+data: {"v":"IO"}
+
+data: {"v":"EN"}
+
+data: {"v":"COD"}
+
+data: {"v":"ING"}
+
+data: {"v":"\"]"}
+
+data: {"v":" ="}
+
+data: {"v":" \""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(\""}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"=="}
+
+data: {"v":">"}
+
+data: {"v":" Live"}
+
+data: {"v":" repro"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"r"}
+
+data: {"v":" ="}
+
+data: {"v":" sub"}
+
+data: {"v":"process"}
+
+data: {"v":".run"}
+
+data: {"v":"(\n"}
+
+data: {"v":"   "}
+
+data: {"v":" ["}
+
+data: {"v":"PY"}
+
+data: {"v":","}
+
+data: {"v":" \"-"}
+
+data: {"v":"X"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"utf"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" \"-"}
+
+data: {"v":"u"}
+
+data: {"v":"\","}
+
+data: {"v":" \"-"}
+
+data: {"v":"m"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"scripts"}
+
+data: {"v":".re"}
+
+data: {"v":"pro"}
+
+data: {"v":"_de"}
+
+data: {"v":"ep"}
+
+data: {"v":"seek"}
+
+data: {"v":"_c"}
+
+data: {"v":"apture"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"\"],\n"}
+
+data: {"v":"   "}
+
+data: {"v":" c"}
+
+data: {"v":"wd"}
+
+data: {"v":"="}
+
+data: {"v":"BE"}
+
+data: {"v":","}
+
+data: {"v":" capture"}
+
+data: {"v":"_output"}
+
+data: {"v":"=True"}
+
+data: {"v":","}
+
+data: {"v":" text"}
+
+data: {"v":"=True"}
+
+data: {"v":","}
+
+data: {"v":" encoding"}
+
+data: {"v":"=\""}
+
+data: {"v":"utf"}
+
+data: {"v":"-"}
+
+data: {"v":"8"}
+
+data: {"v":"\","}
+
+data: {"v":" env"}
+
+data: {"v":"="}
+
+data: {"v":"env"}
+
+data: {"v":",\n"}
+
+data: {"v":")\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(r"}
+
+data: {"v":".stdout"}
+
+data: {"v":")\n"}
+
+data: {"v":"if"}
+
+data: {"v":" r"}
+
+data: {"v":".st"}
+
+data: {"v":"derr"}
+
+data: {"v":".strip"}
+
+data: {"v":"():"}
+
+data: {"v":" print"}
+
+data: {"v":"(\""}
+
+data: {"v":"ST"}
+
+data: {"v":"D"}
+
+data: {"v":"ERR"}
+
+data: {"v":":\","}
+
+data: {"v":" r"}
+
+data: {"v":".st"}
+
+data: {"v":"derr"}
+
+data: {"v":")\n\n"}
+
+data: {"v":"#"}
+
+data: {"v":" "}
+
+data: {"v":"6"}
+
+data: {"v":"."}
+
+data: {"v":" commit"}
+
+data: {"v":"\n"}
+
+data: {"v":"def"}
+
+data: {"v":" git"}
+
+data: {"v":"(args"}
+
+data: {"v":"):\n"}
+
+data: {"v":"   "}
+
+data: {"v":" return"}
+
+data: {"v":" sub"}
+
+data: {"v":"process"}
+
+data: {"v":".run"}
+
+data: {"v":"([\""}
+
+data: {"v":"git"}
+
+data: {"v":"\"]"}
+
+data: {"v":"+"}
+
+data: {"v":"args"}
+
+data: {"v":","}
+
+data: {"v":" c"}
+
+data: {"v":"wd"}
+
+data: {"v":"="}
+
+data: {"v":"RO"}
+
+data: {"v":"OT"}
+
+data: {"v":","}
+
+data: {"v":" capture"}
+
+data: {"v":"_output"}
+
+data: {"v":"=True"}
+
+data: {"v":","}
+
+data: {"v":" text"}
+
+data: {"v":"=True"}
+
+data: {"v":")\n"}
+
+data: {"v":"git"}
+
+data: {"v":"([\""}
+
+data: {"v":"add"}
+
+data: {"v":"\","}
+
+data: {"v":" \"-"}
+
+data: {"v":"A"}
+
+data: {"v":"\"])\n"}
+
+data: {"v":"r"}
+
+data: {"v":" ="}
+
+data: {"v":" git"}
+
+data: {"v":"([\""}
+
+data: {"v":"commit"}
+
+data: {"v":"\","}
+
+data: {"v":" \"-"}
+
+data: {"v":"m"}
+
+data: {"v":"\","}
+
+data: {"v":" \""}
+
+data: {"v":"fix"}
+
+data: {"v":"("}
+
+data: {"v":"deep"}
+
+data: {"v":"seek"}
+
+data: {"v":"):"}
+
+data: {"v":" stop"}
+
+data: {"v":" stripping"}
+
+data: {"v":" fragments"}
+
+data: {"v":";"}
+
+data: {"v":" preserve"}
+
+data: {"v":" whites"}
+
+data: {"v":"pace"}
+
+data: {"v":"\"])\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(\""}
+
+data: {"v":"\\\\"}
+
+data: {"v":"n"}
+
+data: {"v":"\""}
+
+data: {"v":" +"}
+
+data: {"v":" ("}
+
+data: {"v":"r"}
+
+data: {"v":".stdout"}
+
+data: {"v":".strip"}
+
+data: {"v":"()"}
+
+data: {"v":" or"}
+
+data: {"v":" r"}
+
+data: {"v":".st"}
+
+data: {"v":"derr"}
+
+data: {"v":".strip"}
+
+data: {"v":"()))\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(\""}
+
+data: {"v":"=\""}
+
+data: {"v":" *"}
+
+data: {"v":" "}
+
+data: {"v":"60"}
+
+data: {"v":")\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(\""}
+
+data: {"v":"RES"}
+
+data: {"v":"ULT"}
+
+data: {"v":":"}
+
+data: {"v":" SEE"}
+
+data: {"v":" AB"}
+
+data: {"v":"OVE"}
+
+data: {"v":"\")\n"}
+
+data: {"v":"print"}
+
+data: {"v":"(\""}
+
+data: {"v":"=\""}
+
+data: {"v":" *"}
+
+data: {"v":" "}
+
+data: {"v":"60"}
+
+data: {"v":")\n"}
+
+data: {"v":"'"}
+
+data: {"v":"@"}
+
+data: {"v":" |"}
+
+data: {"v":" Out"}
+
+data: {"v":"-F"}
+
+data: {"v":"ile"}
+
+data: {"v":" -"}
+
+data: {"v":"Encoding"}
+
+data: {"v":" utf"}
+
+data: {"v":"8"}
+
+data: {"v":" scripts"}
+
+data: {"v":"\\"}
+
+data: {"v":"b"}
+
+data: {"v":"ootstrap"}
+
+data: {"v":"\\"}
+
+data: {"v":"fix"}
+
+data: {"v":"_st"}
+
+data: {"v":"rip"}
+
+data: {"v":".py"}
+
+data: {"v":"\n"}
+
+data: {"v":"python"}
+
+data: {"v":" scripts"}
+
+data: {"v":"\\"}
+
+data: {"v":"b"}
+
+data: {"v":"ootstrap"}
+
+data: {"v":"\\"}
+
+data: {"v":"fix"}
+
+data: {"v":"_st"}
+
+data: {"v":"rip"}
+
+data: {"v":".py"}
+
+data: {"v":"\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" Then"}
+
+data: {"v":","}
+
+data: {"v":" to"}
+
+data: {"v":" chat"}
+
+data: {"v":" with"}
+
+data: {"v":" me"}
+
+data: {"v":" as"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"```"}
+
+data: {"v":"powers"}
+
+data: {"v":"hell"}
+
+data: {"v":"\n"}
+
+data: {"v":"cd"}
+
+data: {"v":" C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":"-M"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":"5"}
+
+data: {"v":"\\"}
+
+data: {"v":"backend"}
+
+data: {"v":"\n"}
+
+data: {"v":"$"}
+
+data: {"v":"env"}
+
+data: {"v":":"}
+
+data: {"v":"PY"}
+
+data: {"v":"TH"}
+
+data: {"v":"ON"}
+
+data: {"v":"UTF"}
+
+data: {"v":"8"}
+
+data: {"v":"=\""}
+
+data: {"v":"1"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"At"}
+
+data: {"v":"las"}
+
+data: {"v":"\\."}
+
+data: {"v":"ven"}
+
+data: {"v":"v"}
+
+data: {"v":"\\"}
+
+data: {"v":"Script"}
+
+data: {"v":"s"}
+
+data: {"v":"\\"}
+
+data: {"v":"python"}
+
+data: {"v":".exe"}
+
+data: {"v":" -"}
+
+data: {"v":"u"}
+
+data: {"v":" -"}
+
+data: {"v":"m"}
+
+data: {"v":" scripts"}
+
+data: {"v":".ch"}
+
+data: {"v":"at"}
+
+data: {"v":"_de"}
+
+data: {"v":"ep"}
+
+data: {"v":"seek"}
+
+data: {"v":"\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"At"}
+
+data: {"v":" the"}
+
+data: {"v":" prompt"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"```\n"}
+
+data: {"v":"AIR"}
+
+data: {"v":"outer"}
+
+data: {"v":"("}
+
+data: {"v":"chat"}
+
+data: {"v":")>"}
+
+data: {"v":" hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"\n"}
+
+data: {"v":"Deep"}
+
+data: {"v":"seek"}
+
+data: {"v":":\n"}
+
+data: {"v":"<"}
+
+data: {"v":"reply"}
+
+data: {"v":">\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" Paste"}
+
+data: {"v":" back"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"-"}
+
+data: {"v":" Output"}
+
+data: {"v":" of"}
+
+data: {"v":" `"}
+
+data: {"v":"fix"}
+
+data: {"v":"_st"}
+
+data: {"v":"rip"}
+
+data: {"v":".py"}
+
+data: {"v":"`\n"}
+
+data: {"v":"-"}
+
+data: {"v":" The"}
+
+data: {"v":" `"}
+
+data: {"v":"AIR"}
+
+data: {"v":"outer"}
+
+data: {"v":"("}
+
+data: {"v":"chat"}
+
+data: {"v":")>"}
+
+data: {"v":" hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"`"}
+
+data: {"v":" reply"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"If"}
+
+data: {"v":" the"}
+
+data: {"v":" reply"}
+
+data: {"v":" now"}
+
+data: {"v":" matches"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"'s"}
+
+data: {"v":" browser"}
+
+data: {"v":" text"}
+
+data: {"v":","}
+
+data: {"v":" we"}
+
+data: {"v":"'re"}
+
+data: {"v":" done"}
+
+data: {"v":" with"}
+
+data: {"v":" the"}
+
+data: {"v":" parser"}
+
+data: {"v":" and"}
+
+data: {"v":" move"}
+
+data: {"v":" to"}
+
+data: {"v":" Orche"}
+
+data: {"v":"str"}
+
+data: {"v":"ator"}
+
+data: {"v":" v"}
+
+data: {"v":"0"}
+
+data: {"v":"."}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":206037},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789681744.6658099}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

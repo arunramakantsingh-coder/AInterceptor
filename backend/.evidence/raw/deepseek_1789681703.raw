@@ -1,0 +1,816 @@
+event: ready
+data: {"request_message_id":157,"response_message_id":158,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789681704.194376}
+
+data: {"v":{"response":{"message_id":158,"parent_id":157,"model":"","role":"ASSISTANT","thinking_enabled":false,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":200249,"feedback":null,"inserted_at":1789681704.182031,"search_enabled":true,"fragments":[{"id":2,"type":"RESPONSE","content":"##","references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" Quick"}
+
+data: {"v":" status"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"You"}
+
+data: {"v":"'ve"}
+
+data: {"v":" now"}
+
+data: {"v":" sent"}
+
+data: {"v":" \""}
+
+data: {"v":"hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"\""}
+
+data: {"v":" three"}
+
+data: {"v":" times"}
+
+data: {"v":"."}
+
+data: {"v":" I"}
+
+data: {"v":" need"}
+
+data: {"v":" to"}
+
+data: {"v":" know"}
+
+data: {"v":" what"}
+
+data: {"v":" you"}
+
+data: {"v":"'re"}
+
+data: {"v":" looking"}
+
+data: {"v":" for"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"|"}
+
+data: {"v":" Your"}
+
+data: {"v":" intent"}
+
+data: {"v":" |"}
+
+data: {"v":" What"}
+
+data: {"v":" to"}
+
+data: {"v":" do"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|---|---"}
+
+data: {"v":"|\n"}
+
+data: {"v":"|"}
+
+data: {"v":" **"}
+
+data: {"v":"You"}
+
+data: {"v":" want"}
+
+data: {"v":" to"}
+
+data: {"v":" test"}
+
+data: {"v":" the"}
+
+data: {"v":" router"}
+
+data: {"v":"**"}
+
+data: {"v":" |"}
+
+data: {"v":" Run"}
+
+data: {"v":" the"}
+
+data: {"v":" script"}
+
+data: {"v":" I"}
+
+data: {"v":" posted"}
+
+data: {"v":","}
+
+data: {"v":" then"}
+
+data: {"v":" use"}
+
+data: {"v":" `"}
+
+data: {"v":"AIR"}
+
+data: {"v":"outer"}
+
+data: {"v":"("}
+
+data: {"v":"chat"}
+
+data: {"v":")>"}
+
+data: {"v":"`"}
+
+data: {"v":" —"}
+
+data: {"v":" that"}
+
+data: {"v":"'s"}
+
+data: {"v":" where"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" answers"}
+
+data: {"v":" you"}
+
+data: {"v":","}
+
+data: {"v":" not"}
+
+data: {"v":" here"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|"}
+
+data: {"v":" **"}
+
+data: {"v":"You"}
+
+data: {"v":" want"}
+
+data: {"v":" me"}
+
+data: {"v":" ("}
+
+data: {"v":"Cl"}
+
+data: {"v":"aude"}
+
+data: {"v":")"}
+
+data: {"v":" to"}
+
+data: {"v":" reply"}
+
+data: {"v":" as"}
+
+data: {"v":" a"}
+
+data: {"v":" human"}
+
+data: {"v":"**"}
+
+data: {"v":" |"}
+
+data: {"v":" Fine"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" well"}
+
+data: {"v":","}
+
+data: {"v":" thanks"}
+
+data: {"v":"."}
+
+data: {"v":" But"}
+
+data: {"v":" that"}
+
+data: {"v":"'s"}
+
+data: {"v":" not"}
+
+data: {"v":" the"}
+
+data: {"v":" point"}
+
+data: {"v":" of"}
+
+data: {"v":" the"}
+
+data: {"v":" project"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|"}
+
+data: {"v":" **"}
+
+data: {"v":"You"}
+
+data: {"v":"'re"}
+
+data: {"v":" stuck"}
+
+data: {"v":" and"}
+
+data: {"v":" need"}
+
+data: {"v":" help"}
+
+data: {"v":"**"}
+
+data: {"v":" |"}
+
+data: {"v":" Tell"}
+
+data: {"v":" me"}
+
+data: {"v":" where"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":"'ll"}
+
+data: {"v":" narrow"}
+
+data: {"v":" to"}
+
+data: {"v":" one"}
+
+data: {"v":" surgical"}
+
+data: {"v":" step"}
+
+data: {"v":" |\n"}
+
+data: {"v":"|"}
+
+data: {"v":" **"}
+
+data: {"v":"You"}
+
+data: {"v":" want"}
+
+data: {"v":" me"}
+
+data: {"v":" to"}
+
+data: {"v":" skip"}
+
+data: {"v":" ahead"}
+
+data: {"v":"**"}
+
+data: {"v":" |"}
+
+data: {"v":" Say"}
+
+data: {"v":" \""}
+
+data: {"v":"skip"}
+
+data: {"v":" diagnostics"}
+
+data: {"v":","}
+
+data: {"v":" give"}
+
+data: {"v":" me"}
+
+data: {"v":" X"}
+
+data: {"v":"\""}
+
+data: {"v":" and"}
+
+data: {"v":" I"}
+
+data: {"v":" will"}
+
+data: {"v":" |\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" The"}
+
+data: {"v":" single"}
+
+data: {"v":" command"}
+
+data: {"v":" that"}
+
+data: {"v":" moves"}
+
+data: {"v":" us"}
+
+data: {"v":" forward"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"```"}
+
+data: {"v":"powers"}
+
+data: {"v":"hell"}
+
+data: {"v":"\n"}
+
+data: {"v":"cd"}
+
+data: {"v":" C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":"-M"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":"5"}
+
+data: {"v":"\n"}
+
+data: {"v":"python"}
+
+data: {"v":" scripts"}
+
+data: {"v":"\\"}
+
+data: {"v":"b"}
+
+data: {"v":"ootstrap"}
+
+data: {"v":"\\"}
+
+data: {"v":"utf"}
+
+data: {"v":"8"}
+
+data: {"v":"_and"}
+
+data: {"v":"_ch"}
+
+data: {"v":"at"}
+
+data: {"v":".py"}
+
+data: {"v":"\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"Then"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"```"}
+
+data: {"v":"powers"}
+
+data: {"v":"hell"}
+
+data: {"v":"\n"}
+
+data: {"v":"cd"}
+
+data: {"v":" C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":"-M"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":"5"}
+
+data: {"v":"\\"}
+
+data: {"v":"backend"}
+
+data: {"v":"\n"}
+
+data: {"v":"$"}
+
+data: {"v":"env"}
+
+data: {"v":":"}
+
+data: {"v":"PY"}
+
+data: {"v":"TH"}
+
+data: {"v":"ON"}
+
+data: {"v":"UTF"}
+
+data: {"v":"8"}
+
+data: {"v":"=\""}
+
+data: {"v":"1"}
+
+data: {"v":"\"\n"}
+
+data: {"v":"C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"At"}
+
+data: {"v":"las"}
+
+data: {"v":"\\."}
+
+data: {"v":"ven"}
+
+data: {"v":"v"}
+
+data: {"v":"\\"}
+
+data: {"v":"Script"}
+
+data: {"v":"s"}
+
+data: {"v":"\\"}
+
+data: {"v":"python"}
+
+data: {"v":".exe"}
+
+data: {"v":" -"}
+
+data: {"v":"u"}
+
+data: {"v":" -"}
+
+data: {"v":"m"}
+
+data: {"v":" scripts"}
+
+data: {"v":".ch"}
+
+data: {"v":"at"}
+
+data: {"v":"_de"}
+
+data: {"v":"ep"}
+
+data: {"v":"seek"}
+
+data: {"v":"\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"At"}
+
+data: {"v":" the"}
+
+data: {"v":" prompt"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"```\n"}
+
+data: {"v":"AIR"}
+
+data: {"v":"outer"}
+
+data: {"v":"("}
+
+data: {"v":"chat"}
+
+data: {"v":")>"}
+
+data: {"v":" hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"\n"}
+
+data: {"v":"Deep"}
+
+data: {"v":"seek"}
+
+data: {"v":":\n"}
+
+data: {"v":"<"}
+
+data: {"v":"Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"'s"}
+
+data: {"v":" reply"}
+
+data: {"v":","}
+
+data: {"v":" stream"}
+
+data: {"v":"ed"}
+
+data: {"v":" through"}
+
+data: {"v":" your"}
+
+data: {"v":" router"}
+
+data: {"v":">\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" What"}
+
+data: {"v":" to"}
+
+data: {"v":" paste"}
+
+data: {"v":" back"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"-"}
+
+data: {"v":" The"}
+
+data: {"v":" output"}
+
+data: {"v":" of"}
+
+data: {"v":" `"}
+
+data: {"v":"utf"}
+
+data: {"v":"8"}
+
+data: {"v":"_and"}
+
+data: {"v":"_ch"}
+
+data: {"v":"at"}
+
+data: {"v":".py"}
+
+data: {"v":"`\n"}
+
+data: {"v":"-"}
+
+data: {"v":" The"}
+
+data: {"v":" `"}
+
+data: {"v":"AIR"}
+
+data: {"v":"outer"}
+
+data: {"v":"("}
+
+data: {"v":"chat"}
+
+data: {"v":")>"}
+
+data: {"v":"`"}
+
+data: {"v":" session"}
+
+data: {"v":" transcript"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"That"}
+
+data: {"v":"'s"}
+
+data: {"v":" the"}
+
+data: {"v":" only"}
+
+data: {"v":" information"}
+
+data: {"v":" that"}
+
+data: {"v":" lets"}
+
+data: {"v":" me"}
+
+data: {"v":" finish"}
+
+data: {"v":" this"}
+
+data: {"v":" phase"}
+
+data: {"v":"."}
+
+data: {"v":" Once"}
+
+data: {"v":" it"}
+
+data: {"v":" streams"}
+
+data: {"v":" clean"}
+
+data: {"v":"ly"}
+
+data: {"v":","}
+
+data: {"v":" next"}
+
+data: {"v":" script"}
+
+data: {"v":" ="}
+
+data: {"v":" Orche"}
+
+data: {"v":"str"}
+
+data: {"v":"ator"}
+
+data: {"v":" v"}
+
+data: {"v":"0"}
+
+data: {"v":" ("}
+
+data: {"v":"r"}
+
+data: {"v":"outing"}
+
+data: {"v":" between"}
+
+data: {"v":" providers"}
+
+data: {"v":").\n\n"}
+
+data: {"v":"If"}
+
+data: {"v":" you"}
+
+data: {"v":"'re"}
+
+data: {"v":" **"}
+
+data: {"v":"wait"}
+
+data: {"v":"ing"}
+
+data: {"v":" on"}
+
+data: {"v":" me"}
+
+data: {"v":"**"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" not"}
+
+data: {"v":" waiting"}
+
+data: {"v":" on"}
+
+data: {"v":" anything"}
+
+data: {"v":" except"}
+
+data: {"v":" that"}
+
+data: {"v":" output"}
+
+data: {"v":"."}
+
+data: {"v":" If"}
+
+data: {"v":" you"}
+
+data: {"v":"'re"}
+
+data: {"v":" **"}
+
+data: {"v":"asking"}
+
+data: {"v":" me"}
+
+data: {"v":" to"}
+
+data: {"v":" be"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" here"}
+
+data: {"v":" in"}
+
+data: {"v":" chat"}
+
+data: {"v":"**"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":" can"}
+
+data: {"v":" role"}
+
+data: {"v":"-play"}
+
+data: {"v":","}
+
+data: {"v":" but"}
+
+data: {"v":" it"}
+
+data: {"v":"'s"}
+
+data: {"v":" not"}
+
+data: {"v":" the"}
+
+data: {"v":" real"}
+
+data: {"v":" thing"}
+
+data: {"v":" and"}
+
+data: {"v":" won"}
+
+data: {"v":"'t"}
+
+data: {"v":" fix"}
+
+data: {"v":" the"}
+
+data: {"v":" pipeline"}
+
+data: {"v":"."}
+
+data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":200682},{"p":"quasi_status","v":"FINISHED"}]}
+
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: update_session
+data: {"updated_at":1789681705.9669468}
+
+event: close
+data: {"click_behavior":"none","auto_resume":false}
+

@@ -1,0 +1,15 @@
+[Unit]
+Description=AIN harness (dsh) on port 3080
+After=network-online.target ainterceptor-daemon.service
+Wants=network-online.target
+PartOf=ainterceptor-daemon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/arun/bin/dsh-start
+ExecStop=/usr/bin/pkill -f "dsh.*web"
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

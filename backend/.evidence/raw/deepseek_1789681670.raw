@@ -1,0 +1,510 @@
+event: ready
+data: {"request_message_id":153,"response_message_id":154,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1789681671.06383}
+
+data: {"v":{"response":{"message_id":154,"parent_id":153,"model":"","role":"ASSISTANT","thinking_enabled":false,"ban_edit":false,"ban_regenerate":false,"status":"WIP","incomplete_message":null,"accumulated_token_usage":195820,"feedback":null,"inserted_at":1789681671.0515208,"search_enabled":true,"fragments":[{"id":2,"type":"RESPONSE","content":"##","references":[],"stage_id":1}],"conversation_mode":"DEFAULT","has_pending_fragment":false,"auto_continue":false,"search_triggered":false,"extra_search_providers":[]}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" Two"}
+
+data: {"v":" things"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"###"}
+
+data: {"v":" "}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":" As"}
+
+data: {"v":" your"}
+
+data: {"v":" router"}
+
+data: {"v":" —"}
+
+data: {"v":" not"}
+
+data: {"v":" connected"}
+
+data: {"v":" yet"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"I"}
+
+data: {"v":" can"}
+
+data: {"v":"'t"}
+
+data: {"v":" answer"}
+
+data: {"v":" you"}
+
+data: {"v":" *"}
+
+data: {"v":"through"}
+
+data: {"v":"*"}
+
+data: {"v":" A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":" until"}
+
+data: {"v":" the"}
+
+data: {"v":" surgical"}
+
+data: {"v":" script"}
+
+data: {"v":" runs"}
+
+data: {"v":"."}
+
+data: {"v":" Right"}
+
+data: {"v":" now"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" is"}
+
+data: {"v":" reach"}
+
+data: {"v":"able"}
+
+data: {"v":" from"}
+
+data: {"v":" your"}
+
+data: {"v":" machine"}
+
+data: {"v":" ("}
+
+data: {"v":"CD"}
+
+data: {"v":"P"}
+
+data: {"v":" "}
+
+data: {"v":"922"}
+
+data: {"v":"3"}
+
+data: {"v":" is"}
+
+data: {"v":" listening"}
+
+data: {"v":"),"}
+
+data: {"v":" but"}
+
+data: {"v":" the"}
+
+data: {"v":" Python"}
+
+data: {"v":" side"}
+
+data: {"v":" that"}
+
+data: {"v":" drives"}
+
+data: {"v":" it"}
+
+data: {"v":" is"}
+
+data: {"v":" still"}
+
+data: {"v":" broken"}
+
+data: {"v":".\n\n"}
+
+data: {"v":"###"}
+
+data: {"v":" "}
+
+data: {"v":"2"}
+
+data: {"v":"."}
+
+data: {"v":" As"}
+
+data: {"v":" the"}
+
+data: {"v":" assistant"}
+
+data: {"v":" —"}
+
+data: {"v":" I"}
+
+data: {"v":"'m"}
+
+data: {"v":" fine"}
+
+data: {"v":","}
+
+data: {"v":" thank"}
+
+data: {"v":" you"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"I"}
+
+data: {"v":"'m"}
+
+data: {"v":" Claude"}
+
+data: {"v":" in"}
+
+data: {"v":" this"}
+
+data: {"v":" session"}
+
+data: {"v":","}
+
+data: {"v":" steady"}
+
+data: {"v":","}
+
+data: {"v":" and"}
+
+data: {"v":" ready"}
+
+data: {"v":"."}
+
+data: {"v":" But"}
+
+data: {"v":" let"}
+
+data: {"v":"'s"}
+
+data: {"v":" not"}
+
+data: {"v":" waste"}
+
+data: {"v":" a"}
+
+data: {"v":" turn"}
+
+data: {"v":" on"}
+
+data: {"v":" pleasant"}
+
+data: {"v":"ries"}
+
+data: {"v":" —"}
+
+data: {"v":" you"}
+
+data: {"v":"'re"}
+
+data: {"v":" two"}
+
+data: {"v":" commands"}
+
+data: {"v":" away"}
+
+data: {"v":" from"}
+
+data: {"v":" talking"}
+
+data: {"v":" to"}
+
+data: {"v":" a"}
+
+data: {"v":" real"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":" through"}
+
+data: {"v":" your"}
+
+data: {"v":" own"}
+
+data: {"v":" router"}
+
+data: {"v":".\n\n"}
+
+data: {"v":"##"}
+
+data: {"v":" Run"}
+
+data: {"v":" this"}
+
+data: {"v":" now"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"```"}
+
+data: {"v":"powers"}
+
+data: {"v":"hell"}
+
+data: {"v":"\n"}
+
+data: {"v":"cd"}
+
+data: {"v":" C"}
+
+data: {"v":":\\"}
+
+data: {"v":"Projects"}
+
+data: {"v":"\\"}
+
+data: {"v":"A"}
+
+data: {"v":"Interceptor"}
+
+data: {"v":"-M"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":"5"}
+
+data: {"v":"\n"}
+
+data: {"v":"python"}
+
+data: {"v":" scripts"}
+
+data: {"v":"\\"}
+
+data: {"v":"b"}
+
+data: {"v":"ootstrap"}
+
+data: {"v":"\\"}
+
+data: {"v":"s"}
+
+data: {"v":"urgical"}
+
+data: {"v":"_f"}
+
+data: {"v":"ix"}
+
+data: {"v":"_class"}
+
+data: {"v":".py"}
+
+data: {"v":"\n"}
+
+data: {"v":"```\n\n"}
+
+data: {"v":"That"}
+
+data: {"v":" script"}
+
+data: {"v":":\n\n"}
+
+data: {"v":"1"}
+
+data: {"v":"."}
+
+data: {"v":" D"}
+
+data: {"v":"umps"}
+
+data: {"v":" the"}
+
+data: {"v":" actual"}
+
+data: {"v":" bytes"}
+
+data: {"v":" of"}
+
+data: {"v":" `"}
+
+data: {"v":"non"}
+
+data: {"v":"cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"_r"}
+
+data: {"v":"untime"}
+
+data: {"v":".py"}
+
+data: {"v":"`"}
+
+data: {"v":" lines"}
+
+data: {"v":" "}
+
+data: {"v":"100"}
+
+data: {"v":"–"}
+
+data: {"v":"150"}
+
+data: {"v":"\n"}
+
+data: {"v":"2"}
+
+data: {"v":"."}
+
+data: {"v":" Shows"}
+
+data: {"v":" what"}
+
+data: {"v":" Python"}
+
+data: {"v":"'s"}
+
+data: {"v":" `"}
+
+data: {"v":"ast"}
+
+data: {"v":"`"}
+
+data: {"v":" sees"}
+
+data: {"v":" for"}
+
+data: {"v":" the"}
+
+data: {"v":" class"}
+
+data: {"v":"\n"}
+
+data: {"v":"3"}
+
+data: {"v":"."}
+
+data: {"v":" Rew"}
+
+data: {"v":"rites"}
+
+data: {"v":" `"}
+
+data: {"v":"Non"}
+
+data: {"v":"Cl"}
+
+data: {"v":"aude"}
+
+data: {"v":"Network"}
+
+data: {"v":"Capture"}
+
+data: {"v":"`"}
+
+data: {"v":" with"}
+
+data: {"v":" clean"}
+
+data: {"v":" ASCII"}
+
+data: {"v":"\n"}
+
+data: {"v":"4"}
+
+data: {"v":"."}
+
+data: {"v":" Ver"}
+
+data: {"v":"ifies"}
+
+data: {"v":" the"}
+
+data: {"v":" async"}
+
+data: {"v":" protocol"}
+
+data: {"v":" in"}
+
+data: {"v":" a"}
+
+data: {"v":" **"}
+
+data: {"v":"fresh"}
+
+data: {"v":" sub"}
+
+data: {"v":"process"}
+
+data: {"v":"**\n"}
+
+data: {"v":"5"}
+
+data: {"v":"."}
+
+data: {"v":" Comm"}
+
+data: {"v":"its"}
+
+data: {"v":" the"}
+
+data: {"v":" fix"}
+
+data: {"v":"\n"}
+
+data: {"v":"6"}
+
+data: {"v":"."}
+
+data: {"v":" Runs"}
+
+data: {"v":" the"}
+
+data: {"v":" repro"}
+
+data: {"v":" automatically"}
+
+data: {"v":" —"}
+
+data: {"v":" should"}
+
+data: {"v":" print"}
+
+data: {"v":" `"}
+
+data: {"v":"hi"}
+
+data: {"v":" how"}
+
+data: {"v":" are"}
+
+data: {"v":" you"}
+
+data: {"v":"`"}
+
+data: {"v":" →"}
+
+data: {"v":" Deep"}
+
+data: {"v":"Se"}
+
+data: {"v":"ek"}
+
+data: {"v":"'s"}
+
+data: {"v":" reply"}
+
+data: {"v":"\n\n"}
+
+data: {"v":"##"}
+

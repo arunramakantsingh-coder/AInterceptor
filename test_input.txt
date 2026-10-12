@@ -1,0 +1,2 @@
+﻿say hello in one short sentence
+/exit
