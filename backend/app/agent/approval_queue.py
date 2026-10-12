@@ -66,11 +66,37 @@ def _audit(record: dict) -> None:
 # action.
 import hashlib as _hashlib
 RECENT_TTL_S = 600.0
+
+# Load persisted decisions on module import
+_load_recent()
 _RECENT: dict[str, dict] = {}
 
 
 def _signature(session_id: str, tool: str, target_id: str, args: dict) -> str:
-    blob = json.dumps({"s": session_id, "t": tool, "g": target_id, "a": args},
+    """Forgiving cache key.
+
+    Byte-exact args match is too strict: the model emits slightly
+    different arguments each turn (extra `timeout`, different quoting,
+    stray whitespace). What matters for "has the operator already
+    approved this class of action?" is:
+      - the tool
+      - the target
+      - the first line / first 120 chars of the command or path
+    Everything else (defaults, timeout, formatting) is cosmetic.
+    """
+    # Extract the "gist" of the call — the part the operator actually
+    # reads when deciding.
+    gist = ""
+    if isinstance(args, dict):
+        for key in ("cmd", "path", "pattern", "range"):
+            v = args.get(key)
+            if v:
+                gist = str(v).strip().splitlines()[0][:120]
+                break
+        if not gist:
+            # fall back: stringify and take the first 120 chars
+            gist = json.dumps(args, sort_keys=True, default=str)[:120]
+    blob = json.dumps({"s": session_id, "t": tool, "g": target_id, "x": gist},
                       sort_keys=True, default=str)
     return _hashlib.sha256(blob.encode()).hexdigest()[:24]
 
@@ -167,6 +193,7 @@ async def decide(ticket_id: str, allowed: bool, reason: str = "",
         try:
             sig = _signature(t.session_id, t.tool, t.target_id, t.args)
             _RECENT[sig] = {"ts": time.time(), "verdict": t.verdict}
+            _persist_recent()
         except Exception:
             pass
         # Ticket resolved: remove from pending, append to history.

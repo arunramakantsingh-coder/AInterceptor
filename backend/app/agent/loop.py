@@ -118,7 +118,7 @@ async def run_agent(
                     # hits the decision cache.
                     import os as _os
                     try:
-                        wait_s = float(_os.getenv("AGENT_APPROVAL_WAIT_S", "120"))
+                        wait_s = float(_os.getenv("AGENT_APPROVAL_WAIT_S", "10"))
                     except ValueError:
                         wait_s = 120.0
                     try:
